@@ -39,6 +39,11 @@ import Uninstaller
         model.toggle(Set(leftovers.map(\.url)))
         #expect(!model.isChosen(admin))
         #expect(model.chosenLeftovers.count == leftovers.count - 1)
+
+        // Even if the selection were corrupted, the batch never carries a root-owned item.
+        model.leftoverSelection.insert(admin.url)
+        model.beginUninstall()
+        #expect(model.confirmation?.rows.contains { $0.url == admin.url } == false)
     }
 
     @Test func partOfMacOSHasNoUninstall() {

@@ -13,7 +13,7 @@ import TestSupport
         #expect(model.items.contains { $0.rule.safety == .review } && model.items.contains { $0.skipReason != nil })
     }
 
-    @Test func manualAndSkippedItemsCanNeverBeChecked() {
+    @Test func manualAndSkippedItemsCanNeverBeChecked() throws {
         let model = CleanModel.demo()
         let blocked = model.items.filter { !$0.isCleanable }
         #expect(blocked.contains { $0.rule.safety == .manual } && blocked.contains { $0.skipReason != nil })
@@ -21,6 +21,12 @@ import TestSupport
         model.toggle(Set(model.items.map(\.url)))
         model.toggle(Set(model.items.map(\.url)))
         #expect(blocked.allSatisfy { !model.selection.contains($0.url) })
+
+        // `selection` is public; even a caller that forces them in cannot get them into a review.
+        let cleanable = try #require(model.items.first { $0.isCleanable })
+        model.selection = Set(blocked.map(\.url) + [cleanable.url])
+        model.beginReview()
+        #expect(model.review?.items.map(\.url) == [cleanable.url])
     }
 
     @Test func spaceChecksAllHighlightedWhenAnyIsOffThenUnchecksAll() {
