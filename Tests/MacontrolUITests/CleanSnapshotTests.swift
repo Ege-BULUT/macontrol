@@ -64,7 +64,7 @@ enum Snapshot {
 
     /// Lays `view` out in an off-screen window and returns the frame of its tallest scroll view (a List).
     static func largestScrollView(in view: some View, size: CGSize) -> CGRect? {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
         window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
@@ -80,7 +80,7 @@ enum Snapshot {
 
     /// Renders `view` light and dark, checks the PNGs, and keeps them when MACONTROL_SNAPSHOT_DIR is set.
     static func write(_ view: some View, _ name: String, size: CGSize = SnapshotRenderer.windowSize) throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let folder = ProcessInfo.processInfo.environment["MACONTROL_SNAPSHOT_DIR"].map(URL.init(fileURLWithPath:))
         for dark in [false, true] {
             let data = try SnapshotRenderer.png(of: view, dark: dark, size: size)

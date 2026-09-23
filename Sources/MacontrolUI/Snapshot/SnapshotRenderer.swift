@@ -44,6 +44,7 @@ public enum SnapshotRenderer {
     }
 
     public static func png(of view: some View, dark: Bool = false, size: CGSize? = windowSize) throws -> Data {
+        runHeadless()
         let hosting = NSHostingView(rootView: AnyView(view))
         // Lets `.toolbar` and `.navigationTitle` reach the window, as they do in the real app.
         hosting.sceneBridgingOptions = [.toolbars, .title]
@@ -66,6 +67,11 @@ public enum SnapshotRenderer {
 
         let image = try windowImage(window) ?? cachedDisplay(window)
         return try pngData(image)
+    }
+
+    /// Keeps a rendering process out of the Dock and from ever taking focus from the user's work.
+    public static func runHeadless() {
+        NSApplication.shared.setActivationPolicy(.prohibited)
     }
 
     /// The app icon as an `.iconset` folder for `iconutil` (scripts/bundle-app.sh).
