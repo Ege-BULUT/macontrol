@@ -49,7 +49,7 @@ import Testing
     /// T-0060: a skipped row dims its icon, name and path, never its badge. Dimming the whole row to 0.85
     /// put the Safe badge at 3.9:1, so the skipped row's badge must render exactly like an active row's.
     @Test func skippedRowKeepsItsBadgeUndimmed() throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let width = 640.0
         // The badge's 64 pt column sits left of the 84 pt size column and 12 pt of spacing.
         func badgeColumn(skip: String?) throws -> [UInt8] {

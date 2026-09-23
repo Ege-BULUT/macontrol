@@ -33,7 +33,7 @@ import Testing
     /// T-0063: a scan shows the top of the map as it fills in, with a bar against the space it should reach.
     @Test(arguments: MapStyle.allCases)
     func scanningStateRenders(style: MapStyle) throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let demo = ScanTree.demo()
         var preview = ScanTree(rootURL: demo.rootURL, rootIdentity: demo.identity(of: ScanTree.root))
         for (offset, child) in demo.children(of: ScanTree.root).enumerated() {
