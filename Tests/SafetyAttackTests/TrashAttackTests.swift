@@ -158,8 +158,7 @@ import Testing
         try box.file("\(caches)/com.example.second/data.bin")
         try box.file("home/Documents/proj/data.bin")
         let items = [item("\(caches)/com.example.first"), item("\(caches)/com.example.second/data.bin")]
-        let box = self.box
-        box.beforeEachMove { url in
+        box.beforeEachMove { box, url in
             if url.lastPathComponent == "com.example.first" {
                 try? box.swapForSymlink("home/Library/Caches/com.example.second", to: box.url("home/Documents/proj"))
             }
@@ -179,8 +178,7 @@ import Testing
     @Test func aSwapInsideTheMoveMustNotTrashTheLinkedFile() async throws {
         try box.file("\(caches)/com.example.window/data.bin")
         try box.file("home/Documents/proj/data.bin")
-        let box = self.box
-        box.beforeEachMove { url in
+        box.beforeEachMove { box, url in
             if url.lastPathComponent == "data.bin" {
                 try? box.swapForSymlink("home/Library/Caches/com.example.window", to: box.url("home/Documents/proj"))
             }

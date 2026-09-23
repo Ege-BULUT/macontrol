@@ -16,7 +16,7 @@ final class Sandbox: @unchecked Sendable {
     let journal: URL
     private let lock = NSLock()
     private var moved: [URL] = []
-    private var hook: (@Sendable (URL) -> Void)?
+    private var hook: (@Sendable (Sandbox, URL) -> Void)?
     private var deepChains: [(fd: Int32, name: String)] = []
 
     init() throws {
@@ -41,8 +41,9 @@ final class Sandbox: @unchecked Sendable {
         }
     }
 
-    /// Runs just before the backend moves each item: where an attack changes the disk mid-batch.
-    func beforeEachMove(_ hook: @escaping @Sendable (URL) -> Void) {
+    /// Runs just before the backend moves each item: where an attack changes the disk mid-batch. The hook gets
+    /// the sandbox as an argument, so it need not capture it (a captured sandbox would never deinit and clean up).
+    func beforeEachMove(_ hook: @escaping @Sendable (Sandbox, URL) -> Void) {
         lock.withLock { self.hook = hook }
     }
 
@@ -54,7 +55,7 @@ final class Sandbox: @unchecked Sendable {
 
     private var backend: TrashBackend {
         TrashBackend { [self] url in
-            lock.withLock { hook }?(url)
+            lock.withLock { hook }?(self, url)
             lock.withLock { moved.append(url) }
             let parent = url.deletingLastPathComponent().path
             guard let real = realpath(parent, nil) else { throw CocoaError(.fileNoSuchFile) }
