@@ -159,8 +159,8 @@ struct CleanScreen: View {
         let selected = "\(count) selected"
         switch model.estimate {
         case .working: return "\(selected), working out what this frees…"
-        case .freesNow(let estimate): return "\(selected), frees about \(estimate.freesNow.formattedBytes) now"
-        case .atMost(let bytes): return "\(selected), frees at most \(bytes.formattedBytes)"
+        case .freesNow(let estimate): return "\(selected), frees about \(estimate.freesNow.formattedBytes) once you empty the Trash"
+        case .atMost(let bytes): return "\(selected), frees at most \(bytes.formattedBytes) once you empty the Trash"
         }
     }
 
@@ -171,7 +171,7 @@ struct CleanScreen: View {
         if !model.inTrash.isEmpty {
             return "\(model.inTrashBytes.formattedBytes) is in the Trash and frees when you empty it."
         }
-        return "Items go to the Trash. Put them back any time from History."
+        return "Items go to the Trash. Put them back from History until you empty the Trash."
     }
 }
 

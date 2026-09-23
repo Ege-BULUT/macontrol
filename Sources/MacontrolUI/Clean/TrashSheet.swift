@@ -71,7 +71,7 @@ struct TrashSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(report?.summary(of: rows.count) ?? title)
                     .font(.title3.weight(.semibold))
-                Text(report == nil ? message : "Items stay in the Trash, still using their space, until you empty it. You can put them back from History.")
+                Text(report == nil ? message : "Items stay in the Trash and still use their space. Put them back from History until you empty the Trash.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let warning, report == nil {

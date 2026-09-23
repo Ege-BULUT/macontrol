@@ -100,7 +100,7 @@ struct UninstallSheet: View {
             TrashSheet(
                 title: "Uninstall \(name)?",
                 message: (count == 0 ? "\(name) moves to the Trash." : "\(name) and \(count == 1 ? "1 item" : "\(count) items") it left behind move to the Trash.")
-                    + " Space is freed once you empty the Trash, and you can put everything back from History.",
+                    + " Put them back from History until you empty the Trash, which is when the space is freed.",
                 warning: confirmation.appIsRunning ? "\(name) is open. It will be asked to quit first, so save your work." : nil,
                 notes: confirmation.notes,
                 rows: confirmation.rows,

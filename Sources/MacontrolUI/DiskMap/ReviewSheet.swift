@@ -22,7 +22,7 @@ struct ReviewSheet: View {
         Group {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Move \(DiskMapText.itemCount(review.items.count)) to the Trash?").font(.title2.weight(.semibold))
-                Text("You can put them back from the Trash in Finder until it is emptied.")
+                Text("Put them back from History until you empty the Trash.")
                     .foregroundStyle(.secondary)
             }
             List(review.items) { item in
@@ -78,7 +78,7 @@ struct ReviewSheet: View {
                     }
                     Text("\(DiskMapText.size(review.totalBytes, isLowerBound: review.isIncomplete)) on disk").font(.callout).foregroundStyle(.secondary)
                 case .measured(let estimate):
-                    Text("Frees \(review.isIncomplete ? "at least" : "about") \(estimate.freesNow.formattedBytes) once the Trash is emptied")
+                    Text("Frees \(review.isIncomplete ? "at least" : "about") \(estimate.freesNow.formattedBytes) once you empty the Trash")
                         .font(.headline.monospacedDigit())
                     if estimate.sharedElsewhere > 0 {
                         Text("\(estimate.sharedElsewhere.formattedBytes) stays in use: shared with clones, snapshots or other hard links.")
@@ -108,7 +108,7 @@ struct ReviewSheet: View {
                     .font(.title2.weight(.semibold))
                 Text(moved.isEmpty
                      ? "The items stay on the map and in the Discard Pile."
-                     : "\(movedBytes.formattedBytes) is In Trash. The space returns when the Trash is emptied.")
+                     : "\(movedBytes.formattedBytes) is in the Trash and frees once you empty it. Put them back from History until you empty the Trash.")
                     .foregroundStyle(.secondary)
             }
             List(Array(outcomes.enumerated()), id: \.offset) { _, outcome in
