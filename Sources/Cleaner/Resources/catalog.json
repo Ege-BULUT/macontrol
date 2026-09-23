@@ -2,12 +2,217 @@
   "version": 1,
   "rules": [
     {
+      "id": "safari-cache",
+      "title": "Safari cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/com.apple.Safari"],
+      "note": "Downloaded page resources. History, bookmarks, passwords and open tabs live elsewhere and are not touched. Skipped while Safari is running."
+    },
+    {
+      "id": "chrome-cache",
+      "title": "Chrome cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Google/Chrome"],
+      "note": "Chrome's disk cache only, never the profile in Application Support. Skipped while Chrome is running."
+    },
+    {
+      "id": "firefox-cache",
+      "title": "Firefox cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Firefox/Profiles/*"],
+      "note": "The per-profile cache Firefox keeps under Caches. The profiles themselves are in Application Support and are not touched."
+    },
+    {
+      "id": "edge-cache",
+      "title": "Microsoft Edge cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Microsoft Edge"],
+      "note": "Edge's disk cache only, never the profile. Skipped while Edge is running."
+    },
+    {
+      "id": "brave-cache",
+      "title": "Brave cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/BraveSoftware/Brave-Browser"],
+      "note": "Brave's disk cache only, never the profile. Skipped while Brave is running."
+    },
+    {
+      "id": "arc-cache",
+      "title": "Arc cache",
+      "category": "browsers",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Arc", "~/Library/Caches/company.thebrowser.Browser"],
+      "note": "Arc's disk cache only, never its spaces or profile. Skipped while Arc is running."
+    },
+    {
+      "id": "xcode-derived-data",
+      "title": "Xcode build data",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Developer/Xcode/DerivedData/*"],
+      "note": "Build products and indexes, one folder per project. Xcode rebuilds them on the next build. Skipped while Xcode is running."
+    },
+    {
+      "id": "simulator-caches",
+      "title": "Simulator caches",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Developer/CoreSimulator/Caches/*"],
+      "note": "Dyld and runtime caches the Simulator regenerates. Simulator devices and their app data are not touched."
+    },
+    {
+      "id": "swiftpm-cache",
+      "title": "Swift Package Manager cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/org.swift.swiftpm"],
+      "note": "Downloaded package repositories and manifests. Packages are fetched again on the next resolve."
+    },
+    {
+      "id": "cocoapods-cache",
+      "title": "CocoaPods cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/CocoaPods"],
+      "note": "Downloaded pod sources and specs. pod install fetches them again."
+    },
+    {
+      "id": "carthage-cache",
+      "title": "Carthage cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/org.carthage.CarthageKit"],
+      "note": "Downloaded dependency repositories and binaries. Carthage fetches them again."
+    },
+    {
+      "id": "npm-cache",
+      "title": "npm cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/.npm/_cacache/*"],
+      "note": "npm's content-addressed download cache. npm verifies and refills it on the next install."
+    },
+    {
+      "id": "yarn-cache",
+      "title": "Yarn cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Yarn"],
+      "note": "Yarn's global package cache. Projects using Plug'n'Play zero-installs keep their own copy."
+    },
+    {
+      "id": "pip-cache",
+      "title": "pip cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/pip"],
+      "note": "Downloaded and built Python wheels. pip downloads them again when needed."
+    },
+    {
+      "id": "homebrew-downloads",
+      "title": "Homebrew downloads",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/Homebrew/downloads"],
+      "note": "Bottles and source archives Homebrew already installed. Installed packages are not touched."
+    },
+    {
+      "id": "go-build-cache",
+      "title": "Go build cache",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/go-build"],
+      "note": "Compiled Go packages. go build fills it again; the module cache in ~/go is not touched."
+    },
+    {
+      "id": "device-support",
+      "title": "Device support files",
+      "category": "developer",
+      "safety": "review",
+      "paths": [
+        "~/Library/Developer/Xcode/iOS DeviceSupport/*",
+        "~/Library/Developer/Xcode/watchOS DeviceSupport/*",
+        "~/Library/Developer/Xcode/tvOS DeviceSupport/*",
+        "~/Library/Developer/Xcode/visionOS DeviceSupport/*"
+      ],
+      "note": "Symbols copied from each device OS version you debugged on. Xcode copies them again the next time that device connects, which can take several minutes."
+    },
+    {
+      "id": "pnpm-store",
+      "title": "pnpm store",
+      "category": "developer",
+      "safety": "review",
+      "paths": ["~/Library/pnpm/store/*"],
+      "note": "Every project installed with pnpm hard-links its packages from here, so little space may come back until those projects are gone. Global installs are not touched."
+    },
+    {
+      "id": "gradle-caches",
+      "title": "Gradle caches",
+      "category": "developer",
+      "safety": "review",
+      "paths": ["~/.gradle/caches/*"],
+      "note": "Downloaded dependencies and build caches. The next build downloads everything again, which is slow offline."
+    },
+    {
+      "id": "maven-repository",
+      "title": "Maven repository",
+      "category": "developer",
+      "safety": "review",
+      "paths": ["~/.m2/repository/*"],
+      "note": "Downloaded artifacts. Artifacts you installed locally with mvn install exist only here."
+    },
+    {
+      "id": "cargo-registry",
+      "title": "Cargo registry",
+      "category": "developer",
+      "safety": "review",
+      "paths": ["~/.cargo/registry/*"],
+      "note": "Downloaded crate sources and the registry index. Cargo fetches them again; builds need the network until it has."
+    },
+    {
+      "id": "xcode-archives",
+      "title": "Xcode archives",
+      "category": "developer",
+      "safety": "manual",
+      "paths": ["~/Library/Developer/Xcode/Archives/*"],
+      "note": "Builds you shipped, with the symbols needed to read their crash reports. Not part of a clean: review each one and remove it in Finder."
+    },
+    {
+      "id": "ios-device-backups",
+      "title": "iPhone and iPad backups",
+      "category": "system",
+      "safety": "manual",
+      "paths": ["~/Library/Application Support/MobileSync/Backup/*"],
+      "note": "Local device backups, often the only one. Not part of a clean: check the date in Finder's device list before removing one."
+    },
+    {
+      "id": "macos-install-data",
+      "title": "macOS installer leftovers",
+      "category": "system",
+      "safety": "manual",
+      "paths": ["/System/Volumes/Data/macOS Install Data"],
+      "note": "Left behind by a macOS update, owned by the system. Not part of a clean: it needs an administrator, and an update in progress still uses it."
+    },
+    {
+      "id": "apple-caches",
+      "title": "macOS service caches",
+      "category": "system",
+      "safety": "review",
+      "paths": ["~/Library/Caches/com.apple.*"],
+      "note": "Caches of macOS's own services. They are rebuilt, but some services download their data again or run slower until they have."
+    },
+    {
       "id": "user-app-caches",
       "title": "App caches",
       "category": "appCaches",
       "safety": "safe",
       "paths": ["~/Library/Caches/*"],
-      "note": "Apps rebuild their caches when needed. Caches of running apps are skipped."
+      "note": "Apps rebuild their caches when needed. A cache is skipped while its app runs, a file in it is open, or it changed in the last 10 minutes."
     },
     {
       "id": "user-logs",
@@ -16,31 +221,7 @@
       "safety": "safe",
       "paths": ["~/Library/Logs/*"],
       "minimumAgeDays": 7,
-      "note": "Diagnostic logs older than a week."
-    },
-    {
-      "id": "xcode-derived-data",
-      "title": "Xcode build data",
-      "category": "developer",
-      "safety": "safe",
-      "paths": ["~/Library/Developer/Xcode/DerivedData/*"],
-      "note": "Build products and indexes. Xcode rebuilds them on the next build."
-    },
-    {
-      "id": "xcode-archives",
-      "title": "Xcode archives",
-      "category": "developer",
-      "safety": "manual",
-      "paths": ["~/Library/Developer/Xcode/Archives/*"],
-      "note": "Archived builds you may need for crash symbolication or resubmission."
-    },
-    {
-      "id": "ios-device-backups",
-      "title": "iPhone and iPad backups",
-      "category": "system",
-      "safety": "manual",
-      "paths": ["~/Library/Application Support/MobileSync/Backup/*"],
-      "note": "Local device backups. Deleting one cannot be undone once the Trash is emptied."
+      "note": "Diagnostic logs not written to for a week."
     }
   ]
 }
