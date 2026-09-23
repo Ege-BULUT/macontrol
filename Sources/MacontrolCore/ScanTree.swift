@@ -31,16 +31,22 @@ public struct NodeFlags: OptionSet, Hashable, Sendable {
 
 /// A scanned file tree stored as parallel arrays indexed by node number.
 ///
-/// No node stores its path or a URL: a path is rebuilt from parent links on demand
-/// (F-0041 measured 943 B/node for path-per-node trees). Node 0 is the scan root.
-/// A child is always added after its parent, so every child index is greater than its parent's.
+/// No node stores its path or a URL: names live in one byte arena and a path is rebuilt from
+/// parent links on demand (F-0041 measured 943 B/node for path-per-node trees; this layout is
+/// `bytesPerNode` plus the name bytes). Node 0 is the scan root. A child is always added after
+/// its parent, so every child index is greater than its parent's.
 public struct ScanTree: Sendable {
     public static let root = 0
+
+    /// Fixed storage per node, excluding name bytes and array slack.
+    public static let bytesPerNode = 4 + 2 + 4 + 4 + 4 + 8 + 8 + 4 + 2 + 4 + 8
 
     /// The folder that was scanned, spelled the way the user sees it.
     public let rootURL: URL
 
-    private var names: [String] = []
+    private var nameBytes: [UInt8] = []
+    private var nameOffsets: [UInt32] = []
+    private var nameLengths: [UInt16] = []
     private var parents: [Int32] = []
     private var firstChildren: [Int32] = []
     private var nextSiblings: [Int32] = []
@@ -54,10 +60,20 @@ public struct ScanTree: Sendable {
 
     public init(rootURL: URL, rootIdentity: FileIdentity, rootFlags: NodeFlags = .directory) {
         self.rootURL = rootURL
-        append(name: rootURL.lastPathComponent, parent: -1, flags: rootFlags, allocated: 0, logical: 0, identity: rootIdentity)
+        _ = Array(rootURL.lastPathComponent.utf8).withUnsafeBufferPointer { name in
+            append(name: name, parent: -1, flags: rootFlags, allocated: 0, logical: 0, identity: rootIdentity)
+        }
     }
 
-    public var count: Int { names.count }
+    public var count: Int { parents.count }
+
+    /// Heap bytes held by the tree's arrays, slack included.
+    public var storageBytes: Int {
+        nameBytes.capacity + nameOffsets.capacity * 4 + nameLengths.capacity * 2 + parents.capacity * 4
+            + firstChildren.capacity * 4 + nextSiblings.capacity * 4 + allocatedSizes.capacity * 8
+            + logicalSizes.capacity * 8 + fileCounts.capacity * 4 + nodeFlags.capacity * 2
+            + devices.capacity * 4 + inodes.capacity * 8
+    }
 
     /// Adds one entry. Files carry their own sizes; folders start with their own entry size
     /// and receive their children's sizes in `finalizeTotals()`.
@@ -70,6 +86,21 @@ public struct ScanTree: Sendable {
         logical: UInt64,
         identity: FileIdentity
     ) -> Int {
+        Array(name.utf8).withUnsafeBufferPointer { bytes in
+            addChild(of: parent, nameBytes: bytes, flags: flags, allocated: allocated, logical: logical, identity: identity)
+        }
+    }
+
+    /// `addChild` with the name as raw file-system bytes, as the scanner reads it.
+    @discardableResult
+    public mutating func addChild(
+        of parent: Int,
+        nameBytes name: UnsafeBufferPointer<UInt8>,
+        flags: NodeFlags,
+        allocated: UInt64,
+        logical: UInt64,
+        identity: FileIdentity
+    ) -> Int {
         precondition(!totalsAreFinal, "addChild after finalizeTotals")
         let index = append(name: name, parent: Int32(parent), flags: flags, allocated: allocated, logical: logical, identity: identity)
         nextSiblings[index] = firstChildren[parent]
@@ -77,9 +108,14 @@ public struct ScanTree: Sendable {
         return index
     }
 
-    /// Rolls every node's sizes and file count into its ancestors. Call once, after the last `addChild`.
+    /// Charges each hard-linked file to one link, then rolls every node's sizes and file count into
+    /// its ancestors. Call once, after the last `addChild`.
+    ///
+    /// Among links of one `(device, inode)` the one with the byte-wise smallest path keeps the bytes and
+    /// the others count 0, so per-folder sizes do not depend on which link a parallel walk met first (F-0054).
     public mutating func finalizeTotals() {
         precondition(!totalsAreFinal, "finalizeTotals called twice")
+        chargeHardLinksOnce()
         for index in stride(from: count - 1, to: 0, by: -1) {
             let parent = Int(parents[index])
             allocatedSizes[parent] += allocatedSizes[index]
@@ -115,7 +151,10 @@ public struct ScanTree: Sendable {
         }
     }
 
-    public func name(of index: Int) -> String { names[index] }
+    public func name(of index: Int) -> String {
+        nameBytes.withUnsafeBufferPointer { String(decoding: slice(of: index, in: $0), as: UTF8.self) }
+    }
+
     public func parent(of index: Int) -> Int? { parents[index] < 0 ? nil : Int(parents[index]) }
     public func allocatedSize(of index: Int) -> UInt64 { allocatedSizes[index] }
     public func logicalSize(of index: Int) -> UInt64 { logicalSizes[index] }
@@ -138,7 +177,7 @@ public struct ScanTree: Sendable {
         var components: [String] = []
         var node: Int? = index
         while let current = node, current != Self.root {
-            components.append(names[current])
+            components.append(name(of: current))
             node = parent(of: current)
         }
         return components.reversed().reduce(rootURL) { url, name in
@@ -146,16 +185,57 @@ public struct ScanTree: Sendable {
         }
     }
 
-    @discardableResult
+    /// The node's path below the root as raw bytes joined by "/"; compares names without Unicode folding.
+    public func relativePathBytes(of index: Int) -> [UInt8] {
+        var components: [Int] = []
+        var node = index
+        while node != Self.root {
+            components.append(node)
+            node = Int(parents[node])
+        }
+        var path: [UInt8] = []
+        nameBytes.withUnsafeBufferPointer { arena in
+            for component in components.reversed() {
+                if !path.isEmpty { path.append(UInt8(ascii: "/")) }
+                path.append(contentsOf: slice(of: component, in: arena))
+            }
+        }
+        return path
+    }
+
+    private mutating func chargeHardLinksOnce() {
+        var links: [FileIdentity: [Int]] = [:]
+        for index in 1..<count where nodeFlags[index].contains(.hardLinked) {
+            links[identity(of: index), default: []].append(index)
+        }
+        for group in links.values where group.count > 1 {
+            let paths = group.map { ($0, relativePathBytes(of: $0)) }
+            let owner = paths.min { $0.1.lexicographicallyPrecedes($1.1) }!.0
+            for link in group where link != owner {
+                allocatedSizes[link] = 0
+                logicalSizes[link] = 0
+                nodeFlags[link].insert(.sharedHardLink)
+            }
+        }
+    }
+
+    private func slice(of index: Int, in arena: UnsafeBufferPointer<UInt8>) -> UnsafeBufferPointer<UInt8> {
+        let start = Int(nameOffsets[index])
+        return UnsafeBufferPointer(rebasing: arena[start..<start + Int(nameLengths[index])])
+    }
+
     private mutating func append(
-        name: String,
+        name: UnsafeBufferPointer<UInt8>,
         parent: Int32,
         flags: NodeFlags,
         allocated: UInt64,
         logical: UInt64,
         identity: FileIdentity
     ) -> Int {
-        names.append(name)
+        precondition(nameBytes.count + name.count <= UInt32.max, "name arena full")
+        nameOffsets.append(UInt32(nameBytes.count))
+        nameLengths.append(UInt16(name.count))
+        nameBytes.append(contentsOf: name)
         parents.append(parent)
         firstChildren.append(-1)
         nextSiblings.append(-1)
@@ -165,6 +245,6 @@ public struct ScanTree: Sendable {
         nodeFlags.append(flags)
         devices.append(identity.device)
         inodes.append(identity.inode)
-        return names.count - 1
+        return parents.count - 1
     }
 }

@@ -28,9 +28,12 @@ public struct ItemMeasurement: Hashable, Sendable {
 public struct ReclaimEstimate: Hashable, Sendable {
     public var freesNow: UInt64
     public var sharedElsewhere: UInt64
+    /// True when some folder in the selection could not be read, so both numbers are lower bounds (F-0057).
+    public var isIncomplete: Bool
 
-    public init(freesNow: UInt64, sharedElsewhere: UInt64) {
+    public init(freesNow: UInt64, sharedElsewhere: UInt64, isIncomplete: Bool = false) {
         self.freesNow = freesNow
         self.sharedElsewhere = sharedElsewhere
+        self.isIncomplete = isIncomplete
     }
 }
