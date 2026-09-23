@@ -14,10 +14,18 @@ public final class DiskMapModel {
     public private(set) var progress: ScanProgress?
     public private(set) var isScanning = false
     public private(set) var scanError: String?
-    /// The folder the map is drilled into.
-    public var focus: Int = ScanTree.root {
-        didSet { if focus != oldValue { showsAllSmallerItems = false } }
+    /// The folder the map is drilled into. Only a folder the map can open is accepted: the Overview sets
+    /// this directly, and a stale index must not put the map inside a file, a package or the Trash.
+    public var focus: Int {
+        get { focusNode }
+        set {
+            guard newValue != focusNode, canFocus(newValue) else { return }
+            focusNode = newValue
+            showsAllSmallerItems = false
+            listLimit = Self.listPage
+        }
     }
+    private var focusNode = ScanTree.root
     /// Bumped whenever `tree` changes, so layouts of an older tree are never reused.
     private(set) var treeVersion = 0
 
@@ -25,6 +33,9 @@ public final class DiskMapModel {
     var style: MapStyle = .sunburst
     /// The side list shows every member of the focus's "smaller items" row instead of one summary row.
     var showsAllSmallerItems = false
+    /// Node rows the side list shows before folding the rest into one "more items" row.
+    var listLimit = DiskMapModel.listPage
+    static let listPage = 500
     var quickLookURL: URL?
     /// Why the last "Add to Discard Pile" was refused, shown until the selection changes.
     var stagingMessage: String?
@@ -41,10 +52,16 @@ public final class DiskMapModel {
     private(set) var layout: MapLayout?
     private var layoutCache: [LayoutKey: MapLayout] = [:]
     private var cacheOrder: [LayoutKey] = []
+    // The side list asks for its rows on every selection change; sorting a flat folder of 200k
+    // names took 244 ms there, so the sort and the rows are kept until what they depend on changes.
+    @ObservationIgnored var sortedCache: (version: Int, node: Int, children: [Int])?
+    @ObservationIgnored var rowsCache: (key: ListRowsKey, rows: [ListRow])?
 
     let scanEngine: ScanEngine?
     let trashService: TrashService?
     private var scanTask: Task<Void, Never>?
+    /// Only the newest scan may write: a cancelled scan's stream can still deliver buffered events.
+    private var scanGeneration = 0
 
     public init(engine: ScanEngine?, trash: TrashService?, tree: ScanTree? = nil) {
         self.scanEngine = engine
@@ -54,10 +71,25 @@ public final class DiskMapModel {
 
     // MARK: Scanning
 
-    /// Scans `root` and shows it. Cancelling the caller, or `cancelScan()`, stops the walk.
+    /// Scans `root` and shows it once complete. Until then, and after a Stop, the previous map stays.
+    /// Cancelling the caller, or `cancelScan()`, stops the walk.
     func scan(_ root: URL) async {
+        guard let engine = scanEngine else { return }
         scanTask?.cancel()
-        let task = Task { await runScan(root) }
+        let generation = beginScan()
+        let task = Task {
+            do {
+                for try await event in engine.scan(root) {
+                    if Task.isCancelled { break }
+                    receive(event, generation: generation)
+                }
+            } catch {
+                if !Task.isCancelled, generation == scanGeneration {
+                    scanError = "Could not scan “\(root.lastPathComponent)”: \(error.localizedDescription)"
+                }
+            }
+            finishScan(generation)
+        }
         scanTask = task
         await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
     }
@@ -66,36 +98,48 @@ public final class DiskMapModel {
         scanTask?.cancel()
     }
 
-    private func runScan(_ root: URL) async {
-        guard let engine = scanEngine else { return }
-        replaceTree(nil)
+    /// Makes a new scan the only one allowed to change what is shown.
+    func beginScan() -> Int {
+        scanGeneration += 1
         scanError = nil
         progress = nil
         isScanning = true
-        defer { isScanning = false }
-        do {
-            for try await event in engine.scan(root) {
-                switch event {
-                case .progress(let update): progress = update
-                case .completed(let result): replaceTree(result)
-                }
-            }
-        } catch {
-            scanError = "Could not scan “\(root.lastPathComponent)”: \(error.localizedDescription)"
+        return scanGeneration
+    }
+
+    func receive(_ event: ScanEvent, generation: Int) {
+        guard generation == scanGeneration else { return }
+        switch event {
+        case .progress(let update): progress = update
+        case .completed(let result): replaceTree(result)
         }
+    }
+
+    func finishScan(_ generation: Int) {
+        guard generation == scanGeneration else { return }
+        isScanning = false
         progress = nil
     }
 
-    private func replaceTree(_ newTree: ScanTree?) {
+    /// Shows a new scan. Staged items found again at the same path, as the same file, stay staged.
+    /// The In Trash list described the old map; those moves stay in History.
+    private func replaceTree(_ newTree: ScanTree) {
+        let staged = pile.items
         tree = newTree
         treeDidChange()
-        focus = ScanTree.root
+        focusNode = ScanTree.root
+        showsAllSmallerItems = false
+        listLimit = Self.listPage
         selection = nil
         backStack = []
         forwardStack = []
-        pile.removeAll()
         trashed = []
         layout = nil
+        pile.removeAll()
+        for item in staged {
+            guard let node = newTree.node(at: item.url), newTree.identity(of: node) == item.identity else { continue }
+            _ = pile.add(node, in: newTree)
+        }
     }
 
     /// Call after `tree` changed in place: layouts of the old tree are dropped, the on-screen one
@@ -112,8 +156,15 @@ public final class DiskMapModel {
     var canGoForward: Bool { !forwardStack.isEmpty }
     var canGoUp: Bool { tree?.parent(of: focus) != nil }
 
+    /// The scan root, or a live folder the map draws into (not a package, a mount point or a file).
+    func canFocus(_ node: Int) -> Bool {
+        if node == ScanTree.root { return true }
+        guard let tree, (0..<tree.count).contains(node) else { return false }
+        return tree.isExpandable(node) && !tree.isRemoved(node)
+    }
+
     func drill(into node: Int) {
-        guard let tree, node != focus, tree.flags(of: node).contains(.directory) else { return }
+        guard node != focus, canFocus(node) else { return }
         backStack.append(focus)
         forwardStack = []
         focus = node
@@ -154,10 +205,15 @@ public final class DiskMapModel {
         }
     }
 
+    /// Selects `item` and makes sure the side list shows it.
     func select(_ item: MapItem?) {
         selection = item
         stagingMessage = nil
-        if case .node(let node) = item, isInSmallerItemsRow(node) { showsAllSmallerItems = true }
+        guard case .node(let node) = item, tree?.parent(of: node) == focus else { return }
+        if focusSmallerItems.contains(node) { showsAllSmallerItems = true }
+        if let index = sortedChildren(of: focus).firstIndex(of: node), index >= listLimit {
+            listLimit = (index / Self.listPage + 1) * Self.listPage
+        }
     }
 
     /// Arrow keys: the previous or next sibling, in size order.
@@ -169,13 +225,18 @@ public final class DiskMapModel {
         case nil: nil
         }
         let parent = current.flatMap(tree.parent(of:)) ?? focus
-        let siblings = tree.sortedChildren(of: parent)
+        let siblings = sortedChildren(of: parent)
         guard !siblings.isEmpty else { return }
         guard let current, let index = siblings.firstIndex(of: current) else {
             select(.node(siblings[0]))
             return
         }
         select(.node(siblings[min(max(index + offset, 0), siblings.count - 1)]))
+    }
+
+    /// A click in the sunburst's centre goes up one level; the second click of a double-click is not another step.
+    func centerClicked(clickCount: Int) {
+        if clickCount <= 1 { goUp() }
     }
 
     var selectedNode: Int? {
@@ -214,55 +275,6 @@ public final class DiskMapModel {
             if case .smallerItems(_, let members) = layout.elements[index].item { return members }
         }
         return []
-    }
-
-    // MARK: Side list
-
-    /// The focus's contents, largest first. The rows other than "In Trash" add up to the folder's size:
-    /// the map's "smaller items" are one row until expanded, and the folder's own entries get a row too.
-    var listRows: [ListRow] {
-        guard let tree else { return [] }
-        let merged = showsAllSmallerItems ? [] : focusSmallerItems
-        let mergedSet = Set(merged)
-        var rows: [ListRow] = tree.sortedChildren(of: focus)
-            .filter { !mergedSet.contains($0) }
-            .map { ListRow(kind: .node($0), bytes: tree.allocatedSize(of: $0)) }
-        if !merged.isEmpty {
-            rows.append(ListRow(kind: .smallerItems(merged), bytes: merged.reduce(0) { $0 + tree.allocatedSize(of: $1) }))
-        }
-        let childBytes = tree.children(of: focus).reduce(0) { $0 + tree.allocatedSize(of: $1) }
-        let total = tree.allocatedSize(of: focus)
-        if total > childBytes { rows.append(ListRow(kind: .folderEntries, bytes: total - childBytes)) }
-        rows += trashed(from: focus).map { ListRow(kind: .inTrash($0), bytes: $0.bytes) }
-        return rows
-    }
-
-    private func isInSmallerItemsRow(_ node: Int) -> Bool {
-        tree?.parent(of: node) == focus && focusSmallerItems.contains(node)
-    }
-}
-
-struct ListRow: Identifiable, Hashable {
-    enum Kind: Hashable {
-        case node(Int)
-        case smallerItems([Int])
-        /// Bytes of the folder's own directory entries, so the rows add up.
-        case folderEntries
-        /// Moved to the Trash this session: shown, not counted.
-        case inTrash(TrashedItem)
-    }
-
-    let kind: Kind
-    let bytes: UInt64
-
-    /// Node rows use the node number, which the list's selection binding relies on.
-    var id: Int {
-        switch kind {
-        case .node(let node): node
-        case .smallerItems: -1
-        case .folderEntries: -2
-        case .inTrash(let item): -3 - item.node
-        }
     }
 }
 

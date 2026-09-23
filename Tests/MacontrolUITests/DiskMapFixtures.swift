@@ -1,6 +1,7 @@
 import Foundation
 import MacontrolCore
 @testable import MacontrolUI
+import Safety
 
 /// Synthetic scan trees for the disk map tests. Roots point at a path that does not exist, so any
 /// test that passes proves the code under test never reads the disk.
@@ -71,6 +72,14 @@ nonisolated enum DiskMapFixtures {
         for level in 1...depth { parent = builder.folder(parent, "level-\(level)") }
         builder.file(parent, "bottom.bin", 1_000_000)
         return builder.finished()
+    }
+
+    /// A model over `tree` whose Discard Pile skips the Safety check: fixture paths do not exist,
+    /// and the check would refuse them as missing.
+    @MainActor static func model(_ tree: ScanTree, trash: TrashService? = nil) -> DiskMapModel {
+        let model = DiskMapModel(engine: nil, trash: trash, tree: tree)
+        model.pile = DiscardPile { _ in nil }
+        return model
     }
 
     static func key(_ style: MapStyle, focus: Int = ScanTree.root, width: Int = 800, height: Int = 600, scale: Double = 2, version: Int = 0) -> LayoutKey {

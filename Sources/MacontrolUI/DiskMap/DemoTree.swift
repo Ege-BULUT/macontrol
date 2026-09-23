@@ -6,6 +6,8 @@ extension DiskMapModel {
     static func demo() -> DiskMapModel {
         let tree = ScanTree.demo()
         let model = DiskMapModel(engine: nil, trash: nil, tree: tree)
+        // The demo's paths do not exist, and the Safety check would refuse them as missing.
+        model.pile = DiscardPile { _ in nil }
         let named = { (name: String) in (0..<tree.count).first { tree.name(of: $0) == name } }
         if let derivedData = named("DerivedData"), let installer = named("Xcode_26.6.xip") {
             model.stage(derivedData)

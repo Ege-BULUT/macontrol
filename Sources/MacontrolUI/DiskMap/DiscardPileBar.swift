@@ -14,7 +14,7 @@ struct DiscardPileBar: View {
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Discard Pile").font(.headline)
-                        Text("\(DiskMapText.itemCount(model.pile.items.count)) · \(model.pile.totalBytes.formattedBytes) on disk")
+                        Text("\(DiskMapText.itemCount(model.pile.items.count)) · \(DiskMapText.size(model.pile.totalBytes, isLowerBound: model.pile.isIncomplete)) on disk")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -46,10 +46,20 @@ struct DiscardPileBar: View {
         .floatingSurface()
     }
 
+    private func chipHelp(_ item: StagedItem) -> String {
+        var lines = [item.url.path]
+        if item.isIncomplete { lines.append("\(DiskMapText.size(item.bytes, isLowerBound: true)). \(DiskMapText.notFullyScanned)") }
+        if item.isInCloud { lines.append(DiskMapText.inCloud) }
+        if let note = item.note { lines.append(note) }
+        return lines.joined(separator: "\n")
+    }
+
     private func chip(_ item: StagedItem) -> some View {
         HStack(spacing: 4) {
             Image(systemName: item.isFolder ? "folder.fill" : "doc.fill").foregroundStyle(.secondary)
             Text(item.name).lineLimit(1)
+            if item.isIncomplete { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+            if item.isInCloud { Image(systemName: "icloud").foregroundStyle(.orange) }
             Button("Remove \(item.name)", systemImage: "xmark.circle.fill") { model.unstage(item.node) }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.plain)
@@ -59,6 +69,6 @@ struct DiscardPileBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.quaternary, in: .capsule)
-        .help(item.note ?? item.url.path)
+        .help(chipHelp(item))
     }
 }

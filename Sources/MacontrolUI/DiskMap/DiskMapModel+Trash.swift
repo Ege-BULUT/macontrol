@@ -19,8 +19,13 @@ struct ReviewState {
     let items: [StagedItem]
     var estimate: Estimate = .measuring
     var phase: Phase = .confirm
+    /// The user agreed that iCloud items go from every device.
+    var cloudConfirmed = false
 
     var totalBytes: UInt64 { items.reduce(0) { $0 + $1.bytes } }
+    var isIncomplete: Bool { items.contains(where: \.isIncomplete) }
+    var cloudItemCount: Int { items.count(where: \.isInCloud) }
+    var canConfirm: Bool { phase == .confirm && (cloudItemCount == 0 || cloudConfirmed) }
 }
 
 struct ReviewOutcome: Hashable {
@@ -72,15 +77,17 @@ extension DiskMapModel {
     }
 
     func confirmReview() async {
-        guard let items = review?.items, review?.phase == .confirm else { return }
-        review?.phase = .moving
-        let requests = items.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
+        guard let review, review.canConfirm else { return }
+        self.review?.phase = .moving
+        let requests = review.items.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
         let report: TrashReport = if let trashService {
-            await trashService.moveToTrash(requests)
+            await trashService.moveToTrash(requests, cloudConfirmed: review.cloudConfirmed)
         } else {
             TrashReport(batch: UUID(), outcomes: requests.map { .refused($0.url, .notImplemented) })
         }
-        review?.phase = .done(apply(report))
+        // Applied before `review` is touched: the sheet may be gone by now, and the report must land anyway.
+        let outcomes = apply(report)
+        self.review?.phase = .done(outcomes)
     }
 
     /// Splices trashed items out of the tree in memory, without a rescan (F-0052). Each removal
@@ -135,10 +142,10 @@ extension DiskMapModel {
 
     /// Focus, history and selection move off anything that was just trashed.
     private func leaveRemovedNodes(in tree: ScanTree) {
-        func isGone(_ node: Int) -> Bool {
-            tree.path(to: node).contains { tree.flags(of: $0).contains(.removed) }
-        }
-        while isGone(focus), let parent = tree.parent(of: focus) { focus = parent }
+        let isGone = tree.isRemoved
+        var target = focus
+        while isGone(target), let parent = tree.parent(of: target) { target = parent }
+        focus = target
         backStack.removeAll(where: isGone)
         forwardStack.removeAll(where: isGone)
         switch selection {

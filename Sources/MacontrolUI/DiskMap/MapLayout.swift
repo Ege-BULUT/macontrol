@@ -140,6 +140,35 @@ extension ScanTree {
         return flags.contains(.directory) && !flags.contains(.package) && !flags.contains(.mountPoint)
     }
 
+    /// Whether `index`, or a folder holding it, was spliced out after a Move to Trash.
+    nonisolated func isRemoved(_ index: Int) -> Bool {
+        path(to: index).contains { flags(of: $0).contains(.removed) }
+    }
+
+    /// Whether `index`, or anything inside it, could not be fully listed, so its size is a lower bound.
+    nonisolated func hasUnscannedContent(_ index: Int) -> Bool {
+        let unscanned: NodeFlags = [.unreadable, .incomplete]
+        if !flags(of: index).isDisjoint(with: unscanned) { return true }
+        guard flags(of: index).contains(.directory) else { return false }
+        // Unscanned folders are rare, so check each one's ancestry instead of walking the subtree.
+        return (0..<count).contains { node in
+            node != index && !flags(of: node).isDisjoint(with: unscanned) && !isRemoved(node) && path(to: node).contains(index)
+        }
+    }
+
+    /// The node at `url`, found by name from the scan root; nil when the scan did not see it.
+    nonisolated func node(at url: URL) -> Int? {
+        let root = rootURL.standardizedFileURL.pathComponents
+        let components = url.standardizedFileURL.pathComponents
+        guard components.starts(with: root) else { return nil }
+        var node = Self.root
+        for name in components.dropFirst(root.count) {
+            guard let child = children(of: node).first(where: { self.name(of: $0) == name }) else { return nil }
+            node = child
+        }
+        return node
+    }
+
     /// Ancestors from the scan root down to `index`, both included. Iterative, so any depth works.
     nonisolated func path(to index: Int) -> [Int] {
         var result: [Int] = []

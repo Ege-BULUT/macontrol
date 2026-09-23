@@ -35,7 +35,7 @@ struct ItemList: View {
                 if let id = ids.first, id >= 0 { DiskMapItemMenu(model: model, node: id) }
             } primaryAction: { ids in
                 guard let id = ids.first else { return }
-                if id >= 0 { model.open(.node(id)) } else if id == -1 { model.showsAllSmallerItems = true }
+                if id >= 0 { model.open(.node(id)) } else { expand(id) }
             }
         }
     }
@@ -46,12 +46,14 @@ struct ItemList: View {
             model.selectedNode
         } set: { id in
             guard let id else { return }
-            if id >= 0 {
-                model.select(.node(id))
-            } else if id == -1 {
-                model.showsAllSmallerItems = true
-            }
+            if id >= 0 { model.select(.node(id)) } else { expand(id) }
         }
+    }
+
+    /// The "smaller items" row lists its members, the "more items" row the next page.
+    private func expand(_ id: Int) {
+        if id == ListRow.smallerItemsID { model.showsAllSmallerItems = true }
+        if id == ListRow.moreID { model.showMoreRows() }
     }
 
     private func branchSlots() -> [Int: Int] {
@@ -122,7 +124,7 @@ private struct ItemRow: View {
         switch row.kind {
         case .node: MapPalette.rgb(branch: branch, depth: 0, dark: colorScheme == .dark).color
         case .smallerItems: MapPalette.smallerItems.color
-        case .folderEntries, .inTrash: .clear
+        case .more, .folderEntries, .inTrash: .clear
         }
     }
 
@@ -130,6 +132,7 @@ private struct ItemRow: View {
         switch row.kind {
         case .node(let node): tree.name(of: node)
         case .smallerItems(let members): DiskMapText.smallerItems(members.count)
+        case .more(let count): "\(DiskMapText.itemCount(count)) more"
         case .folderEntries: "Folder entries"
         case .inTrash(let item): item.name
         }
@@ -139,6 +142,7 @@ private struct ItemRow: View {
         switch row.kind {
         case .node(let node): DiskMapText.notes(for: tree.flags(of: node)).first?.text
         case .smallerItems: "Too small to draw. Click to list them"
+        case .more: "Click to show the next \(DiskMapModel.listPage.formatted())"
         case .folderEntries: "The folder's own directory records"
         case .inTrash: "In Trash: space returns when the Trash is emptied"
         }
@@ -152,6 +156,7 @@ private struct ItemRow: View {
         switch row.kind {
         case .node(let node): Self.symbol(for: tree.flags(of: node))
         case .smallerItems: "square.stack.3d.up"
+        case .more: "ellipsis.circle"
         case .folderEntries: "list.bullet.rectangle"
         case .inTrash: "trash"
         }

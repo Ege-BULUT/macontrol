@@ -49,8 +49,17 @@ enum DiskMapText {
         case .inTrash: "Already in the Trash"
         case .alreadyStaged: "Already in the Discard Pile"
         case .insideStaged(let name): "Already in the Discard Pile as part of “\(name)”"
+        case .insidePackage(let name): "Part of “\(name)”, which is removed as one item"
         }
     }
+
+    /// A size that may be larger: "at least 2 GB" when part of it was not scanned.
+    static func size(_ bytes: UInt64, isLowerBound: Bool) -> String {
+        isLowerBound ? "at least \(bytes.formattedBytes)" : bytes.formattedBytes
+    }
+
+    static let notFullyScanned = "Not fully scanned: it may hold more than shown"
+    static let inCloud = "In iCloud Drive: moving it to the Trash removes it on every device"
 
     static func itemCount(_ count: Int) -> String {
         count == 1 ? "1 item" : "\(count.formatted()) items"

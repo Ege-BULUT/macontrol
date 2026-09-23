@@ -73,7 +73,8 @@ struct InspectorPanel: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Button("Reveal in Finder", systemImage: "folder") { model.revealInFinder(node) }
-                    .keyboardShortcut("r")
+                    // ⌘R is the app's Rescan.
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
                     .frame(maxWidth: .infinity)
                 Button("Quick Look", systemImage: "eye") { model.quickLook(node) }
                     .labelStyle(.iconOnly)

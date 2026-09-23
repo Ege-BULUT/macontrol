@@ -1,3 +1,4 @@
+import AppKit
 import MacontrolCore
 import SwiftUI
 
@@ -8,7 +9,7 @@ struct MapChart: View {
     let tree: ScanTree
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovered: Int?
+    @State private var hover: MapHover?
     @State private var pointer: CGPoint = .zero
 
     var body: some View {
@@ -32,6 +33,7 @@ struct MapChart: View {
     private func canvas(_ layout: MapLayout, size: CGSize) -> some View {
         let geometry = MapGeometry(layout: layout, size: size)
         let staged = Set(model.pile.items.map(\.node))
+        let hovered = hover?.element(in: layout)
         return ZStack {
             MapFillLayer(layout: layout, tree: tree).equatable()
             MapHighlightLayer(layout: layout, hovered: hovered, selection: model.selection, staged: staged)
@@ -39,7 +41,7 @@ struct MapChart: View {
             if layout.elements.isEmpty {
                 Text("Empty folder").font(.callout).foregroundStyle(.secondary)
             }
-            if let hovered, layout.elements.indices.contains(hovered) {
+            if let hovered {
                 MapTooltip(element: layout.elements[hovered], tree: tree, focusBytes: tree.allocatedSize(of: layout.key.focus))
                     .position(tooltipPosition(in: size))
                     .allowsHitTesting(false)
@@ -50,9 +52,9 @@ struct MapChart: View {
             switch phase {
             case .active(let location):
                 pointer = location
-                hovered = layout.element(at: geometry.toLayout(location))
+                hover = layout.element(at: geometry.toLayout(location)).map { MapHover(key: layout.key, index: $0) }
             case .ended:
-                hovered = nil
+                hover = nil
             }
         }
         .gesture(SpatialTapGesture(count: 2).onEnded { value in
@@ -60,7 +62,7 @@ struct MapChart: View {
         })
         .simultaneousGesture(SpatialTapGesture().onEnded { value in
             if layout.isInCenter(geometry.toLayout(value.location)) {
-                model.goUp()
+                model.centerClicked(clickCount: NSApp.currentEvent?.clickCount ?? 1)
             } else {
                 model.select(item(at: value.location, layout, geometry))
             }
@@ -74,11 +76,17 @@ struct MapChart: View {
         .accessibilityLabel("Disk map of \(tree.name(of: layout.key.focus))")
         .accessibilityChildren {
             ForEach(Array(layout.topLevel), id: \.self) { index in
-                let label = MapGeometry.label(for: layout.elements[index], in: tree)
+                let element = layout.elements[index]
+                let label = MapGeometry.label(for: element, in: tree)
                 Rectangle()
                     .accessibilityLabel("\(label.name), \(label.size)")
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { model.open(layout.elements[index].item) }
+                    .accessibilityAction { model.open(element.item) }
+                    .accessibilityAction(named: "Select") { model.select(element.item) }
+                    .accessibilityAction(named: "Add to Discard Pile") {
+                        model.select(element.item)
+                        model.stageSelection()
+                    }
             }
         }
     }
@@ -146,5 +154,17 @@ private struct MapTooltip: View {
         .background(.regularMaterial, in: .rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+    }
+}
+
+/// The element under the pointer, tied to the layout it indexes. A drill-in or a trash splice replaces
+/// the layout while the pointer rests, and the old index must never be read in the new one: the context
+/// menu reads it on every body evaluation, so a stale index would trap or act on the wrong item.
+struct MapHover: Equatable {
+    let key: LayoutKey
+    let index: Int
+
+    func element(in layout: MapLayout) -> Int? {
+        key == layout.key && layout.elements.indices.contains(index) ? index : nil
     }
 }

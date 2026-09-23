@@ -15,6 +15,7 @@ struct ReviewSheet: View {
         }
         .padding(24)
         .frame(width: 560)
+        .interactiveDismissDisabled(review.phase == .moving)
     }
 
     private var confirmation: some View {
@@ -30,10 +31,12 @@ struct ReviewSheet: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.name).lineLimit(1)
                         Text(item.url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(.orange) }
+                        if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
                         if let note = item.note { Text(note).font(.caption).foregroundStyle(.orange) }
                     }
                     Spacer()
-                    Text(item.bytes.formattedBytes).monospacedDigit().foregroundStyle(.secondary)
+                    Text(DiskMapText.size(item.bytes, isLowerBound: item.isIncomplete)).monospacedDigit().foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
             }
@@ -41,13 +44,21 @@ struct ReviewSheet: View {
             .alternatingRowBackgrounds()
             .frame(height: min(CGFloat(review.items.count) * 44 + 12, 240))
             estimate
+            if review.cloudItemCount > 0 {
+                Toggle(isOn: Binding { model.review?.cloudConfirmed ?? false } set: { model.review?.cloudConfirmed = $0 }) {
+                    Text("Remove \(DiskMapText.itemCount(review.cloudItemCount)) from iCloud Drive on every device")
+                }
+                .disabled(review.phase != .confirm)
+            }
             HStack {
                 Spacer()
+                // Closing the sheet mid-move would hide the outcome; the model applies it either way.
                 Button("Cancel") { model.review = nil }
                     .keyboardShortcut(.cancelAction)
+                    .disabled(review.phase == .moving)
                 Button("Move to Trash") { Task { await model.confirmReview() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(review.phase == .moving)
+                    .disabled(!review.canConfirm)
             }
             .controlSize(.large)
         }
@@ -65,9 +76,9 @@ struct ReviewSheet: View {
                         ProgressView().controlSize(.small)
                         Text("Measuring what this frees…")
                     }
-                    Text("\(review.totalBytes.formattedBytes) on disk").font(.callout).foregroundStyle(.secondary)
+                    Text("\(DiskMapText.size(review.totalBytes, isLowerBound: review.isIncomplete)) on disk").font(.callout).foregroundStyle(.secondary)
                 case .measured(let estimate):
-                    Text("Frees about \(estimate.freesNow.formattedBytes) once the Trash is emptied")
+                    Text("Frees \(review.isIncomplete ? "at least" : "about") \(estimate.freesNow.formattedBytes) once the Trash is emptied")
                         .font(.headline.monospacedDigit())
                     if estimate.sharedElsewhere > 0 {
                         Text("\(estimate.sharedElsewhere.formattedBytes) stays in use: shared with clones, snapshots or other hard links.")
@@ -75,7 +86,7 @@ struct ReviewSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 case .unavailable:
-                    Text("\(review.totalBytes.formattedBytes) on disk").font(.headline.monospacedDigit())
+                    Text("\(DiskMapText.size(review.totalBytes, isLowerBound: review.isIncomplete)) on disk").font(.headline.monospacedDigit())
                     Text("How much of it is shared with clones or hard links could not be measured, so the space freed may be less.")
                         .font(.callout)
                         .foregroundStyle(.secondary)

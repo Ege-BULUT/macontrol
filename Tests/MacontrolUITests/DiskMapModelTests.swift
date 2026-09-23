@@ -57,7 +57,7 @@ import TestSupport
 
     @Test func navigatesAFourThousandLevelChain() {
         let depth = 4_000
-        let model = DiskMapModel(engine: nil, trash: nil, tree: DiskMapFixtures.chain(depth: depth))
+        let model = DiskMapFixtures.model(DiskMapFixtures.chain(depth: depth))
         model.focus = depth
         for _ in 0..<depth { model.goUp() }
         #expect(model.focus == ScanTree.root)
@@ -102,7 +102,7 @@ import TestSupport
         let outer = builder.folder(ScanTree.root, "outer")
         let inner = builder.file(outer, "inner", 100)
         let tree = builder.finished()
-        var pile = DiscardPile()
+        var pile = DiscardPile { _ in nil }
         #expect(pile.add(inner, in: tree) == nil)
         #expect(pile.add(inner, in: tree) == .alreadyStaged)
         #expect(pile.add(outer, in: tree) == nil)
@@ -119,7 +119,7 @@ import TestSupport
         let keep = builder.file(caches, "keep", 3_000)
         let old = builder.folder(ScanTree.root, "old")
         builder.file(old, "a", 1_000)
-        let model = DiskMapModel(engine: nil, trash: nil, tree: builder.finished())
+        let model = DiskMapFixtures.model(builder.finished())
         let before = model.tree!.allocatedSize(of: ScanTree.root)
         model.stage(blob)
         model.stage(old)
@@ -151,7 +151,7 @@ import TestSupport
         let second = builder.folder(ScanTree.root, "second")
         _ = builder.add(first, "data.bin", bytes: 4 << 20, flags: .hardLinked, identity: shared)
         let link = builder.add(second, "data-link.bin", bytes: 0, flags: [.hardLinked, .sharedHardLink], identity: shared)
-        let model = DiskMapModel(engine: nil, trash: nil, tree: builder.finished())
+        let model = DiskMapFixtures.model(builder.finished())
         let rootBefore = model.tree!.allocatedSize(of: ScanTree.root)
         model.stage(link)
         model.apply(TrashReport(batch: UUID(), outcomes: [.trashed(original: model.tree!.url(of: link), trashedTo: URL(fileURLWithPath: "/.Trash/data-link.bin"))]))
@@ -160,9 +160,9 @@ import TestSupport
         #expect(model.tree!.allocatedSize(of: second) == 0)
     }
 
-    /// Until the Trash service lands everything is refused: the map and pile stay, each item says why.
+    /// Items that are not moved stay on the map and in the pile, each with the reason.
     @Test func refusalsLeaveTheMapAndThePileAsTheyWere() async {
-        let model = DiskMapModel(engine: nil, trash: nil, tree: DiskMapFixtures.mixed())
+        let model = DiskMapFixtures.model(DiskMapFixtures.mixed())
         let target = model.tree!.sortedChildren(of: ScanTree.root)[0]
         model.stage(target)
         let version = model.treeVersion
