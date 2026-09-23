@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// How much trust a rule's matches get in the UI (F-0027).
 public enum SafetyLevel: String, Codable, Sendable, CaseIterable {
@@ -29,8 +30,16 @@ public struct CleanupRule: Codable, Sendable, Identifiable, Hashable {
     public var minimumAgeDays: Int?
     /// Why this is safe (or not), shown to the user.
     public var note: String
+    /// Apps and tools that use the matches (bundle ids, app or executable names); a match is skipped
+    /// while any of them runs. `[]` declares the matches ownerless. `nil`, for catch-all cache rules
+    /// only, takes the owner from a reverse-DNS folder name, and a match without one is never
+    /// preselected (F-0015).
+    public var owners: [String]?
 
-    public init(id: String, title: String, category: CleanupCategory, safety: SafetyLevel, paths: [String], minimumAgeDays: Int?, note: String) {
+    public init(
+        id: String, title: String, category: CleanupCategory, safety: SafetyLevel, paths: [String],
+        minimumAgeDays: Int?, note: String, owners: [String]? = nil
+    ) {
         self.id = id
         self.title = title
         self.category = category
@@ -38,6 +47,7 @@ public struct CleanupRule: Codable, Sendable, Identifiable, Hashable {
         self.paths = paths
         self.minimumAgeDays = minimumAgeDays
         self.note = note
+        self.owners = owners
     }
 }
 
@@ -51,7 +61,17 @@ public struct CleanupCatalog: Codable, Sendable {
         self.rules = rules
     }
 
+    /// The catalog shipped inside the signed app, with invalid rules dropped and logged (F-0021, F-0032).
     public static func bundled() throws -> CleanupCatalog {
+        let (catalog, rejections) = try unvalidatedBundled().validated()
+        for rejection in rejections {
+            Logger(subsystem: "Macontrol", category: "Cleaner")
+                .error("dropped rule \(rejection.ruleID, privacy: .public): \(rejection.pattern, privacy: .public) is \(rejection.reason, privacy: .public)")
+        }
+        return catalog
+    }
+
+    static func unvalidatedBundled() throws -> CleanupCatalog {
         // SwiftPM's Bundle.module only looks beside the executable; in the .app the resource
         // bundle sits in Contents/Resources (scripts/bundle-app.sh), where code signing allows it.
         let resources = Bundle.main.url(forResource: "macontrol_Cleaner", withExtension: "bundle").flatMap(Bundle.init(url:))
