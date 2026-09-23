@@ -1,0 +1,82 @@
+import Darwin
+import Foundation
+import MacontrolCore
+@testable import ScanEngine
+import Testing
+
+/// How listings become tree nodes, fed with hand-made listings so no real volume is walked.
+@Suite struct TreeSinkTests {
+    private func listing(_ entries: [(String, BulkEntry)]) -> Listing {
+        var listing = Listing()
+        for (name, template) in entries {
+            var entry = template
+            entry.nameStart = listing.names.count
+            entry.nameLength = name.utf8.count
+            listing.names.append(contentsOf: name.utf8)
+            listing.entries.append(entry)
+        }
+        return listing
+    }
+
+    private func folder(inode: UInt64, flags: UInt32 = 0) -> BulkEntry {
+        BulkEntry(nameStart: 0, nameLength: 0, device: 1, type: UInt32(VDIR.rawValue), fileFlags: flags, inode: inode)
+    }
+
+    private func file(inode: UInt64, allocated: UInt64, flags: UInt32 = 0) -> BulkEntry {
+        BulkEntry(nameStart: 0, nameLength: 0, device: 1, type: UInt32(VREG.rawValue), fileFlags: flags, inode: inode, logical: allocated, allocated: allocated)
+    }
+
+    /// F-0031, F-0005: "/" is the Data volume walked once. Firmlinked entries appear at their "/" paths;
+    /// Data-only folders such as "macOS Install Data" appear under /System/Volumes/Data, where they exist.
+    @Test func dataVolumeRootIsPlacedAtUserFacingPaths() throws {
+        let layout = try #require(DataVolumeLayout(firmlinks: "/Users\tUsers\n/System/Library/Caches\tSystem/Library/Caches\n/usr/local\tusr/local\n"))
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: layout)
+        let entries = listing([
+            ("macOS Install Data", folder(inode: 10)),
+            ("Users", folder(inode: 11)),
+            ("System", folder(inode: 12)),
+            (".Spotlight-V100", folder(inode: 13)),
+            ("usr", folder(inode: 14)),
+            ("leftover.log", file(inode: 15, allocated: 4096)),
+        ])
+        var walkable: [Int32] = []
+
+        sink.add(entries, to: 0, walkableNodes: &walkable)
+
+        let paths = walkable.map { sink.tree.url(of: Int($0)).path }
+        #expect(paths == ["/System/Volumes/Data/macOS Install Data", "/Users", "/System", "/System/Volumes/Data/.Spotlight-V100", "/usr"])
+        let data = try #require(sink.tree.parent(of: Int(walkable[0])))
+        #expect(sink.tree.url(of: data).path == "/System/Volumes/Data")
+        #expect(sink.tree.children(of: ScanTree.root).count == 3, "Users, System, usr; nothing else at the top")
+    }
+
+    /// F-0019: an evicted iCloud item counts 0 B here and is never listed (listing would download it).
+    @Test func datalessItemsAreZeroAndNotEntered() {
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
+        let dataless = UInt32(SF_DATALESS)
+        var walkable: [Int32] = []
+
+        sink.add(listing([
+            ("cloud.mov", file(inode: 3, allocated: 1 << 30, flags: dataless)),
+            ("CloudFolder", folder(inode: 4, flags: dataless)),
+            ("System Thing", folder(inode: 5, flags: UInt32(SF_RESTRICTED))),
+        ]), to: 0, walkableNodes: &walkable)
+        sink.tree.finalizeTotals()
+
+        #expect(sink.tree.allocatedSize(of: ScanTree.root) == 0)
+        #expect(sink.tree.children(of: 0).allSatisfy { sink.tree.flags(of: $0).contains(.dataless) || sink.tree.flags(of: $0).contains(.systemProtected) })
+        #expect(walkable.count == 1, "only the restricted folder is listed; the dataless one is not")
+    }
+
+    @Test func mountPointEntryIsALeafWithItsFlag() {
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
+        var mount = folder(inode: 3)
+        mount.mountStatus = UInt32(DIR_MNTSTATUS_MNTPOINT)
+        var walkable: [Int32] = []
+
+        sink.add(listing([("Volume", mount)]), to: 0, walkableNodes: &walkable)
+
+        #expect(walkable.isEmpty)
+        #expect(sink.tree.flags(of: 1).isSuperset(of: [.directory, .mountPoint]))
+    }
+}
