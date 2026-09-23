@@ -19,8 +19,12 @@ struct BulkEntry {
     var privateSize: UInt64?
     var cloneID: UInt64 = 0
     var cloneRefCount: UInt32 = 0
-    /// EF_MAY_SHARE_BLOCKS: some of the file's blocks may belong to a clone.
-    var mayShareBlocks = false
+    /// EF_* bits from sys/stat.h.
+    var extendedFlags: UInt64 = 0
+    /// Some of the file's blocks may belong to a clone.
+    var mayShareBlocks: Bool { extendedFlags & UInt64(EF_MAY_SHARE_BLOCKS) != 0 }
+    /// Every block also belongs to another file, so deleting this one frees nothing.
+    var sharesAllBlocks: Bool { extendedFlags & UInt64(EF_SHARES_ALL_BLOCKS) != 0 }
 
     var isDirectory: Bool { type == UInt32(VDIR.rawValue) }
     var isSymlink: Bool { type == UInt32(VLNK.rawValue) }
@@ -140,7 +144,7 @@ final class BulkReader {
             let privateSize = cursor.take(UInt64.self)
             if returnedExtended & attrgroup_t(ATTR_CMNEXT_PRIVATESIZE) != 0 { entry.privateSize = privateSize }
             entry.cloneID = cursor.take(UInt64.self)
-            entry.mayShareBlocks = cursor.take(UInt64.self) & 0x1 != 0  // EF_MAY_SHARE_BLOCKS, sys/stat.h
+            entry.extendedFlags = cursor.take(UInt64.self)
             entry.cloneRefCount = cursor.take(UInt32.self)
         }
         guard cursor.offset <= record.count else { return }  // a malformed record never becomes an entry

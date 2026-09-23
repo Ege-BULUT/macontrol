@@ -5,8 +5,9 @@ import MacontrolCore
 public struct ScanOptions: Sendable {
     /// Walker threads. `nil` lets the engine pick (active cores, fewer under Low Power Mode or thermal pressure).
     public var workerCount: Int?
-    /// Directory descriptors one walk may hold open. `nil` takes half the process's open-file limit.
-    /// Any value gives the same result; a small one only costs reopening folders by name.
+    /// Directory descriptors one walk may hold open. `nil` takes a quarter of the process's open-file limit,
+    /// so the cleaner's parallel measures and a scan fit together. Any value gives the same result; a
+    /// small one only costs reopening folders by name.
     public var descriptorBudget: Int?
 
     public init(workerCount: Int? = nil, descriptorBudget: Int? = nil) {
@@ -28,10 +29,20 @@ public struct ScanOptions: Sendable {
 
     var resolvedDescriptorBudget: Int {
         if let descriptorBudget { return descriptorBudget }
+        _ = Self.raisedFileLimit
         var limit = rlimit()
         guard getrlimit(RLIMIT_NOFILE, &limit) == 0 else { return 64 }
-        return Int(min(limit.rlim_cur / 2, 1024))
+        return Int(min(limit.rlim_cur / 4, 1024))
     }
+
+    /// A GUI app starts with a soft limit of 256 descriptors; raise it once to what the kernel allows
+    /// (F-0060). Walks share the process, and running out only costs waiting, never bytes.
+    private static let raisedFileLimit: Void = {
+        var limit = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &limit) == 0, limit.rlim_cur < rlim_t(OPEN_MAX) else { return }
+        limit.rlim_cur = min(limit.rlim_max, rlim_t(OPEN_MAX))
+        setrlimit(RLIMIT_NOFILE, &limit)
+    }()
 }
 
 public struct ScanProgress: Sendable, Equatable {
@@ -67,14 +78,16 @@ public final class ScanEngine: Sendable {
     /// Streams progress (at most about 10 events a second), then exactly one `.completed` tree.
     /// Ending the stream or cancelling the consumer stops the walk.
     ///
-    /// Scanning "/" walks the Data volume once and shows its entries at their firmlinked paths, plus
-    /// the Data-only folders under /System/Volumes/Data (F-0031, F-0005).
+    /// Scanning "/" or /System/Volumes/Data scans the startup disk as the user sees it: the Data volume is
+    /// walked once and its entries are shown at their firmlinked paths under a "/" root, plus the Data-only
+    /// folders under /System/Volumes/Data (F-0031, F-0005).
     public func scan(_ root: URL) -> AsyncThrowingStream<ScanEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<ScanEvent, any Error>.makeStream()
         let cancellation = Cancellation()
         continuation.onTermination = { _ in cancellation.cancel() }
         let options = options
         Thread {
+            stopDatalessMaterialization()
             do {
                 let tree = try Self.buildTree(root, options: options, cancellation: cancellation) { continuation.yield(.progress($0)) }
                 continuation.yield(.completed(tree))
@@ -132,10 +145,12 @@ public final class ScanEngine: Sendable {
         guard lstat(path, &info) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         guard info.st_mode & S_IFMT == S_IFDIR else { throw ScanError.notADirectory(root) }
         let identity = FileIdentity(device: info.st_dev, inode: info.st_ino)
-        let layout = path == "/" ? DataVolumeLayout() : nil
+        let layout = DataVolumeLayout.forStartupDisk(path)
         let walkRoot = layout.map { WalkRoot(path: DataVolumeLayout.dataRoot, identity: $0.dataIdentity, node: 0) }
             ?? WalkRoot(path: path, identity: identity, node: 0)
-        let sink = TreeSink(tree: ScanTree(rootURL: root, rootIdentity: identity), dataVolume: layout)
+        let tree = layout.map { ScanTree(rootURL: URL(fileURLWithPath: "/"), rootIdentity: $0.rootIdentity) }
+            ?? ScanTree(rootURL: root, rootIdentity: identity)
+        let sink = TreeSink(tree: tree, dataVolume: layout)
         try walk([walkRoot], sink: sink, extended: false, options: options, cancellation: cancellation) { progress($0.progress) }
         sink.tree.finalizeTotals()
         return sink.tree
@@ -160,7 +175,10 @@ public final class ScanEngine: Sendable {
         let cancellation = Cancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                Thread { continuation.resume(with: Result { try work(cancellation) }) }.start()
+                Thread {
+                    stopDatalessMaterialization()
+                    continuation.resume(with: Result { try work(cancellation) })
+                }.start()
             }
         } onCancel: {
             cancellation.cancel()

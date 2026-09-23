@@ -4,7 +4,9 @@ import MacontrolCore
 /// Answers "what does trashing this selection free right now" for `ScanEngine.reclaimable` (F-0004).
 ///
 /// - A file frees its PRIVATESIZE: bytes not trapped in a clone or snapshot.
-/// - A decmpfs-compressed file reports PRIVATESIZE 0 and frees its ALLOCSIZE instead.
+/// - A decmpfs-compressed file reports PRIVATESIZE 0 and frees its ALLOCSIZE instead, unless it shares
+///   all its blocks: a clone of it reports CLONE_REFCNT 0 too, so its group cannot be counted and it
+///   promises nothing (F-0004).
 /// - A hard-linked inode frees its bytes only if every link is selected; PRIVATESIZE is per inode,
 ///   so it is charged once.
 /// - A full clone group (same CLONEID, CLONE_REFCNT members) frees its shared blocks once if every
@@ -71,7 +73,11 @@ final class ReclaimSink: WalkSink {
         if entry.isDataless { return }
         let compressed = entry.fileFlags & UInt32(UF_COMPRESSED) != 0
         let privateBytes = compressed ? entry.allocated : min(entry.privateSize ?? entry.allocated, entry.allocated)
-        if entry.linkCount > 1 {
+        if compressed && entry.sharesAllBlocks {
+            // ponytail: two selected clones of one compressed file also promise 0, not one copy; nothing
+            // reports how many clones share it. Group them by CLONEID if that undercount shows up.
+            shared += entry.allocated
+        } else if entry.linkCount > 1 {
             let key = FileIdentity(device: entry.device, inode: entry.inode)
             hardLinks[key, default: Group(members: entry.linkCount, allocated: entry.allocated, privateBytes: privateBytes)].seen += 1
         } else if entry.mayShareBlocks && entry.cloneRefCount > 1 && entry.cloneID != 0 && !compressed {

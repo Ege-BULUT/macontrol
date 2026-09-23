@@ -74,6 +74,35 @@ import Testing
         #expect((tree.storageBytes - nameBytes) / tree.count < 80 + ScanTree.bytesPerNode / 2, "slack from array growth only")
     }
 
+    /// F-0063: trashing the link that carries an inode's bytes leaves them on disk through the other links;
+    /// the smallest surviving path takes the charge, the same rule a rescan would apply.
+    @Test func removingTheChargedLinkMovesItsBytesToTheNextLink() {
+        var tree = ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 1))
+        let data = FileIdentity(device: 1, inode: 9)
+        var links: [String: Int] = [:]
+        for folder in ["c", "a", "b"] {
+            let node = tree.addChild(of: ScanTree.root, name: folder, flags: .directory, allocated: 0, logical: 0, identity: FileIdentity(device: 1, inode: 100 + UInt64(links.count)))
+            links[folder] = tree.addChild(of: node, name: "data.bin", flags: .hardLinked, allocated: 1 << 20, logical: 1_000_000, identity: data)
+        }
+        tree.finalizeTotals()
+        #expect(tree.allocatedSize(of: links["a"]!) == 1 << 20)
+
+        tree.removeSubtree(at: tree.parent(of: links["a"]!)!)
+
+        #expect(tree.allocatedSize(of: ScanTree.root) == 1 << 20, "the inode lives on through b and c")
+        #expect(tree.logicalSize(of: ScanTree.root) == 1_000_000)
+        #expect(tree.allocatedSize(of: links["b"]!) == 1 << 20)
+        #expect(tree.allocatedSize(of: tree.parent(of: links["b"]!)!) == 1 << 20)
+        #expect(!tree.flags(of: links["b"]!).contains(.sharedHardLink))
+        #expect(tree.flags(of: links["c"]!).contains(.sharedHardLink))
+
+        tree.removeSubtree(at: links["c"]!)
+        #expect(tree.allocatedSize(of: ScanTree.root) == 1 << 20, "removing a 0 B link changes nothing")
+        tree.removeSubtree(at: links["b"]!)
+        #expect(tree.allocatedSize(of: ScanTree.root) == 0, "the last link takes the bytes with it")
+        #expect(tree.fileCount(of: ScanTree.root) == 0)
+    }
+
     @Test func removingAFolderSplicesItOut() {
         var (tree, folder, _) = sampleTree()
         tree.removeSubtree(at: folder)

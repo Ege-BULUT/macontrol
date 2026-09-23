@@ -65,24 +65,47 @@ import TestSupport
         #expect(estimate == ReclaimEstimate(freesNow: UInt64(mebibyte), sharedElsewhere: 0))
     }
 
-    @Test func compressedFileFreesItsAllocatedSize() async throws {
-        let tmp = try TemporaryDirectory()
-        let plain = tmp.url.appendingPathComponent("plain.txt")
+    /// A decmpfs-compressed copy of a highly compressible text file, made by `ditto --hfsCompression`.
+    private func compressedFile(in tmp: TemporaryDirectory, named name: String) throws -> URL {
+        let plain = tmp.url.appendingPathComponent("plain-\(name)")
         try String(repeating: "macontrol compresses well. ", count: 400_000).write(to: plain, atomically: false, encoding: .utf8)
-        let compressed = tmp.url.appendingPathComponent("compressed.txt")
+        let compressed = tmp.url.appendingPathComponent(name)
         let ditto = Process()
         ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         ditto.arguments = ["--hfsCompression", plain.path, compressed.path]
         try ditto.run()
         ditto.waitUntilExit()
+        try #require(Fixtures.allocatedBytes(compressed) > 0)
+        try #require(Fixtures.allocatedBytes(compressed) < Fixtures.allocatedBytes(plain) / 10, "ditto did not compress")
+        return compressed
+    }
+
+    @Test func compressedFileFreesItsAllocatedSize() async throws {
+        let tmp = try TemporaryDirectory()
+        let compressed = try compressedFile(in: tmp, named: "compressed.txt")
         let allocated = Fixtures.allocatedBytes(compressed)
-        try #require(allocated > 0 && allocated < Fixtures.allocatedBytes(plain) / 10, "ditto did not compress")
 
         let estimate = try await ScanEngine().reclaimable([compressed])
         let tree = try await Fixtures.scanTree(tmp.url)
 
         #expect(estimate == ReclaimEstimate(freesNow: allocated, sharedElsewhere: 0))
         #expect(tree.flags(of: try #require(Fixtures.node("compressed.txt", in: tree))).contains(.compressed))
+    }
+
+    /// F-0004: a Finder Duplicate of a compressed file shares every block (EF_SHARES_ALL_BLOCKS) yet reports
+    /// PRIVATESIZE 0 and CLONE_REFCNT 0 like an unshared one, so it must not fall into the ALLOCSIZE rule.
+    @Test func cloneOfACompressedFileFreesNothing() async throws {
+        let tmp = try TemporaryDirectory()
+        let compressed = try compressedFile(in: tmp, named: "compressed.txt")
+        let clone = tmp.url.appendingPathComponent("clone.txt")
+        try #require(clonefile(compressed.path, clone.path, 0) == 0)
+        let allocated = Fixtures.allocatedBytes(clone)
+
+        #expect(try await ScanEngine().reclaimable([clone]) == ReclaimEstimate(freesNow: 0, sharedElsewhere: allocated))
+
+        // Once the clone is gone the file shares nothing again (EF_MAY_SHARE_BLOCKS alone) and frees its size.
+        try #require(unlink(clone.path) == 0)
+        #expect(try await ScanEngine().reclaimable([compressed]) == ReclaimEstimate(freesNow: allocated, sharedElsewhere: 0))
     }
 
     @Test func sparseFileFreesItsAllocatedBlocks() async throws {
@@ -108,6 +131,17 @@ import TestSupport
         let estimate = try await ScanEngine().reclaimable([tmp.url.appendingPathComponent("sel")])
 
         #expect(estimate == ReclaimEstimate(freesNow: 8192, sharedElsewhere: 0, isIncomplete: true))
+    }
+
+    /// A selected name the listing does not spell the same way (APFS is case-insensitive, so lstat found it)
+    /// makes the estimate a lower bound instead of a silent 0.
+    @Test func selectionSpelledInAnotherCaseIsALowerBound() async throws {
+        let tmp = try TemporaryDirectory()
+        try tmp.file("dir/Cache.bin", size: mebibyte)
+        let misspelled = tmp.url.appendingPathComponent("dir/cache.bin")
+        try #require(FileManager.default.fileExists(atPath: misspelled.path), "temp folder is on a case-sensitive volume")
+        let estimate = try await ScanEngine().reclaimable([misspelled])
+        #expect(estimate.freesNow == UInt64(mebibyte) || estimate.isIncomplete, "\(estimate)")
     }
 
     @Test func missingItemsFreeNothing() async throws {

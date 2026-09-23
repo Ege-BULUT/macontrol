@@ -11,6 +11,12 @@ protocol WalkSink: AnyObject, SendableMetatype {
     func flag(_ folder: Int32, _ flags: NodeFlags)
 }
 
+/// Never download evicted iCloud files or folders while reading metadata, on every engine thread that
+/// touches paths (F-0019). Per thread, so the rest of the app can still open such a file on purpose.
+func stopDatalessMaterialization() {
+    setiopolicy_np(IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_THREAD, IOPOL_MATERIALIZE_DATALESS_FILES_OFF)
+}
+
 /// A walk root: an absolute path, the identity it must still have, and the sink's node for it.
 struct WalkRoot {
     var path: String
@@ -100,8 +106,7 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
     // MARK: Worker
 
     private func work() {
-        // Never download evicted iCloud files or folders while reading their metadata (F-0019).
-        setiopolicy_np(IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_THREAD, IOPOL_MATERIALIZE_DATALESS_FILES_OFF)
+        stopDatalessMaterialization()
         let reader = BulkReader(extended: extended)
         var listing = Listing()
         var walkable: [Int32] = []
@@ -173,21 +178,8 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
                 return -1
             }
         }
-        let name = folders[Int(job)].name
-        let identity = folders[Int(job)].identity
-        let deadline = Date().addingTimeInterval(descriptorWait)
-        var fd: Int32 = -1
-        var failure: Int32 = 0
-        while true {
-            lock.unlock()
-            // A first open follows the listing that just named it; only roots and reopens can be stale.
-            fd = Self.openDirectory(at: parentFD, name, verifying: parent < 0 ? identity : nil)
-            failure = fd < 0 ? errno : 0
-            lock.lock()
-            // Out of descriptors outside our budget: free one of ours, or wait for another worker's.
-            guard fd < 0, failure == EMFILE || failure == ENFILE, !cancelled, Date() < deadline else { break }
-            if !spillIdleFolder() { _ = lock.wait(until: Date().addingTimeInterval(0.01)) }
-        }
+        // A first open follows the listing that just named it; only roots and reopens can be stale.
+        let (fd, failure) = openWaiting(at: parentFD, folders[Int(job)].name, verifying: parent < 0 ? folders[Int(job)].identity : nil)
         if parent >= 0 {
             folders[Int(parent)].pinned -= 1
             folders[Int(parent)].unopened -= 1
@@ -214,6 +206,11 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
                 break
             }
             let fd = reopen(folder)
+            if folders[Int(folder)].fd >= 0 {  // another worker reopened it while this one had the lock released
+                if fd >= 0 { close(fd) }
+                release(2)
+                break
+            }
             release(fd >= 0 ? 1 : 2)
             guard fd >= 0 else { return -1 }
             folders[Int(folder)].fd = fd
@@ -225,7 +222,7 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
     }
 
     /// Walks names down from the nearest open ancestor (or a root's path) to `folder`, holding at most
-    /// two descriptors at a time. Runs under the lock: it is rare, and no ancestor may close meanwhile.
+    /// two descriptors at a time. The ancestor stays pinned while the lock is released for each open.
     private func reopen(_ folder: Int32) -> Int32 {
         var chain: [Int32] = []
         var ancestor = folder
@@ -234,16 +231,41 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
             guard folders[Int(ancestor)].parent >= 0 else { break }
             ancestor = folders[Int(ancestor)].parent
         }
-        var current = folders[Int(ancestor)].fd >= 0 ? folders[Int(ancestor)].fd : AT_FDCWD
+        let anchor = folders[Int(ancestor)].fd >= 0 ? ancestor : -1
+        var current = AT_FDCWD
+        if anchor >= 0 {
+            folders[Int(anchor)].pinned += 1
+            current = folders[Int(anchor)].fd
+        }
+        defer {
+            if anchor >= 0 {
+                folders[Int(anchor)].pinned -= 1
+                closeIfIdle(anchor)
+            }
+        }
         var owned = false
         for link in chain.reversed() {
-            let next = Self.openDirectory(at: current, folders[Int(link)].name, verifying: folders[Int(link)].identity)
+            let (next, _) = openWaiting(at: current, folders[Int(link)].name, verifying: folders[Int(link)].identity)
             if owned { close(current) }
             guard next >= 0 else { return -1 }
             current = next
             owned = true
         }
         return current
+    }
+
+    /// `openat` with the lock released. While the process is out of descriptors (other walks, other code),
+    /// frees this walk's idle ones or waits, for up to `descriptorWait` (F-0060). Called and returns with the lock held.
+    private func openWaiting(at parent: Int32, _ name: [UInt8], verifying identity: FileIdentity?) -> (fd: Int32, error: Int32) {
+        let deadline = Date().addingTimeInterval(descriptorWait)
+        while true {
+            lock.unlock()
+            let fd = Self.openDirectory(at: parent, name, verifying: identity)
+            let failure = fd < 0 ? errno : 0
+            lock.lock()
+            guard fd < 0, failure == EMFILE || failure == ENFILE, !cancelled, Date() < deadline else { return (fd, failure) }
+            if !spillIdleFolder() { _ = lock.wait(until: Date().addingTimeInterval(0.01)) }
+        }
     }
 
     private static func openDirectory(at parent: Int32, _ name: [UInt8], verifying identity: FileIdentity?) -> Int32 {

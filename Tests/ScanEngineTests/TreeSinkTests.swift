@@ -50,6 +50,15 @@ import Testing
         #expect(sink.tree.children(of: ScanTree.root).count == 3, "Users, System, usr; nothing else at the top")
     }
 
+    /// The app's Macintosh HD scope passes the Data volume and a user may pick "/": both are the startup
+    /// disk shown at user-facing paths, while a folder inside either is scanned as it is.
+    @Test func dataVolumeAndSlashAreBothTheStartupDisk() {
+        #expect(DataVolumeLayout.forStartupDisk("/System/Volumes/Data") != nil)
+        #expect(DataVolumeLayout.forStartupDisk("/") != nil)
+        #expect(DataVolumeLayout.forStartupDisk("/System/Volumes/Data/Users") == nil)
+        #expect(DataVolumeLayout.forStartupDisk("/Users") == nil)
+    }
+
     /// F-0019: an evicted iCloud item counts 0 B here and is never listed (listing would download it).
     @Test func datalessItemsAreZeroAndNotEntered() {
         let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)

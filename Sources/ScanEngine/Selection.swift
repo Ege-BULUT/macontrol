@@ -57,11 +57,14 @@ struct Selection {
             if reader.read(fd, into: &listing) != 0 { sink.flag(0, .incomplete) }
             close(fd)
             let listed = listing.names
+            var missing = names
             listing.entries.removeAll { entry in
                 // String equality is canonical, like APFS name lookup: an NFC request matches an NFD name.
-                !names.contains(String(decoding: listed[entry.nameStart..<entry.nameStart + entry.nameLength], as: UTF8.self))
+                missing.remove(String(decoding: listed[entry.nameStart..<entry.nameStart + entry.nameLength], as: UTF8.self)) == nil
             }
             sink.add(listing, to: 0, walkableNodes: &nodes)
+            // Spelled in another case on a case-insensitive volume, or gone since: unknown, never a silent 0.
+            if !missing.isEmpty { sink.flag(0, .incomplete) }
         }
     }
 

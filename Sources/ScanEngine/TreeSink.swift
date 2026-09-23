@@ -113,15 +113,18 @@ struct DataVolumeLayout {
 
     /// First components of the Data-volume side of /usr/share/firmlinks.
     let firmlinkedNames: Set<[UInt8]>
+    let rootIdentity: FileIdentity
     let systemIdentity: FileIdentity
     let volumesIdentity: FileIdentity
     let dataIdentity: FileIdentity
 
     /// nil when this Mac has no separate Data volume.
     init?(firmlinks: String = (try? String(contentsOfFile: "/usr/share/firmlinks", encoding: .utf8)) ?? "") {
-        guard let system = FileIdentity(url: URL(fileURLWithPath: "/System")),
+        guard let root = FileIdentity(url: URL(fileURLWithPath: "/")),
+              let system = FileIdentity(url: URL(fileURLWithPath: "/System")),
               let volumes = FileIdentity(url: URL(fileURLWithPath: "/System/Volumes")),
               let data = FileIdentity(url: URL(fileURLWithPath: Self.dataRoot)) else { return nil }
+        rootIdentity = root
         systemIdentity = system
         volumesIdentity = volumes
         dataIdentity = data
@@ -129,6 +132,12 @@ struct DataVolumeLayout {
             let target = line.split(separator: "\t").dropFirst().first
             return target?.split(separator: "/").first.map { Array($0.utf8) }
         })
+    }
+
+    /// The layout when a resolved scan root is the startup disk. The app's Macintosh HD scope passes the
+    /// Data volume, a user may pick "/"; both mean the same tree.
+    static func forStartupDisk(_ path: String) -> DataVolumeLayout? {
+        path == "/" || path == dataRoot ? DataVolumeLayout() : nil
     }
 
     func isFirmlinked(_ name: ArraySlice<UInt8>) -> Bool { firmlinkedNames.contains(Array(name)) }

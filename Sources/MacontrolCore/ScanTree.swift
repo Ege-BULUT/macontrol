@@ -130,7 +130,9 @@ public struct ScanTree: Sendable {
         nodeFlags[index].formUnion(flags)
     }
 
-    /// Splices a trashed node out and subtracts only the bytes it was charged (F-0063).
+    /// Splices a trashed node out and subtracts only the bytes it was charged (F-0063). A removed link
+    /// that carried a hard-linked file's bytes hands them to the surviving link with the smallest path,
+    /// because the file is still on disk.
     public mutating func removeSubtree(at index: Int) {
         precondition(index != Self.root, "cannot remove the scan root")
         guard !nodeFlags[index].contains(.removed), let parent = parent(of: index) else { return }
@@ -149,6 +151,7 @@ public struct ScanTree: Sendable {
             fileCounts[node] -= fileCounts[index]
             ancestor = self.parent(of: node)
         }
+        rechargeHardLinks(ownedUnder: index)
     }
 
     public func name(of index: Int) -> String {
@@ -216,6 +219,52 @@ public struct ScanTree: Sendable {
                 logicalSizes[link] = 0
                 nodeFlags[link].insert(.sharedHardLink)
             }
+        }
+    }
+
+    private mutating func rechargeHardLinks(ownedUnder removed: Int) {
+        var owners: [FileIdentity: Int] = [:]
+        var stack = [removed]
+        while let node = stack.popLast() {
+            if nodeFlags[node].contains(.hardLinked) && !nodeFlags[node].contains(.sharedHardLink) {
+                owners[identity(of: node)] = node
+            }
+            var child = firstChildren[node]
+            while child >= 0 {
+                stack.append(Int(child))
+                child = nextSiblings[Int(child)]
+            }
+        }
+        guard !owners.isEmpty else { return }
+        // ponytail: one pass over all nodes per removal that takes an owner link; keep an identity index
+        // if trashing many hard-linked files at once gets slow.
+        var heirs: [FileIdentity: (node: Int, path: [UInt8])] = [:]
+        for node in 1..<count where nodeFlags[node].contains(.sharedHardLink) && owners[identity(of: node)] != nil && isInTree(node) {
+            let path = relativePathBytes(of: node)
+            if let heir = heirs[identity(of: node)], !path.lexicographicallyPrecedes(heir.path) { continue }
+            heirs[identity(of: node)] = (node, path)
+        }
+        for (identity, heir) in heirs {
+            let owner = owners[identity]!
+            nodeFlags[heir.node].remove(.sharedHardLink)
+            allocatedSizes[heir.node] = allocatedSizes[owner]
+            logicalSizes[heir.node] = logicalSizes[owner]
+            var ancestor = parent(of: heir.node)
+            while let node = ancestor {
+                allocatedSizes[node] += allocatedSizes[owner]
+                logicalSizes[node] += logicalSizes[owner]
+                ancestor = parent(of: node)
+            }
+        }
+    }
+
+    /// False when the node or one of its ancestors was removed.
+    private func isInTree(_ index: Int) -> Bool {
+        var node = index
+        while true {
+            if nodeFlags[node].contains(.removed) { return false }
+            guard parents[node] >= 0 else { return true }
+            node = Int(parents[node])
         }
     }
 
