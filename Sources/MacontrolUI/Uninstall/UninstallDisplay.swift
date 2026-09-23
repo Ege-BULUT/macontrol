@@ -1,0 +1,50 @@
+import Uninstaller
+
+extension AppKind {
+    var sectionTitle: String {
+        switch self {
+        case .thirdParty: "Apps"
+        case .appleAppStore: "Apple apps"
+        case .builtIn: "Part of macOS"
+        }
+    }
+
+    /// Display order of the list sections.
+    static let listOrder: [AppKind] = [.thirdParty, .appleAppStore, .builtIn]
+}
+
+extension LeftoverEvidence {
+    /// Display order: strongest evidence first, the unselected exact-name matches last.
+    static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName]
+
+    var title: String {
+        switch self {
+        case .bundleIdentifier: "Named with the app's ID"
+        case .containerMetadata: "App sandbox"
+        case .appGroup: "Shared app group"
+        case .launchdJob: "Background items"
+        case .exactName: "Same name as the app"
+        }
+    }
+
+    /// One line on why these items belong to the app.
+    var explanation: String {
+        switch self {
+        case .bundleIdentifier: "Named with the app's bundle ID, in folders where apps keep their data."
+        case .containerMetadata: "The container's own record names this app."
+        case .appGroup: "The app lists this group container in its entitlements."
+        case .launchdJob: "They start a program inside the app and are stopped first."
+        case .exactName: "Likely the app's, but not certain. Not selected: check them first."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .bundleIdentifier: "checkmark.seal.fill"
+        case .containerMetadata: "shippingbox.fill"
+        case .appGroup: "person.2.fill"
+        case .launchdJob: "gearshape.2.fill"
+        case .exactName: "questionmark.folder.fill"
+        }
+    }
+}
