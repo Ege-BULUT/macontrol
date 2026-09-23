@@ -41,7 +41,9 @@ public final class Uninstaller: Sendable {
     }
 
     public func plan(for app: InstalledApp) async throws -> UninstallPlan {
+        // The UI plans the selected app in a task it cancels on the next selection; the walks below never see that.
         let others = try await installedApps().filter { $0.url.path != app.url.path }
+        try Task.checkCancellation()
         let finder = LeftoverFinder(app: app, others: others, home: home, systemRoot: systemRoot)
         // A built-in app never goes, so its data is not a leftover: Safari's history is not junk, and the groups
         // it shares with other Apple apps would otherwise look like its own.
@@ -50,12 +52,14 @@ public final class Uninstaller: Sendable {
             : await offCooperativePool { finder.run() }
         var leftovers: [Leftover] = []
         for candidate in found.candidates {
+            try Task.checkCancellation()
             leftovers.append(Leftover(
                 url: candidate.url, identity: FileIdentity(url: candidate.url), evidence: candidate.evidence,
                 measurement: await measure(candidate.url), needsAdministrator: candidate.needsAdministrator,
                 note: candidate.note, launchdLabel: candidate.launchdLabel
             ))
         }
+        try Task.checkCancellation()
         return UninstallPlan(
             app: app,
             appMeasurement: await measure(app.url),
@@ -66,9 +70,11 @@ public final class Uninstaller: Sendable {
         )
     }
 
-    /// Checks every item, quits the app, boots out its launchd jobs by exact label, then trashes the bundle and the
-    /// chosen leftovers in one batch, so one Undo restores it all. Any failed step stops before the next one (F-0030),
-    /// and exactly what the plan listed is trashed (F-0069): URLs not in the plan are ignored.
+    /// Checks every item, quits the app and boots out its launchd jobs by exact label. Then the bundle goes to the
+    /// Trash on its own, and the chosen leftovers follow only once it is there: Safety carries on past a refused item,
+    /// so one shared batch would take the data of an app that stays installed. Any failed step stops before the next
+    /// one (F-0030), and exactly what the plan listed is trashed (F-0069): URLs not in the plan are ignored.
+    /// The report carries the bundle's batch; the leftovers are a second batch in History.
     public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>) async throws -> TrashReport {
         if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
         let chosen = plan.leftovers.filter { selected.contains($0.url) }
@@ -78,9 +84,8 @@ public final class Uninstaller: Sendable {
         if let administrative = chosen.first(where: \.needsAdministrator) {
             throw UninstallError.needsAdministrator(administrative.url)
         }
-        let items = [TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]
-            + chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
-        try checkUnchanged(items)
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
+        try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         var stopped = Set<String>()
@@ -92,7 +97,16 @@ public final class Uninstaller: Sendable {
         if !stopped.isEmpty {
             guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         }
-        return await actions.moveToTrash(items)
+        let appReport = await actions.moveToTrash([bundle])
+        guard case .trashed? = appReport.outcomes.first else {
+            let reason = "Not moved, because \(plan.app.name) itself could not be moved to the Trash."
+            let kept = chosen.map { TrashOutcome.failed($0.url, message: reason) }
+            return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + kept)
+        }
+        if chosen.isEmpty { return appReport }
+        // Read again now: the app may have saved its settings while it quit.
+        let leftoverReport = await actions.moveToTrash(chosen.map(Self.itemToTrash(for:)))
+        return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + leftoverReport.outcomes)
     }
 
     // MARK: Helpers
@@ -127,6 +141,10 @@ public final class Uninstaller: Sendable {
         if app.url.standardizedFileURL.path == Bundle.main.bundleURL.standardizedFileURL.path {
             return "macontrol can't remove itself while it's running."
         }
+        // The Locked flag also makes the bundle unwritable, which would otherwise read as root-owned.
+        if let flags = FileSystem.status(of: app.url)?.st_flags, flags & UInt32(UF_IMMUTABLE) != 0 {
+            return "Locked in Finder. Clear Locked in its Get Info window, then try again."
+        }
         if !FileSystem.isRemovableByUser(app.url) {
             return "Owned by the system, so removing it needs an administrator. Reveal it in Finder and drag it to the Trash."
         }
@@ -154,6 +172,17 @@ public final class Uninstaller: Sendable {
                 throw UninstallError.refused(item.url, reason)
             }
         }
+    }
+
+    /// cfprefsd replaces a preferences plist on every write, and apps save their settings as they quit, so a regular
+    /// file's plan-time identity goes stale with no change of owner. A regular file still at the planned path is taken
+    /// as it is now. Folders and links keep the identity the plan saw, and an item the plan had none for gets none.
+    private static func itemToTrash(for leftover: Leftover) -> TrashItem {
+        var identity = leftover.identity
+        if identity != nil, let info = FileSystem.status(of: leftover.url), info.st_mode & S_IFMT == S_IFREG {
+            identity = FileIdentity(device: info.st_dev, inode: info.st_ino)
+        }
+        return TrashItem(url: leftover.url, expectedIdentity: identity)
     }
 
     /// A size that could not be read is shown as incomplete, never as a reason to drop the item.

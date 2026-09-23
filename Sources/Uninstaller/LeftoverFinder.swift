@@ -72,7 +72,7 @@ struct LeftoverFinder {
         found += exactNames()
         return Result(
             candidates: Self.outermostUnique(found),
-            bundleLaunchdLabels: LaunchdJob.labels(in: app.url.appendingPathComponent("Contents/Library/LaunchAgents")),
+            bundleLaunchdLabels: LaunchdJob.labels(in: app.url.appendingPathComponent("Contents/Library/LaunchAgents"), of: app.url),
             notes: rootDaemonNotes() + receiptNotes()
         )
     }
@@ -137,11 +137,15 @@ struct LeftoverFinder {
     }
 
     /// Group containers (and their Application Scripts) named in the app's `application-groups` entitlement.
-    /// The names are text from the bundle: an empty entry (an undefined `$(APP_GROUP)`) or `../../Documents` must
-    /// not name a folder, so only plain names count, and a group container only when containermanagerd records it
-    /// as that group's. Built-in apps count as other users, so listing `group.com.apple.notes` never takes Notes' store.
+    /// The names are text from the bundle, so only a single name shaped like a group (`group.` or the app's own team
+    /// ID, then a dot) counts: not an empty entry (an undefined `$(APP_GROUP)`), `../../Documents`, or `com.apple.mail`,
+    /// whose Application Scripts folder holds Mail's rule scripts and has no metadata to check. A group container
+    /// counts only when containermanagerd records it as that group's. Built-in apps count as other users, so listing
+    /// `group.com.apple.notes` never takes Notes' store.
     private func groupContainers() -> [LeftoverCandidate] {
-        let groups = AppBundle(url: app.url).appGroups.filter(Self.isPlainName)
+        let bundle = AppBundle(url: app.url)
+        let team = bundle.teamIdentifier
+        let groups = bundle.appGroups.filter { Self.isAppGroup($0, team: team) }
         guard !groups.isEmpty else { return [] }
         var users: [String: String] = [:]
         // ponytail: one signature read per installed app, ~0.3 s for 94 apps here; read them concurrently if plans feel slow.
@@ -158,8 +162,9 @@ struct LeftoverFinder {
         }
     }
 
-    private static func isPlainName(_ name: String) -> Bool {
-        !name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+    static func isAppGroup(_ name: String, team: String?) -> Bool {
+        let shaped = name.hasPrefix("group.") || team.map { !$0.isEmpty && name.hasPrefix($0 + ".") } == true
+        return shaped && !name.contains("/") && !name.contains("\0")
     }
 
     /// containermanagerd's record of whose container this is.
@@ -239,7 +244,7 @@ struct LeftoverFinder {
     // MARK: Notes
 
     private func rootDaemonNotes() -> [String] {
-        LaunchdJob.labels(in: app.url.appendingPathComponent("Contents/Library/LaunchDaemons")).map {
+        LaunchdJob.labels(in: app.url.appendingPathComponent("Contents/Library/LaunchDaemons"), of: app.url).map {
             "\(app.name) has a background service that runs as root (\($0)). macontrol can't stop it; it stops when you restart your Mac."
         }
     }

@@ -7,23 +7,23 @@ import Testing
 @Suite struct AppGroupTests {
     @Test func groupContainersFromEntitlementsAreFoundAndSharedOnesHeldBack() async throws {
         let fx = try Fixture()
-        try signedApp("Writer", id: "com.example.Writer", groups: ["ABCDE12345.com.example.shared", "ABCDE12345.com.example.writer"], in: fx)
-        try signedApp("Sheets", id: "com.example.Sheets", groups: ["ABCDE12345.com.example.shared"], in: fx)
-        try groupContainer("ABCDE12345.com.example.writer", in: fx)
-        try groupContainer("ABCDE12345.com.example.shared", in: fx)
-        try groupContainer("ABCDE12345.com.example.unrelated", in: fx)
-        try fx.file("home/Library/Application Scripts/ABCDE12345.com.example.writer/script.scpt")
+        try signedApp("Writer", id: "com.example.Writer", groups: ["group.com.example.shared", "group.com.example.writer"], in: fx)
+        try signedApp("Sheets", id: "com.example.Sheets", groups: ["group.com.example.shared"], in: fx)
+        try groupContainer("group.com.example.writer", in: fx)
+        try groupContainer("group.com.example.shared", in: fx)
+        try groupContainer("group.com.example.unrelated", in: fx)
+        try fx.file("home/Library/Application Scripts/group.com.example.writer/script.scpt")
 
         let plan = try await fx.plan("Writer")
 
         let library = fx.home.appendingPathComponent("Library")
         #expect(plan.paths(relativeTo: library) == [
-            "Application Scripts/ABCDE12345.com.example.writer",
-            "Group Containers/ABCDE12345.com.example.shared",
-            "Group Containers/ABCDE12345.com.example.writer",
+            "Application Scripts/group.com.example.writer",
+            "Group Containers/group.com.example.shared",
+            "Group Containers/group.com.example.writer",
         ])
         #expect(plan.leftovers.allSatisfy { $0.evidence == .appGroup })
-        #expect(plan.leftover("Group Containers/ABCDE12345.com.example.shared", in: library)?.note == "Also used by Sheets")
+        #expect(plan.leftover("Group Containers/group.com.example.shared", in: library)?.note == "Also used by Sheets")
         #expect(plan.leftovers.filter(\.isPreselected).count == 2)
     }
 
@@ -32,11 +32,12 @@ import Testing
     /// all preselected.
     @Test func malformedAppGroupNeverNamesAFolderOutsideItsOwnContainer() async throws {
         let fx = try Fixture()
-        try signedApp("Writer", id: "com.example.Writer", groups: ["", ".", "..", "../../Documents", "a/b"], in: fx)
-        try groupContainer("ABCDE12345.com.other.app", in: fx)
+        try signedApp("Writer", id: "com.example.Writer", groups: ["", ".", "..", "../../Documents", "a/b", "group.x/../../../Documents"], in: fx)
+        try groupContainer("group.com.other.app", in: fx)
         try fx.file("home/Library/Application Scripts/com.other.app/script.scpt")
         try fx.file("home/Library/Group Containers/a/b/data")
         try fx.file("home/Library/Application Scripts/a/b/script.scpt")
+        try fx.file("home/Library/Application Scripts/group.x/script.scpt")
         try fx.file("home/Documents/thesis.docx")
 
         let plan = try await fx.plan("Writer")
@@ -47,10 +48,10 @@ import Testing
     /// A folder named like the group is taken only when containermanagerd records it as that group's container.
     @Test func groupContainerNeedsItsOwnMetadata() async throws {
         let fx = try Fixture()
-        try signedApp("Writer", id: "com.example.Writer", groups: ["ABCDE12345.com.example.writer", "ABCDE12345.com.example.bare"], in: fx)
-        try fx.write(["MCMMetadataIdentifier": "ABCDE12345.com.example.other"],
-                     to: "home/Library/Group Containers/ABCDE12345.com.example.writer/\(LeftoverFinder.containerMetadata)")
-        try fx.file("home/Library/Group Containers/ABCDE12345.com.example.bare/Library/data")
+        try signedApp("Writer", id: "com.example.Writer", groups: ["group.com.example.writer", "group.com.example.bare"], in: fx)
+        try fx.write(["MCMMetadataIdentifier": "group.com.example.other"],
+                     to: "home/Library/Group Containers/group.com.example.writer/\(LeftoverFinder.containerMetadata)")
+        try fx.file("home/Library/Group Containers/group.com.example.bare/Library/data")
 
         let plan = try await fx.plan("Writer")
 
@@ -69,6 +70,29 @@ import Testing
         let store = try #require(plan.leftovers.first { $0.url.lastPathComponent == "group.com.apple.notes" })
         #expect(store.note == "Also used by Notes")
         #expect(store.isPreselected == false)
+    }
+
+    /// Application Scripts has no metadata, so the group's shape guards it: an entry that is another app's identifier
+    /// would take that app's folder (Mail keeps the user's rule scripts in Application Scripts/com.apple.mail).
+    @Test func groupThatIsABundleIdNeverTakesThatAppsScripts() async throws {
+        let fx = try Fixture()
+        try signedApp("Writer", id: "com.example.Writer", groups: ["com.apple.mail"], in: fx)
+        try fx.file("home/Library/Application Scripts/com.apple.mail/Sort newsletters.scpt")
+
+        let plan = try await fx.plan("Writer")
+
+        #expect(plan.leftovers.isEmpty, "\(plan.leftovers.map(\.url.path))")
+    }
+
+    /// Ad-hoc signing carries no team, so the team-prefixed form is checked here directly.
+    @Test func appGroupsAreGroupDotOrTheAppsOwnTeam() {
+        #expect(LeftoverFinder.isAppGroup("group.com.example.shared", team: nil))
+        #expect(LeftoverFinder.isAppGroup("ABCDE12345.com.example.shared", team: "ABCDE12345"))
+        #expect(!LeftoverFinder.isAppGroup("ABCDE12345.com.example.shared", team: "ZYXWV98765"))
+        #expect(!LeftoverFinder.isAppGroup("ABCDE12345.com.example.shared", team: nil))
+        for malformed in ["", ".", "..", "com.apple.mail", "group./../Documents", "group.a\0b"] {
+            #expect(!LeftoverFinder.isAppGroup(malformed, team: ""), "\(malformed)")
+        }
     }
 
     private func groupContainer(_ group: String, in fx: Fixture) throws {

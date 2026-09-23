@@ -97,6 +97,10 @@ final class Recorder: @unchecked Sendable {
     /// Answers to the quit calls, in order; every call after these succeeds.
     var quitResults: [Bool] = []
     var failingLabel: String?
+    /// Runs inside every quit, as an app saving its settings or an updater swapping the bundle would.
+    var whileQuitting: (@Sendable () -> Void)?
+    /// A path the Trash refuses, as Safety does when the object at it changed.
+    var refusedPath: String?
 
     var events: [Event] { lock.withLock { recorded } }
 
@@ -108,6 +112,7 @@ final class Recorder: @unchecked Sendable {
         UninstallActions(
             quit: { app in
                 self.record(.quit(app.name))
+                self.lock.withLock { self.whileQuitting }?()
                 return self.lock.withLock { self.quitResults.isEmpty ? true : self.quitResults.removeFirst() }
             },
             bootout: { label in
@@ -118,7 +123,10 @@ final class Recorder: @unchecked Sendable {
             },
             moveToTrash: { items in
                 self.record(.trash(items))
-                return TrashReport(batch: UUID(), outcomes: items.map { .trashed(original: $0.url, trashedTo: $0.url) })
+                let refused = self.lock.withLock { self.refusedPath }
+                return TrashReport(batch: UUID(), outcomes: items.map {
+                    $0.url.path == refused ? .refused($0.url, .identityChanged) : .trashed(original: $0.url, trashedTo: $0.url)
+                })
             }
         )
     }

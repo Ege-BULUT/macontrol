@@ -115,3 +115,25 @@ public enum UninstallError: Error, Hashable {
     /// `launchctl bootout` failed; the job may still be running, so nothing was trashed.
     case bootoutFailed(label: String, status: Int32)
 }
+
+extension UninstallError: LocalizedError {
+    /// Shown after "The uninstall stopped before moving anything:", so each one says what to do next.
+    public var errorDescription: String? {
+        switch self {
+        case .blocked(let reason):
+            reason
+        case .needsAdministrator(let url):
+            "\(url.lastPathComponent) needs an administrator to remove. Deselect it, or reveal it in Finder and remove it there."
+        case .refused(let url, .protectedLocation(let place)):
+            "\(url.lastPathComponent) is in a place macontrol never deletes (\(place)). Deselect it and try again."
+        case .refused(let url, _):
+            "\(url.lastPathComponent) can't be moved to the Trash safely. Deselect it and try again."
+        case .changedSincePlan(let url):
+            "\(url.lastPathComponent) changed after the list was made. Refresh the list and try again."
+        case .stillRunning(let name):
+            "\(name) is still running. Quit it, then try again."
+        case .bootoutFailed(let label, let status):
+            "Its background service \(label) could not be stopped (launchctl exit \(status)). Restart your Mac, then try again."
+        }
+    }
+}

@@ -29,11 +29,99 @@ import Testing
 
         _ = try await fx.uninstaller().uninstall(plan, leftovers: Set(chosen.map(\.url)))
 
-        let trashed = [TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]
-            + chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
+        let leftovers = chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
         #expect(fx.recorder.events == [
-            .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"), .trash(trashed),
+            .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"),
+            .trash([bundle]), .trash(leftovers),
         ])
+    }
+
+    /// F-0030: Safety carries on past a refused item, so the bundle goes alone and first. When it stays (Sparkle
+    /// swapped in a new copy while the app quit, App Management said no), its data stays too.
+    @Test func appThatStaysInstalledKeepsItsData() async throws {
+        let fx = try demo()
+        let plan = try await fx.plan("Demo")
+        let chosen = plan.leftovers.filter(\.isPreselected)
+        fx.recorder.refusedPath = plan.app.url.path
+
+        let report = try await fx.uninstaller().uninstall(plan, leftovers: Set(chosen.map(\.url)))
+
+        #expect(fx.recorder.events.last == .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]))
+        #expect(report.outcomes.first == .refused(plan.app.url, .identityChanged))
+        let kept = report.outcomes.dropFirst().compactMap { if case .failed(let url, _) = $0 { url } else { nil } }
+        #expect(kept == chosen.map(\.url), "\(report.outcomes)")
+    }
+
+    /// cfprefsd replaces a preferences plist on every write, and apps save settings as they quit. A regular file is
+    /// taken as it is at each look; a folder keeps the identity the plan saw.
+    @Test func preferencesRewrittenBeforeAndWhileQuittingAreStillTrashed() async throws {
+        let fx = try demo()
+        let plan = try await fx.plan("Demo")
+        let prefs = fx.home.appendingPathComponent("Library/Preferences/com.example.Demo.plist")
+        let cache = try #require(plan.leftover("Caches/com.example.Demo", in: fx.home.appendingPathComponent("Library")))
+        try Data("window frame".utf8).write(to: prefs, options: .atomic)
+        fx.recorder.whileQuitting = { try? Data("window frame, saved on quit".utf8).write(to: prefs, options: .atomic) }
+
+        _ = try await fx.uninstaller().uninstall(plan, leftovers: [prefs, cache.url])
+
+        guard case .trash(let items) = fx.recorder.events.last else { Issue.record("no leftover batch"); return }
+        #expect(items == [TrashItem(url: cache.url, expectedIdentity: cache.identity),
+                          TrashItem(url: prefs, expectedIdentity: FileIdentity(url: prefs))])
+        #expect(FileIdentity(url: prefs) != plan.leftover("Preferences/com.example.Demo.plist", in: fx.home.appendingPathComponent("Library"))?.identity)
+    }
+
+    @Test func preferencesReplacedByALinkCountAsChanged() async throws {
+        let fx = try demo()
+        let plan = try await fx.plan("Demo")
+        let prefs = fx.home.appendingPathComponent("Library/Preferences/com.example.Demo.plist")
+        try FileManager.default.removeItem(at: prefs)
+        try FileManager.default.createSymbolicLink(at: prefs, withDestinationURL: try fx.file("home/Documents/thesis.docx"))
+
+        await #expect(throws: UninstallError.changedSincePlan(prefs)) {
+            try await fx.uninstaller().uninstall(plan, leftovers: [prefs])
+        }
+        #expect(fx.recorder.events.isEmpty)
+    }
+
+    /// The UI shows `localizedDescription` after "The uninstall stopped before moving anything:".
+    @Test func uninstallErrorsReadAsSentences() {
+        let errors: [UninstallError] = [
+            .blocked("Part of macOS."), .needsAdministrator(URL(fileURLWithPath: "/Library/Logs/Demo")),
+            .refused(URL(fileURLWithPath: "/Users/me/Documents"), .protectedLocation("Documents")),
+            .refused(URL(fileURLWithPath: "/Users/me/Library/Caches/x"), .identityChanged),
+            .changedSincePlan(URL(fileURLWithPath: "/Applications/Demo.app")), .stillRunning("Demo"),
+            .bootoutFailed(label: "com.example.Demo.agent", status: 5),
+        ]
+        for error in errors {
+            let text = error.localizedDescription
+            #expect(!text.contains("UninstallError") && text.hasSuffix("."), "\(error): \(text)")
+        }
+        #expect(UninstallError.stillRunning("Demo").localizedDescription == "Demo is still running. Quit it, then try again.")
+    }
+
+    /// The UI cancels the plan of an app the user has moved past; it must not walk that app's leftovers anyway.
+    @Test func cancelledPlanStops() async throws {
+        let fx = try demo()
+        let app = try await fx.app(named: "Demo")
+        let uninstaller = fx.uninstaller()
+        let task = Task { try await uninstaller.plan(for: app) }
+        task.cancel()
+
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+    }
+
+    /// uchg makes the bundle unwritable too, which must not read as "owned by the system".
+    @Test func lockedBundleSaysItIsLocked() async throws {
+        let fx = try Fixture()
+        let url = try fx.app("Demo", id: "com.example.Demo")
+        let app = try await fx.app(named: "Demo")
+        let blocker = withExtendedLifetime(fx) {
+            #expect(chflags(url.path, UInt32(UF_IMMUTABLE)) == 0)
+            defer { #expect(chflags(url.path, 0) == 0) }
+            return Uninstaller.blocker(for: app)
+        }
+        #expect(blocker == "Locked in Finder. Clear Locked in its Get Info window, then try again.")
     }
 
     @Test func appRelaunchedBeforeItsJobsStoppedStopsBeforeTrashing() async throws {
@@ -58,10 +146,10 @@ import Testing
 
         _ = try await fx.uninstaller().uninstall(plan, leftovers: [exactName.url, stranger])
 
-        let items = [TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity),
-                     TrashItem(url: exactName.url, expectedIdentity: exactName.identity)]
-        #expect(fx.recorder.events.last == .trash(items))
-        #expect(items.allSatisfy { $0.expectedIdentity != nil })
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
+        let leftover = TrashItem(url: exactName.url, expectedIdentity: exactName.identity)
+        #expect(fx.recorder.events.suffix(2) == [.trash([bundle]), .trash([leftover])])
+        #expect(bundle.expectedIdentity != nil && leftover.expectedIdentity != nil)
     }
 
     /// F-0030: a failed step ends the uninstall; nothing after it runs.

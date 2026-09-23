@@ -237,6 +237,26 @@ import Uninstaller
         #expect(plan.leftovers.isEmpty)
     }
 
+    /// A label in the bundle's own plist is text the bundle ships: it is booted out only when the job runs the
+    /// bundle's program, never another vendor's (here Keystone's updater, outside the bundle).
+    @Test func bundleLabelsCountOnlyWhenTheJobRunsTheBundlesOwnProgram() async throws {
+        let fx = try Fixture()
+        let app = try fx.app("Demo", id: "com.example.Demo")
+        let agents = "root/Applications/Demo.app/Contents/Library/LaunchAgents"
+        try fx.write(["Label": "com.example.Demo.login", "BundleProgram": "Contents/MacOS/login"], to: "\(agents)/login.plist")
+        try fx.launchdJob("\(agents)/helper.plist", label: "com.example.Demo.helper",
+                          program: app.appendingPathComponent("Contents/MacOS/helper").path)
+        try fx.launchdJob("\(agents)/keystone.plist", label: "com.google.keystone.agent",
+                          program: "/Users/me/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdateAgent")
+        try fx.write(["Label": "com.example.escape", "BundleProgram": "../../usr/bin/true"], to: "\(agents)/escape.plist")
+        try fx.launchdJob("\(agents)/climb.plist", label: "com.example.climb",
+                          program: app.appendingPathComponent("../Other.app/Contents/MacOS/other").path)
+
+        let plan = try await fx.plan("Demo")
+
+        #expect(plan.bundleLaunchdLabels == ["com.example.Demo.helper", "com.example.Demo.login"])
+    }
+
     @Test func applesContentLibrariesAreAdminOnlyAndShared() async throws {
         let fx = try Fixture()
         try fx.app("GarageBand", id: "com.apple.garageband10")

@@ -28,6 +28,11 @@ struct AppBundle {
         return (entitlements as? [String: Any])?["com.apple.security.application-groups"] as? [String] ?? []
     }
 
+    /// The signing team, the prefix of the app groups it may claim. Ad-hoc and unsigned code have none.
+    var teamIdentifier: String? {
+        signingInformation(SecCSFlags(rawValue: kSecCSSigningInformation))?[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
     func installedApp(systemRoot: URL) -> InstalledApp {
         InstalledApp(
             url: url,
@@ -69,7 +74,7 @@ struct AppBundle {
         guard SecRequirementCreateWithString("anchor apple generic" as CFString, [], &requirement) == errSecSuccess else { return false }
         let flags = SecCSFlags(rawValue: kSecCSDoNotValidateExecutable | kSecCSDoNotValidateResources)
         guard SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess else { return false }
-        return signingInformation(SecCSFlags(rawValue: kSecCSSigningInformation))?[kSecCodeInfoTeamIdentifier as String] as? String == "59GAB85EFG"
+        return teamIdentifier == "59GAB85EFG"
     }
 
     private var staticCode: SecStaticCode? {
