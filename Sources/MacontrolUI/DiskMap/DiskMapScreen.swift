@@ -87,32 +87,127 @@ private struct DiskMapWorkspace: View {
     }
 }
 
+/// A scan in progress: how far it has got, and the top of the map as it fills in (T-0063).
 private struct ScanningView: View {
     let model: DiskMapModel
 
     var body: some View {
-        VStack(spacing: 14) {
-            ProgressView().controlSize(.large)
-            Text("Scanning…").font(.title2.weight(.semibold))
-            if let progress = model.progress {
-                Text("\(progress.filesVisited.formatted()) items · \(progress.bytesVisited.formattedBytes)")
-                    .font(.title3.monospacedDigit())
+        VStack(spacing: 0) {
+            header
+            Divider()
+            if let preview = model.preview {
+                ScanPreviewChart(tree: preview, version: model.previewVersion, style: model.style)
+                    .equatable()
+                    .padding(Theme.spacing)
+                Text("Sizes grow as the scan finds more. The full map, with the folders inside, opens when it finishes.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                if let path = progress.currentPath {
-                    Text(path)
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: 480)
+                    .padding([.horizontal, .bottom], Theme.spacing)
+            } else {
+                ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Scanning…").font(.system(size: 22, weight: .semibold))
+                if let progress = model.progress {
+                    Text("\(progress.bytesVisited.formattedBytes) · \(DiskMapText.itemCount(progress.filesVisited))")
+                        .font(.title3.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Stop Scan") { model.cancelScan() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            if let expected = model.expectedTotal, expected.bytes > 0 {
+                let visited = min(model.progress?.bytesVisited ?? 0, expected.bytes)
+                ProgressView(value: Double(visited), total: Double(expected.bytes)) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text("About \(DiskMapText.percent(visited, of: expected.bytes)) of the \(expected.bytes.formattedBytes) \(expected.isLastScan ? "the last scan found" : "in use on this volume")")
+                        .monospacedDigit()
+                }
+            } else {
+                ProgressView().progressViewStyle(.linear)
+            }
+            Text(model.progress?.currentPath ?? " ")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, Theme.spacing + 4)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+}
+
+/// The preview drawn like the map, without interaction; the sunburst names its wedges in a legend, since
+/// nothing can be hovered yet. It is one ring of at most 256 items, so its layout is built right here:
+/// microseconds, not the off-main work a full map takes.
+private struct ScanPreviewChart: View, Equatable {
+    let tree: ScanTree
+    let version: Int
+    let style: MapStyle
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var colorScheme
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.version == rhs.version && lhs.style == rhs.style
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let legendWidth = style == .sunburst ? min(240, proxy.size.width * 0.4) : 0
+            let chart = CGSize(width: proxy.size.width - legendWidth, height: proxy.size.height)
+            let key = LayoutKey(
+                treeVersion: version, focus: ScanTree.root, style: style,
+                width: Int(chart.width), height: Int(chart.height), scale: displayScale
+            )
+            let layout = (try? MapLayoutBuilder.build(tree, key)) ?? .empty(key)
+            HStack(spacing: 0) {
+                ZStack {
+                    MapFillLayer(layout: layout, tree: tree).equatable()
+                    if style == .sunburst {
+                        VStack(spacing: 2) {
+                            Text(tree.name(of: ScanTree.root)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                            Text(tree.allocatedSize(of: ScanTree.root).formattedBytes)
+                                .font(.system(size: 17, weight: .semibold, design: .rounded).monospacedDigit())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
+                        .frame(width: MapLayout.chartRadius(in: chart) * MapLayout.holeRadius * 1.6)
+                    }
+                }
+                .frame(width: chart.width, height: chart.height)
+                if style == .sunburst { legend(layout).frame(width: legendWidth) }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Map of the scan so far")
+    }
+
+    private func legend(_ layout: MapLayout) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(layout.topLevel.prefix(12)), id: \.self) { index in
+                let element = layout.elements[index]
+                let label = MapGeometry.label(for: element, in: tree)
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(MapPalette.rgb(branch: element.branch, depth: 0, dark: colorScheme == .dark).color)
+                        .opacity(element.item.isSmallerItems ? 0.55 : 1)
+                        .frame(width: 10, height: 10)
+                    Text(label.name).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 6)
+                    Text(label.size).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
-            Button("Stop Scan") { model.cancelScan() }
-                .controlSize(.large)
-                .keyboardShortcut(.cancelAction)
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .font(.callout)
     }
 }
 

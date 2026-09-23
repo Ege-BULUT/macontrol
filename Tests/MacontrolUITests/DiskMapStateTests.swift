@@ -41,6 +41,25 @@ import Testing
         #expect(!model.isScanning)
     }
 
+    /// T-0063: previews of the newest scan show while it runs; the completed tree replaces them.
+    @Test func previewsShowUntilTheScanCompletes() {
+        let model = DiskMapModel(engine: nil, trash: nil)
+        let older = model.beginScan()
+        let newer = model.beginScan()
+        model.receive(.preview(DiskMapFixtures.chain(depth: 3)), generation: older)
+        #expect(model.preview == nil)
+        let preview = DiskMapFixtures.mixed()
+        model.receive(.preview(preview), generation: newer)
+        #expect(model.preview?.count == preview.count)
+        let version = model.previewVersion
+        model.receive(.preview(preview), generation: newer)
+        #expect(model.previewVersion == version + 1)
+        model.receive(.completed(DiskMapFixtures.mixed()), generation: newer)
+        model.finishScan(newer)
+        #expect(model.preview == nil)
+        #expect(model.tree != nil)
+    }
+
     /// Stop keeps the map and the pile. A rescan keeps staged items it finds again at the same path
     /// as the same file, and drops the ones that changed.
     @Test func stopKeepsTheMapAndARescanKeepsThePile() {

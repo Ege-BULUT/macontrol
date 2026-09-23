@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import MacontrolCore
 @testable import MacontrolUI
+import ScanEngine
 import Testing
 
 /// Renders the map in both styles and the review sheet, light and dark, with demo data.
@@ -26,6 +27,35 @@ import Testing
             await app.diskMap.prepareLayout(app.diskMap.layoutKey(width: 510, height: 470, scale: 2))
             let data = try SnapshotRenderer.png(of: RootView(model: app), dark: dark)
             try write(data, "disk-map-\(style.rawValue)-\(dark ? "dark" : "light")")
+        }
+    }
+
+    /// T-0063: a scan shows the top of the map as it fills in, with a bar against the space it should reach.
+    @Test(arguments: MapStyle.allCases)
+    func scanningStateRenders(style: MapStyle) throws {
+        _ = NSApplication.shared
+        let demo = ScanTree.demo()
+        var preview = ScanTree(rootURL: demo.rootURL, rootIdentity: demo.identity(of: ScanTree.root))
+        for (offset, child) in demo.children(of: ScanTree.root).enumerated() {
+            // Part-way: each top-level item has been read to a different extent.
+            preview.addChild(
+                of: ScanTree.root, name: demo.name(of: child), flags: demo.flags(of: child),
+                allocated: demo.allocatedSize(of: child) / UInt64(offset % 3 + 1), logical: 0, identity: demo.identity(of: child)
+            )
+        }
+        preview.finalizeTotals()
+        for (suffix, size) in [("", SnapshotRenderer.windowSize), ("-small", CGSize(width: 900, height: 600))] {
+            for dark in [false, true] {
+                let app = AppModel.demo(selection: .diskMap)
+                app.diskMap.style = style
+                let generation = app.diskMap.beginScan()
+                app.diskMap.expectedTotal = (demo.allocatedSize(of: ScanTree.root), true)
+                let path = "/Users/demo/Library/Application Support/Steam/steamapps/common"
+                app.diskMap.receive(.progress(ScanProgress(filesVisited: 48_210, bytesVisited: preview.allocatedSize(of: ScanTree.root), currentPath: path)), generation: generation)
+                app.diskMap.receive(.preview(preview), generation: generation)
+                let data = try SnapshotRenderer.png(of: RootView(model: app), dark: dark, size: size)
+                try write(data, "disk-map-scanning-\(style.rawValue)\(suffix)-\(dark ? "dark" : "light")")
+            }
         }
     }
 

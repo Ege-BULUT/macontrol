@@ -48,6 +48,9 @@ import Testing
         let data = try #require(sink.tree.parent(of: Int(walkable[0])))
         #expect(sink.tree.url(of: data).path == "/System/Volumes/Data")
         #expect(sink.tree.children(of: ScanTree.root).count == 3, "Users, System, usr; nothing else at the top")
+        let preview = sink.preview()
+        let system = try #require(preview.children(of: ScanTree.root).first { preview.name(of: $0) == "System" })
+        #expect(preview.allocatedSize(of: system) == 4096, "leftover.log lives under /System/Volumes/Data")
     }
 
     /// The app's Macintosh HD scope passes the Data volume and a user may pick "/": both are the startup
@@ -75,6 +78,36 @@ import Testing
         #expect(sink.tree.allocatedSize(of: ScanTree.root) == 0)
         #expect(sink.tree.children(of: 0).allSatisfy { sink.tree.flags(of: $0).contains(.dataless) || sink.tree.flags(of: $0).contains(.systemProtected) })
         #expect(walkable.count == 1, "only the restricted folder is listed; the dataless one is not")
+    }
+
+    /// T-0063: while the walk runs, each top-level item only grows, and once every listing is in, the preview
+    /// holds the finished tree's top-level sizes.
+    @Test func previewSizesOnlyGrowAndEndAtTheFinishedTotals() {
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
+        var walkable: [Int32] = []
+        func sizes() -> [String: UInt64] {
+            let preview = sink.preview()
+            return Dictionary(uniqueKeysWithValues: preview.children(of: ScanTree.root).map { (preview.name(of: $0), preview.allocatedSize(of: $0)) })
+        }
+        sink.add(listing([("A", folder(inode: 3)), ("B", folder(inode: 4)), ("top.bin", file(inode: 5, allocated: 100))]), to: 0, walkableNodes: &walkable)
+        let (a, b) = (walkable[0], walkable[1])
+        var previews = [sizes()]
+        walkable = []
+        sink.add(listing([("a1.bin", file(inode: 6, allocated: 10)), ("A1", folder(inode: 7)), ("a2.bin", file(inode: 8, allocated: 20))]), to: a, walkableNodes: &walkable)
+        previews.append(sizes())
+        let a1 = walkable[0]
+        sink.add(listing([("deep.bin", file(inode: 9, allocated: 5))]), to: a1, walkableNodes: &walkable)
+        previews.append(sizes())
+        sink.add(listing([("b1.bin", file(inode: 10, allocated: 7))]), to: b, walkableNodes: &walkable)
+        previews.append(sizes())
+
+        for (earlier, later) in zip(previews, previews.dropFirst()) {
+            #expect(earlier.allSatisfy { later[$0.key, default: 0] >= $0.value }, "\(earlier) -> \(later)")
+        }
+        sink.tree.finalizeTotals()
+        let finished = Dictionary(uniqueKeysWithValues: sink.tree.children(of: ScanTree.root).map { (sink.tree.name(of: $0), sink.tree.allocatedSize(of: $0)) })
+        #expect(previews.last == finished)
+        #expect(finished == ["A": 35, "B": 7, "top.bin": 100])
     }
 
     @Test func mountPointEntryIsALeafWithItsFlag() {

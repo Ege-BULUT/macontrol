@@ -14,6 +14,13 @@ public final class DiskMapModel {
     public private(set) var progress: ScanProgress?
     public private(set) var isScanning = false
     public private(set) var scanError: String?
+    /// The running scan so far, one level deep, drawn while it lasts (T-0063). The completed tree replaces it.
+    public private(set) var preview: ScanTree?
+    /// Counts previews, so each one gets a layout of its own.
+    private(set) var previewVersion = 0
+    /// What the running scan should reach, for its progress bar: the last scan's total when the same folder
+    /// is scanned again, else the space in use when a whole volume is scanned.
+    var expectedTotal: (bytes: UInt64, isLastScan: Bool)?
     /// The folder the map is drilled into. Only a folder the map can open is accepted: the Overview sets
     /// this directly, and a stale index must not put the map inside a file, a package or the Trash.
     public var focus: Int {
@@ -76,7 +83,13 @@ public final class DiskMapModel {
     func scan(_ root: URL) async {
         guard let engine = scanEngine else { return }
         scanTask?.cancel()
+        let expected: (bytes: UInt64, isLastScan: Bool)? = if let tree, tree.rootURL.standardizedFileURL == root.standardizedFileURL {
+            (tree.allocatedSize(of: ScanTree.root), true)
+        } else {
+            ScanEngine.volumeBytesInUse(at: root).map { ($0, false) }
+        }
         let generation = beginScan()
+        expectedTotal = expected
         let task = Task {
             do {
                 for try await event in engine.scan(root) {
@@ -103,6 +116,8 @@ public final class DiskMapModel {
         scanGeneration += 1
         scanError = nil
         progress = nil
+        preview = nil
+        expectedTotal = nil
         isScanning = true
         return scanGeneration
     }
@@ -111,6 +126,9 @@ public final class DiskMapModel {
         guard generation == scanGeneration else { return }
         switch event {
         case .progress(let update): progress = update
+        case .preview(let tree):
+            preview = tree
+            previewVersion += 1
         case .completed(let result): replaceTree(result)
         }
     }
@@ -119,6 +137,8 @@ public final class DiskMapModel {
         guard generation == scanGeneration else { return }
         isScanning = false
         progress = nil
+        preview = nil
+        expectedTotal = nil
     }
 
     /// Shows a new scan. Staged items found again at the same path, as the same file, stay staged.

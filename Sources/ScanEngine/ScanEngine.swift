@@ -59,6 +59,9 @@ public struct ScanProgress: Sendable, Equatable {
 
 public enum ScanEvent: Sendable {
     case progress(ScanProgress)
+    /// The scan so far, one level deep: the root's largest children with the bytes found inside each yet.
+    /// Sizes only grow; the completed tree is the exact one (T-0063).
+    case preview(ScanTree)
     case completed(ScanTree)
 }
 
@@ -75,7 +78,8 @@ public final class ScanEngine: Sendable {
         self.options = options
     }
 
-    /// Streams progress (at most about 10 events a second), then exactly one `.completed` tree.
+    /// Streams progress (at most about 10 events a second) and previews (about 4 a second, from the first
+    /// quarter second on), then exactly one `.completed` tree.
     /// Ending the stream or cancelling the consumer stops the walk.
     ///
     /// Scanning "/" or /System/Volumes/Data scans the startup disk as the user sees it: the Data volume is
@@ -89,7 +93,10 @@ public final class ScanEngine: Sendable {
         Thread {
             stopDatalessMaterialization()
             do {
-                let tree = try Self.buildTree(root, options: options, cancellation: cancellation) { continuation.yield(.progress($0)) }
+                let tree = try Self.buildTree(
+                    root, options: options, cancellation: cancellation,
+                    progress: { continuation.yield(.progress($0)) }, preview: { continuation.yield(.preview($0)) }
+                )
                 continuation.yield(.completed(tree))
                 continuation.finish()
             } catch {
@@ -133,10 +140,33 @@ public final class ScanEngine: Sendable {
         }
     }
 
+    /// The bytes in use on the volume that `root` is the top of, which a full scan of it approaches: the Data
+    /// volume's for the startup disk. nil when `root` is a folder inside a volume. APFS reports capacity and
+    /// free space per container, so this reads the volume's own ATTR_VOL_SPACEUSED.
+    public static func volumeBytesInUse(at root: URL) -> UInt64? {
+        guard let resolved = realpath(root.path, nil) else { return nil }
+        var path = String(cString: resolved)
+        free(resolved)
+        if DataVolumeLayout.forStartupDisk(path) != nil { path = DataVolumeLayout.dataRoot }
+        var volume = statfs()
+        guard statfs(path, &volume) == 0 else { return nil }
+        let mountPoint = withUnsafeBytes(of: volume.f_mntonname) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        guard mountPoint == path else { return nil }
+        var request = attrlist()
+        request.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
+        request.volattr = attrgroup_t(ATTR_VOL_INFO) | attrgroup_t(ATTR_VOL_SPACEUSED)
+        // A UInt32 length, then the off_t, packed.
+        var reply = [UInt8](repeating: 0, count: 16)
+        guard getattrlist(path, &request, &reply, reply.count, 0) == 0 else { return nil }
+        let used = reply.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int64.self) }
+        return used > 0 ? UInt64(used) : nil
+    }
+
     // MARK: Plumbing
 
     static func buildTree(
-        _ root: URL, options: ScanOptions, cancellation: Cancellation, progress: @escaping (ScanProgress) -> Void
+        _ root: URL, options: ScanOptions, cancellation: Cancellation, progress: @escaping (ScanProgress) -> Void,
+        preview: ((ScanTree) -> Void)? = nil
     ) throws -> ScanTree {
         guard let resolved = realpath(root.path, nil) else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         let path = String(cString: resolved)
@@ -151,7 +181,16 @@ public final class ScanEngine: Sendable {
         let tree = layout.map { ScanTree(rootURL: URL(fileURLWithPath: "/"), rootIdentity: $0.rootIdentity) }
             ?? ScanTree(rootURL: root, rootIdentity: identity)
         let sink = TreeSink(tree: tree, dataVolume: layout)
-        try walk([walkRoot], sink: sink, options: options, cancellation: cancellation) { progress($0.progress) }
+        var nextPreview = ContinuousClock.now + .milliseconds(250)
+        try walk([walkRoot], sink: sink, options: options, cancellation: cancellation) { sink in
+            progress(sink.progress)
+            guard let preview, ContinuousClock.now >= nextPreview else { return }
+            let started = ContinuousClock.now
+            preview(sink.preview())
+            // The walk waits while a preview is built (3 ms for 200k entries at the top); a slower one comes
+            // less often, so previews never take more than a tenth of the walk.
+            nextPreview = .now + max(.milliseconds(250), started.duration(to: .now) * 10)
+        }
         sink.tree.finalizeTotals()
         return sink.tree
     }

@@ -18,6 +18,39 @@ import TestSupport
         #expect(tree.fileCount(of: ScanTree.root) == 3)
     }
 
+    /// T-0063: running sizes from a real walk add up to what the completed scan reports, top-level item by item.
+    @Test func previewOfAFinishedWalkMatchesTheCompletedScan() async throws {
+        let tmp = try TemporaryDirectory()
+        try tmp.file("top.bin", size: 50_000)
+        try tmp.file("a/one.bin", size: 1 << 20)
+        try tmp.file("a/b/c/two.bin", size: 300_000)
+        _ = try Fixtures.makeBushyTree(tmp, under: "noise", width: 3, depth: 3)
+        try tmp.directory("empty")
+        let identity = try #require(FileIdentity(url: tmp.url))
+        let sink = TreeSink(tree: ScanTree(rootURL: tmp.url, rootIdentity: identity), dataVolume: nil)
+
+        try ScanEngine.walk([WalkRoot(path: tmp.url.path, identity: identity, node: 0)], sink: sink, options: ScanOptions(), cancellation: Cancellation())
+        let preview = sink.preview()
+        let completed = try await Fixtures.scanTree(tmp.url)
+
+        func topLevel(_ tree: ScanTree) -> [String: UInt64] {
+            Dictionary(uniqueKeysWithValues: tree.children(of: ScanTree.root).map { (tree.name(of: $0), tree.allocatedSize(of: $0)) })
+        }
+        #expect(topLevel(preview) == topLevel(completed))
+        #expect(preview.allocatedSize(of: ScanTree.root) == completed.allocatedSize(of: ScanTree.root))
+    }
+
+    /// The progress bar's goal for a whole volume: its own bytes in use, never a folder's volume.
+    @Test func volumeBytesInUseOnlyForAVolumeRoot() throws {
+        let tmp = try TemporaryDirectory()
+        #expect(ScanEngine.volumeBytesInUse(at: tmp.url) == nil)
+        let data = try #require(ScanEngine.volumeBytesInUse(at: URL(fileURLWithPath: "/System/Volumes/Data")))
+        #expect(data > 0)
+        // Other processes write meanwhile; the System volume alone would be off by gigabytes the other way.
+        let slash = try #require(ScanEngine.volumeBytesInUse(at: URL(fileURLWithPath: "/")))
+        #expect(slash.distance(to: data).magnitude < 1 << 30, "\"/\" is scanned as the Data volume")
+    }
+
     /// F-0054, F-0010: the link with the smallest path keeps the bytes in every run, whichever link a worker met first.
     @Test func hardLinkOwnerIsTheSmallestPathInEveryRun() async throws {
         let tmp = try TemporaryDirectory()
