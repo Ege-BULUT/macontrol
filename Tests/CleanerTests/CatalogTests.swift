@@ -1,29 +1,77 @@
-import Cleaner
+@testable import Cleaner
 import Foundation
 import Testing
-import TestSupport
 
+/// Checks over the catalog that ships in the app.
 @Suite struct CatalogTests {
-    @Test func bundledCatalogLoadsWithUniqueIDs() throws {
-        let catalog = try CleanupCatalog.bundled()
-        #expect(!catalog.rules.isEmpty)
-        #expect(Set(catalog.rules.map(\.id)).count == catalog.rules.count)
+    let catalog: CleanupCatalog
+
+    init() throws {
+        catalog = try CleanupCatalog.unvalidatedBundled()
     }
 
-    @Test func scanFindsOnlyMatchesInsideTheGivenHome() async throws {
-        let home = try TemporaryDirectory()
-        try home.file("Library/Caches/com.example.App/blob", size: 5000)
-        let rule = CleanupRule(
-            id: "t", title: "T", category: .appCaches, safety: .safe,
-            paths: ["~/Library/Caches/*"], minimumAgeDays: nil, note: ""
-        )
+    func rule(_ id: String) throws -> CleanupRule {
+        try #require(catalog.rules.first { $0.id == id })
+    }
 
-        var items: [CleanupItem] = []
-        for try await item in Cleaner(catalog: CleanupCatalog(version: 1, rules: [rule]), home: home.url).scan() {
-            items.append(item)
+    /// F-0032: the shipped rules pass the same validator the app applies at load and before every scan.
+    @Test func everyBundledPatternPassesValidation() throws {
+        #expect(catalog.validated().rejections == [])
+        #expect(try CleanupCatalog.bundled().rules.count == catalog.rules.count)
+    }
+
+    @Test func idsAreUniqueAndEveryRuleExplainsItself() {
+        #expect(Set(catalog.rules.map(\.id)).count == catalog.rules.count)
+        for rule in catalog.rules {
+            #expect(!rule.title.isEmpty && !rule.note.isEmpty && !rule.paths.isEmpty, "\(rule.id)")
         }
+    }
 
-        #expect(items.map(\.url.lastPathComponent) == ["com.example.App"])
-        #expect(items.first?.measurement.allocated == 8192)
+    /// F-0027: backups, archives and installer data are never preselected or part of a clean.
+    @Test func irreplaceableDataIsManual() throws {
+        for id in ["ios-device-backups", "xcode-archives", "macos-install-data"] {
+            #expect(try rule(id).safety == .manual, "\(id)")
+        }
+    }
+
+    /// F-0027: Mac Sai offered the whole CoreSimulator/Devices folder, every simulator's data, as junk.
+    @Test func simulatorDevicesAreNeverMatched() {
+        let patterns = catalog.rules.flatMap(\.paths).map { $0.lowercased() }
+        #expect(patterns.allSatisfy { !$0.contains("coresimulator/devices") })
+        #expect(patterns.contains("~/library/developer/coresimulator/caches/*"))
+    }
+
+    /// F-0033: stores other tools hard-link from, and slow re-downloads, need a look first.
+    @Test func sharedStoresAndDeviceSymbolsNeedReview() throws {
+        for id in ["pnpm-store", "gradle-caches", "maven-repository", "cargo-registry", "device-support", "apple-caches"] {
+            #expect(try rule(id).safety == .review, "\(id)")
+        }
+    }
+
+    @Test func browserRulesStayInCachesNeverProfiles() {
+        for rule in catalog.rules where rule.category == .browsers {
+            #expect(rule.paths.allSatisfy { $0.hasPrefix("~/Library/Caches/") }, "\(rule.id)")
+        }
+    }
+
+    @Test func logsKeepAWeek() throws {
+        #expect(try rule("user-logs").minimumAgeDays == 7)
+    }
+
+    /// Overlaps resolve by catalog order, so specific rules must come before the catch-all cache rule.
+    @Test func catchAllCacheRuleComesAfterEverySpecificCacheRule() throws {
+        let order = catalog.rules.map(\.id)
+        let catchAll = try #require(order.firstIndex(of: "user-app-caches"))
+        let specific = catalog.rules.enumerated().filter { $0.element.paths.contains { $0.hasPrefix("~/Library/Caches/") } && $0.element.id != "user-app-caches" }
+        #expect(specific.allSatisfy { $0.offset < catchAll })
+    }
+
+    /// F-0015: only the catch-all cache rules read the owner from the folder name; every other rule names it.
+    @Test func everyRuleButTheCacheCatchAllsDeclaresItsOwners() {
+        let undeclared = catalog.rules.filter { $0.owners == nil }
+        #expect(Set(undeclared.map(\.id)) == ["apple-caches", "user-app-caches"])
+        for rule in undeclared {
+            #expect(rule.paths.allSatisfy { $0.hasPrefix("~/Library/Caches/") && !$0.dropFirst("~/Library/Caches/".count).contains("/") }, "\(rule.id)")
+        }
     }
 }
