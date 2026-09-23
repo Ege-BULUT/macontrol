@@ -8,7 +8,7 @@ import Uninstaller
 /// Nothing here touches a real app, launchd job or file outside the temporary folder.
 final class Fixture {
     let tmp: TemporaryDirectory
-    let recorder = Recorder()
+    let recorder: Recorder
     var home: URL { tmp.url.appendingPathComponent("home") }
     /// Stands in for `/`: `root/Applications`, `root/System/Applications`, `root/Library`.
     var root: URL { tmp.url.appendingPathComponent("root") }
@@ -17,6 +17,7 @@ final class Fixture {
         tmp = try TemporaryDirectory()
         try tmp.directory("home/Library")
         try tmp.directory("root/Applications")
+        recorder = Recorder(fixture: tmp.url, trash: try tmp.directory("Trash"))
     }
 
     /// An app bundle with an Info.plist; `folder` is relative to the fixture (default `root/Applications`).
@@ -83,7 +84,8 @@ extension UninstallPlan {
     }
 }
 
-/// Records what an uninstall asked for, in order, and answers as configured.
+/// Records what an uninstall asked for, in order, and answers as configured. Its Trash is a folder in the fixture,
+/// and it moves nothing from outside the fixture.
 final class Recorder: @unchecked Sendable {
     enum Event: Hashable {
         case quit(String)
@@ -91,6 +93,8 @@ final class Recorder: @unchecked Sendable {
         case trash([TrashItem])
     }
 
+    private let fixture: URL
+    private let trash: URL
     // Written only from the actions below, which the uninstaller calls one at a time.
     private let lock = NSLock()
     private var recorded: [Event] = []
@@ -101,6 +105,13 @@ final class Recorder: @unchecked Sendable {
     var whileQuitting: (@Sendable () -> Void)?
     /// A path the Trash refuses, as Safety does when the object at it changed.
     var refusedPath: String?
+    /// Runs after each Trash batch, as an updater that finishes late would.
+    var afterTrashing: (@Sendable () -> Void)?
+
+    init(fixture: URL, trash: URL) {
+        self.fixture = fixture
+        self.trash = trash
+    }
 
     var events: [Event] { lock.withLock { recorded } }
 
@@ -124,10 +135,23 @@ final class Recorder: @unchecked Sendable {
             moveToTrash: { items in
                 self.record(.trash(items))
                 let refused = self.lock.withLock { self.refusedPath }
-                return TrashReport(batch: UUID(), outcomes: items.map {
-                    $0.url.path == refused ? .refused($0.url, .identityChanged) : .trashed(original: $0.url, trashedTo: $0.url)
-                })
+                let outcomes = items.map { $0.url.path == refused ? .refused($0.url, .identityChanged) : self.moveIntoTrash($0.url) }
+                self.lock.withLock { self.afterTrashing }?()
+                return TrashReport(batch: UUID(), outcomes: outcomes)
             }
         )
+    }
+
+    private func moveIntoTrash(_ url: URL) -> TrashOutcome {
+        guard url.path.hasPrefix(fixture.path + "/"), !url.path.split(separator: "/").contains("..") else {
+            return .refused(url, .protectedLocation("Outside the fixture"))
+        }
+        let destination = trash.appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent)
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+            return .trashed(original: url, trashedTo: destination)
+        } catch {
+            return .failed(url, message: error.localizedDescription)
+        }
     }
 }

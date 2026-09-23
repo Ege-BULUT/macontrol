@@ -98,8 +98,9 @@ public final class Uninstaller: Sendable {
             guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         }
         let appReport = await actions.moveToTrash([bundle])
-        guard case .trashed? = appReport.outcomes.first else {
-            let reason = "Not moved, because \(plan.app.name) itself could not be moved to the Trash."
+        // An updater still finishing after the quit can put a new copy at the path the Trash step just emptied.
+        guard case .trashed? = appReport.outcomes.first, !FileSystem.exists(plan.app.url) else {
+            let reason = "Not moved, because \(plan.app.name) is still installed."
             let kept = chosen.map { TrashOutcome.failed($0.url, message: reason) }
             return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + kept)
         }

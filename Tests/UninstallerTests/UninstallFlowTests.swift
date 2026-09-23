@@ -37,18 +37,24 @@ import Testing
         ])
     }
 
-    /// F-0030: Safety carries on past a refused item, so the bundle goes alone and first. When it stays (Sparkle
-    /// swapped in a new copy while the app quit, App Management said no), its data stays too.
-    @Test func appThatStaysInstalledKeepsItsData() async throws {
+    /// F-0030: Safety carries on past a refused item, so the bundle goes alone and first, and its path must be empty
+    /// after. When the app stays (Sparkle swapped in a new copy while it quit, App Management said no, or an updater
+    /// finished after the Trash step), its data stays too.
+    @Test(arguments: [false, true]) func appThatStaysInstalledKeepsItsData(reinstalledAfterTrash: Bool) async throws {
         let fx = try demo()
         let plan = try await fx.plan("Demo")
         let chosen = plan.leftovers.filter(\.isPreselected)
-        fx.recorder.refusedPath = plan.app.url.path
+        if reinstalledAfterTrash {
+            let contents = plan.app.url.appendingPathComponent("Contents")
+            fx.recorder.afterTrashing = { try? FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true) }
+        } else {
+            fx.recorder.refusedPath = plan.app.url.path
+        }
 
         let report = try await fx.uninstaller().uninstall(plan, leftovers: Set(chosen.map(\.url)))
 
         #expect(fx.recorder.events.last == .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]))
-        #expect(report.outcomes.first == .refused(plan.app.url, .identityChanged))
+        #expect(chosen.allSatisfy { FileManager.default.fileExists(atPath: $0.url.path) })
         let kept = report.outcomes.dropFirst().compactMap { if case .failed(let url, _) = $0 { url } else { nil } }
         #expect(kept == chosen.map(\.url), "\(report.outcomes)")
     }
@@ -63,12 +69,14 @@ import Testing
         try Data("window frame".utf8).write(to: prefs, options: .atomic)
         fx.recorder.whileQuitting = { try? Data("window frame, saved on quit".utf8).write(to: prefs, options: .atomic) }
 
-        _ = try await fx.uninstaller().uninstall(plan, leftovers: [prefs, cache.url])
+        let report = try await fx.uninstaller().uninstall(plan, leftovers: [prefs, cache.url])
 
-        guard case .trash(let items) = fx.recorder.events.last else { Issue.record("no leftover batch"); return }
-        #expect(items == [TrashItem(url: cache.url, expectedIdentity: cache.identity),
-                          TrashItem(url: prefs, expectedIdentity: FileIdentity(url: prefs))])
-        #expect(FileIdentity(url: prefs) != plan.leftover("Preferences/com.example.Demo.plist", in: fx.home.appendingPathComponent("Library"))?.identity)
+        // A rename keeps the inode, so the Trash copy shows the identity the plist had when it was trashed.
+        guard case .trashed(_, let trashedPrefs)? = report.outcomes.last else { Issue.record("\(report.outcomes)"); return }
+        let saved = try #require(FileIdentity(url: trashedPrefs))
+        #expect(fx.recorder.events.last == .trash([TrashItem(url: cache.url, expectedIdentity: cache.identity),
+                                                   TrashItem(url: prefs, expectedIdentity: saved)]))
+        #expect(saved != plan.leftover("Preferences/com.example.Demo.plist", in: fx.home.appendingPathComponent("Library"))?.identity)
     }
 
     @Test func preferencesReplacedByALinkCountAsChanged() async throws {
