@@ -17,7 +17,7 @@ extension DiskMapModel {
 }
 
 extension ScanTree {
-    /// About 1,500 nodes shaped like a developer's home folder, sizes fixed by a seeded generator.
+    /// About 1,100 nodes shaped like a developer's home folder, sizes fixed by a seeded generator.
     static func demo() -> ScanTree {
         var demo = DemoBuilder(root: URL(fileURLWithPath: "/Users/demo"))
         let root = ScanTree.root
