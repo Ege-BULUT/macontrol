@@ -1,5 +1,7 @@
 import AppKit
+import Cleaner
 import Foundation
+import MacontrolCore
 @testable import MacontrolUI
 import Safety
 import SwiftUI
@@ -42,6 +44,41 @@ import Testing
             clean: model, uninstall: .demo(), history: .demo()
         )
         try Snapshot.write(RootView(model: app), "clean-after")
+    }
+
+    /// T-0060: a skipped row dims its icon, name and path, never its badge. Dimming the whole row to 0.85
+    /// put the Safe badge at 3.9:1, so the skipped row's badge must render exactly like an active row's.
+    @Test func skippedRowKeepsItsBadgeUndimmed() throws {
+        _ = NSApplication.shared
+        let width = 640.0
+        // The badge's 64 pt column sits left of the 84 pt size column and 12 pt of spacing.
+        func badgeColumn(skip: String?) throws -> [UInt8] {
+            let item = CleanupItem(
+                rule: DemoCleanup.safari, url: URL(fileURLWithPath: "/Users/demo/Library/Caches/com.apple.Safari"), identity: nil,
+                measurement: ItemMeasurement(allocated: 410_000_000, logical: 410_000_000, fileCount: 1200, newestModification: nil, isIncomplete: false),
+                // Same line count either way, so the badge sits at the same height.
+                skipReason: skip, caution: skip == nil ? "Safari is running" : nil
+            )
+            let data = try SnapshotRenderer.png(of: CleanRow(item: item, isChecked: .constant(false)).frame(width: width), size: nil)
+            let image = try #require(NSBitmapImageRep(data: data))
+            let pixels = try #require(image.bitmapData)
+            let scale = Double(image.pixelsWide) / width
+            let bytesPerPixel = image.bitsPerPixel / 8
+            var column: [UInt8] = []
+            for y in 0..<image.pixelsHigh {
+                let row = pixels + y * image.bytesPerRow
+                for x in Int((width - 160) * scale)..<Int((width - 96) * scale) {
+                    column.append(contentsOf: UnsafeBufferPointer(start: row + x * bytesPerPixel, count: bytesPerPixel))
+                }
+            }
+            return column
+        }
+        let active = try badgeColumn(skip: nil)
+        let skipped = try badgeColumn(skip: "Safari is running")
+        #expect(Set(active).count > 20, "the column holds the badge, not blank background")
+        #expect(active.count == skipped.count)
+        let changed = zip(active, skipped).filter { abs(Int($0) - Int($1)) > 8 }.count
+        #expect(changed == 0, "\(changed) badge channel values differ on the skipped row")
     }
 
     /// Review round 2, item 3 (F-0050): however many notes a plan carries, the list of items keeps most of the sheet.

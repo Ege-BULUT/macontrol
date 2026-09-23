@@ -15,13 +15,15 @@ struct CleanRow: View {
             Image(systemName: item.measurement.fileCount == 1 ? "doc" : "folder")
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
+                .opacity(dimming)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.name).lineLimit(1)
+                Text(item.name).lineLimit(1).opacity(dimming)
                 Text(item.url.displayPath)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .opacity(dimming)
                 if let reason = item.skipReason {
                     Label("Skipped: \(reason)", systemImage: "pause.circle.fill")
                         .font(.caption)
@@ -41,14 +43,16 @@ struct CleanRow: View {
             size.frame(width: 84, alignment: .trailing)
         }
         .padding(.vertical, 3)
-        // Dimmed, not faded: at 0.7 the skip reason fell to 3.4:1 on white; 0.85 keeps it at 4.6:1 (T-0060).
-        .opacity(item.skipReason == nil ? 1 : 0.85)
         .contextMenu {
             Button("Reveal in Finder") { item.url.revealInFinder() }
         }
         .accessibilityElement(children: .combine)
         .accessibilityValue(item.canClean ? (isChecked ? "selected" : "not selected") : "cannot be selected")
     }
+
+    /// A skipped row dims what it is, never the skip reason or the badge: dimming the whole row put the
+    /// Safe badge at 3.9:1 (T-0060).
+    private var dimming: Double { item.skipReason == nil ? 1 : 0.85 }
 
     @ViewBuilder
     private var leading: some View {
