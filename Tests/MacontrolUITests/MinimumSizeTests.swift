@@ -9,7 +9,7 @@ import Testing
 @Suite struct MinimumSizeTests {
     @Test(arguments: SidebarItem.allCases)
     func screenFitsTheMinimumWindow(item: SidebarItem) throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let size = RootView.minimumSize
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: RootView(model: .demo(selection: item)).frame(width: size.width, height: size.height))

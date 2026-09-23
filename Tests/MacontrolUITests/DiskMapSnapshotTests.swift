@@ -18,7 +18,7 @@ import Testing
 
     @Test(arguments: MapStyle.allCases)
     func mapRenders(style: MapStyle) async throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         for dark in [false, true] {
             let app = AppModel.demo(selection: .diskMap)
             app.diskMap.style = style
@@ -60,7 +60,7 @@ import Testing
     }
 
     @Test func reviewSheetRenders() throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let model = DiskMapModel.demo()
         let staged = model.pile.items
         let shared: UInt64 = 3_600_000_000

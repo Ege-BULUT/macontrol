@@ -5,7 +5,7 @@ import Testing
 
 @Suite struct SnapshotTests {
     @Test func everyShotRendersToAPNG() throws {
-        _ = NSApplication.shared
+        SnapshotRenderer.runHeadless()
         let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47]
         let names = SnapshotRenderer.shots.map(\.name)
         #expect(Set(names).isSuperset(of: SidebarItem.allCases.map(\.rawValue) + ["onboarding", "overview-limited"]))
