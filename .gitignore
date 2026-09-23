@@ -5,3 +5,6 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .build/
+research/sources/
+research/bench/fixtures/
+research/bench/tools/
