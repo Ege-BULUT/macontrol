@@ -146,14 +146,14 @@
   "_meta": {
     "description": "Roadmap data. Edit via scripts/roadmap_cli.py, not by hand. Run its `render` command afterward to update roadmap.html. Fully local, nothing here is ever pushed anywhere.",
     "milestoneIdPrefix": "M",
-    "nextMilestoneSeq": 9
+    "nextMilestoneSeq": 10
   },
   "intro": "The plan, sequenced.",
   "milestones": [
     {
       "id": "M1",
       "name": "Source research",
-      "status": "next",
+      "status": "done",
       "description": "Survey proven open-source cleaners and disk visualizers, license-check them, and pick what to reuse, what to improve and what to rewrite.",
       "why": "Reusing proven wheels is the core strategy; picking wrong here costs every later milestone.",
       "examples": [],
@@ -164,58 +164,69 @@
     {
       "id": "M2",
       "name": "Scan engine",
-      "status": "planned",
-      "description": "Fastest possible filesystem walk and size aggregation (getattrlistbulk, parallel walk, APFS clones and hard links counted once), benchmarked against the candidates.",
+      "status": "next",
+      "description": "Production walker behind the ScanEngine contract: fd-relative getattrlistbulk on a fixed pool of blocking threads, compact ScanTree (no stored paths), hard links once with a deterministic owner, no mount-point crossing, dataless never materialized, errors flagged not zeroed; exact 'frees now' via PRIVATESIZE for selections; mcscan in the bench (target: fixture total exact, within 1.3x of dua). Task T-0043.",
       "why": "Speed of the scan decides whether the app feels instant; both cleanup and visualization sit on it.",
       "examples": [],
       "chips": [
-        "Loop: spikes, benchmarks"
+        "Loop: spikes, benchmarks",
+        "v1 merged on main (c99e07e)"
       ]
     },
     {
       "id": "M3",
       "name": "App shell & UI",
-      "status": "planned",
-      "description": "SwiftUI app skeleton, design system, navigation, permissions onboarding (Full Disk Access).",
+      "status": "next",
+      "description": "SwiftUI shell (sidebar: Overview, Disk Map, Clean, Uninstall, History), Overview, Full Disk Access onboarding (per-user probe, poll, relaunch), History with Undo, design tokens and Liquid Glass surfaces, snapshot tooling (Macontrol --snapshot), Clean and Uninstall screens. Tasks T-0047, T-0049.",
       "why": "One shell that both feature sets plug into, designed once.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "v1 merged on main (c99e07e)"
+      ]
     },
     {
       "id": "M4",
       "name": "Disk visualizer",
-      "status": "planned",
-      "description": "Sunburst / treemap, drill-down into any folder, reveal in Finder, move to Trash, live size updates.",
+      "status": "done",
+      "description": "Byte-proportional sunburst and treemap in Canvas, 'smaller items' group instead of dropping, keyboard-first drill-down, inspector, staging tray with the 'frees now' figure, Move to Trash with in-place splice (no rescan). Task T-0048.",
       "why": "Radix-grade half of the product.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "v1 merged on main (c99e07e)"
+      ]
     },
     {
       "id": "M5",
       "name": "System cleaner",
-      "status": "planned",
-      "description": "Caches, logs, dev junk (Xcode DerivedData, simulators, package caches), language files, large and old files.",
+      "status": "done",
+      "description": "Signed, validated JSON cleanup catalog (safe / review / manual), generic in-use guard, caches, logs, browser caches and developer junk; project artifacts only if time allows. Task T-0045.",
       "why": "PureMac-grade half of the product.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "v1 merged on main (c99e07e)"
+      ]
     },
     {
       "id": "M6",
       "name": "App uninstaller",
-      "status": "planned",
-      "description": "Remove apps with every leftover (Containers, Application Support, Preferences, LaunchAgents), plus removable bundled Apple apps where SIP allows.",
+      "status": "next",
+      "description": "App inventory with Apple-app classification, evidence-scored leftovers (bundle id, container metadata, app groups, launchd), quit + launchctl bootout + one Trash batch; built-in apps shown as 'Part of macOS'. No privileged helper in v1. Task T-0046.",
       "why": "Most requested cleanup feature, and the riskiest one.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "v1 merged on main (c99e07e)"
+      ]
     },
     {
       "id": "M7",
       "name": "Safety & verification",
-      "status": "planned",
-      "description": "Dry-run everywhere, Trash-first deletes, protected-path allowlist, test suite over fixture trees, benchmarks in CI.",
+      "status": "next",
+      "description": "One deletion door (Sources/Safety, sink-audit test): containment protected-path policy with canonical paths, identity re-check, FileManager.trashItem only, JSON Lines undo journal; no permanent delete in v1; fixture-only tests. Task T-0044.",
       "why": "A cleaner that deletes the wrong thing once is uninstalled forever.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "v1 merged on main (c99e07e)"
+      ]
     },
     {
       "id": "M8",
@@ -225,9 +236,23 @@
       "why": "Ship it.",
       "examples": [],
       "chips": []
+    },
+    {
+      "id": "M9",
+      "name": "Debloat & hardcore",
+      "status": "next",
+      "description": "Hardcore mode (a toolbar checkbox on every screen, off at launch; on = permanent delete after a risk modal), a fd-relative permanent-delete engine in Safety, a privileged helper for root-owned items (do shell script with administrator privileges, request file bound by SHA-256, root-side re-validation), a Debloat section that removes Apple's apps with their content from a validated apple-apps.json, and an honest expert flow for sealed system apps. Design: docs/DESIGN-debloat.md.",
+      "why": "User decisions after v1 (M-0045 4-6): debloating the Mac the way Windows debloaters remove Microsoft's own apps is the product's main promise. The user wants admin deletions like PureMac (Apple apps with all their leftovers), a permanent 'hardcore mode', and system apps removable with the strongest warnings. No paid developer account, so everything must work ad-hoc signed.",
+      "examples": [],
+      "chips": [
+        "7 tasks",
+        "Risk: high (no undo, root)"
+      ]
     }
   ],
-  "notes": []
+  "notes": [
+    "Release plan: v0.1.0 released (Trash-only preview). v0.2.0 = hardcore mode + admin deletions + Apple app debloat. v0.3.0 = live map while scanning."
+  ]
 }
 </script>
 
