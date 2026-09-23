@@ -41,7 +41,8 @@ struct CleanRow: View {
             size.frame(width: 84, alignment: .trailing)
         }
         .padding(.vertical, 3)
-        .opacity(item.skipReason == nil ? 1 : 0.7)
+        // Dimmed, not faded: at 0.7 the skip reason fell to 3.4:1 on white; 0.85 keeps it at 4.6:1 (T-0060).
+        .opacity(item.skipReason == nil ? 1 : 0.85)
         .contextMenu {
             Button("Reveal in Finder") { item.url.revealInFinder() }
         }
