@@ -19,6 +19,8 @@ extension UninstallModel {
 enum DemoApps {
     static let editor = app("Editor", "com.example.Editor", "4.2.1", .thirdParty)
     static let garageBand = app("GarageBand", "com.apple.garageband10", "10.4.12", .appleAppStore)
+    /// Root-owned, as App Store installs are: blocked, with leftovers still listed.
+    static let pages = app("Pages", "com.apple.iWork.Pages", "14.4", .appleAppStore)
     static let chess = app("Chess", "com.apple.Chess", "3.18", .builtIn, folder: "/System/Applications")
 
     static let apps: [InstalledApp] = [
@@ -27,7 +29,7 @@ enum DemoApps {
         app("Podcast Maker", "com.example.PodcastMaker", "1.8.3", .thirdParty),
         app("Terminal Plus", "com.example.TerminalPlus", "0.9", .thirdParty),
         garageBand,
-        app("Pages", "com.apple.iWork.Pages", "14.4", .appleAppStore),
+        pages,
         app("Safari", "com.apple.Safari", "26.0", .builtIn),
         chess,
         app("Photo Booth", "com.apple.PhotoBooth", "13.1", .builtIn, folder: "/System/Applications"),
@@ -56,6 +58,9 @@ enum DemoApps {
             leftover("/Library/Application Support/GarageBand", .contentLibrary, 2_310_000_000, admin: true,
                      note: "Instruments and sounds, shared with Logic Pro if you install it."),
         ], blocker: nil),
+        UninstallPlan(app: pages, appMeasurement: size(612_000_000), leftovers: [
+            leftover("~/Library/Containers/com.apple.iWork.Pages", .containerMetadata, 96_000_000),
+        ], blocker: "Owned by the system, so removing it needs an administrator. Reveal it in Finder and drag it to the Trash."),
         UninstallPlan(app: chess, appMeasurement: size(8_100_000), leftovers: [], blocker:
             "Chess is part of macOS. It lives on the sealed, read-only system volume, which macOS restores on every update, so no app can remove it."),
     ]

@@ -39,14 +39,30 @@ struct TrashSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             header.padding(20)
             Divider()
-            List(rows) { row in
-                TrashSheetRowView(row: row, outcome: outcomes[row.url], notMoved: notMoved[row.url], isDone: report != nil)
+            // Notes scroll with the items: in the fixed header, a long list of them squeezed the items to a sliver.
+            List {
+                if report == nil && !notes.isEmpty {
+                    Section("Also happens") {
+                        ForEach(notes, id: \.self) { note in
+                            Label(note, systemImage: "info.circle").foregroundStyle(.secondary)
+                        }
+                    }
+                    Section("Moves to the Trash") { rowViews }
+                } else {
+                    rowViews
+                }
             }
             .listStyle(.inset)
             Divider()
             footer.padding(16)
         }
         .frame(width: 640, height: 540)
+    }
+
+    private var rowViews: some View {
+        ForEach(rows) { row in
+            TrashSheetRowView(row: row, outcome: outcomes[row.url], notMoved: notMoved[row.url], isDone: report != nil)
+        }
     }
 
     private var header: some View {
@@ -58,13 +74,6 @@ struct TrashSheet: View {
                 Text(report == nil ? message : "Items stay in the Trash, still using their space, until you empty it. You can put them back from History.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if report == nil {
-                    ForEach(notes, id: \.self) { note in
-                        Label(note, systemImage: "info.circle")
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
                 if let warning, report == nil {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
@@ -145,6 +154,11 @@ private struct TrashSheetRowView: View {
                 }
             }
             Spacer(minLength: 12)
+            // What stayed behind is reachable from here even after its app or row is gone.
+            if isDone && outcome?.isTrashed != true {
+                Button("Reveal in Finder") { row.url.revealInFinder() }
+                    .controlSize(.small)
+            }
             Text(row.bytes.formattedBytes)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)

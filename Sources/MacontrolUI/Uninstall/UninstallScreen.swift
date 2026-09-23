@@ -84,6 +84,9 @@ private struct AppRow: View {
                 .foregroundStyle(.secondary)
         }
         .task { await model.measureIfNeeded(app) }
+        .contextMenu {
+            Button("Reveal in Finder") { app.url.revealInFinder() }
+        }
     }
 }
 

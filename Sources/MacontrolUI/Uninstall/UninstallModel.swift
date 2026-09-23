@@ -31,12 +31,41 @@ struct UninstallConfirmation: Identifiable {
 
     /// Every step besides the moves, then what macontrol leaves alone: the preview lists all of it (F-0069).
     var notes: [String] {
+        backgroundItems.map { "Stops background item \($0)" } + plan.notes
+    }
+
+    /// The launchd jobs the uninstall boots out, in the order it does.
+    private var backgroundItems: [String] {
         var labels: [String] = []
         for label in plan.bundleLaunchdLabels + leftovers.compactMap(\.launchdLabel) where !labels.contains(label) {
             labels.append(label)
         }
-        return labels.map { "Stops background item \($0)" } + plan.notes
+        return labels
     }
+
+    /// Why the uninstall stopped, and what already ran. The quit and the bootouts come before any move,
+    /// so a late stop leaves them done even though nothing is in the Trash (F-0069).
+    func failureMessage(for error: any Error) -> String {
+        let reason = error.localizedDescription
+        let askedToQuit: Bool
+        switch error as? UninstallError {
+        case .stillRunning?: askedToQuit = true
+        case .bootoutFailed?: askedToQuit = appIsRunning
+        default: return "The uninstall stopped before moving anything: \(reason)"
+        }
+        var ran = askedToQuit ? ["\(plan.app.name) was asked to quit"] : []
+        if !backgroundItems.isEmpty {
+            ran.append("these background items may have been stopped: \(backgroundItems.joined(separator: ", "))")
+        }
+        return "Nothing was moved to the Trash, but \(ran.joined(separator: ", and ")). \(reason)"
+    }
+}
+
+/// A leftover the user checked or unchecked, with what the leftover showed when they did.
+private struct LeftoverChoice {
+    let chosen: Bool
+    let note: String?
+    let wasPreselected: Bool
 }
 
 @Observable
@@ -45,7 +74,12 @@ public final class UninstallModel {
     public var selectedApp: InstalledApp.ID?
     /// The plan of the selected app, once found.
     public private(set) var plan: UninstallPlan?
-    var query = ""
+    var query = "" {
+        // Return would otherwise uninstall an app the search no longer shows.
+        didSet {
+            if let selectedApp, !sections.contains(where: { $0.apps.contains { $0.id == selectedApp } }) { self.selectedApp = nil }
+        }
+    }
     /// Bundle sizes, measured lazily as rows appear.
     var sizes: [URL: UInt64] = [:]
     /// Last plan per app, shown at once on reselect while the app is read again.
@@ -56,9 +90,9 @@ public final class UninstallModel {
     private(set) var planError: String?
     var confirmation: UninstallConfirmation?
 
-    /// Per app, per leftover: chosen or not. A leftover is seeded from `isPreselected` the first time it is
-    /// offered; after that the user's choice stands, across app switches and re-scans (F-0011, F-0022).
-    private var choices: [URL: [URL: Bool]] = [:]
+    /// Per app, per leftover: what the user checked or unchecked, across app switches and re-scans. Every other
+    /// leftover follows the current plan's `isPreselected` (F-0011, F-0022).
+    private var choices: [URL: [URL: LeftoverChoice]] = [:]
 
     private let uninstaller: Uninstaller?
     private let engine: ScanEngine?
@@ -173,9 +207,14 @@ public final class UninstallModel {
     private func show(_ plan: UninstallPlan) {
         self.plan = plan
         sizes[plan.app.url] = plan.appMeasurement.allocated
-        var chosen = choices[plan.app.url] ?? [:]
-        for leftover in plan.leftovers where chosen[leftover.url] == nil { chosen[leftover.url] = leftover.isPreselected }
-        choices[plan.app.url] = chosen
+        // A check stands only while the leftover looks as it did when the user gave it. One that has since gained
+        // a note ("Also used by X") or lost preselection goes back to the plan's default: unchecked.
+        for leftover in plan.leftovers {
+            guard let choice = choices[plan.app.url]?[leftover.url], choice.chosen else { continue }
+            if choice.note != leftover.note || choice.wasPreselected != leftover.isPreselected {
+                choices[plan.app.url]?[leftover.url] = nil
+            }
+        }
     }
 
     private func refreshRunning(_ app: InstalledApp) {
@@ -190,25 +229,19 @@ public final class UninstallModel {
     // MARK: Leftover choice
 
     /// Chosen leftovers of the shown plan.
-    var leftoverSelection: Set<URL> {
-        get {
-            guard let plan, let chosen = choices[plan.app.url] else { return [] }
-            return Set(plan.leftovers.map(\.url).filter { chosen[$0] == true })
-        }
-        set {
-            guard let plan else { return }
-            var chosen = (choices[plan.app.url] ?? [:]).mapValues { _ in false }
-            for url in newValue { chosen[url] = true }
-            choices[plan.app.url] = chosen
-        }
+    var leftoverSelection: Set<URL> { Set(chosenLeftovers.map(\.url)) }
+
+    /// Nothing is chosen for an app that can't be uninstalled, and root-owned leftovers never are:
+    /// v1 offers Reveal in Finder for them.
+    func isChosen(_ leftover: Leftover) -> Bool {
+        guard canUninstall, !leftover.needsAdministrator, let plan else { return false }
+        return choices[plan.app.url]?[leftover.url]?.chosen ?? leftover.isPreselected
     }
 
-    func isChosen(_ leftover: Leftover) -> Bool { leftoverSelection.contains(leftover.url) }
-
-    /// Root-owned leftovers are never chosen: v1 offers Reveal in Finder for them.
     func setChosen(_ chosen: Bool, _ leftover: Leftover) {
-        guard !leftover.needsAdministrator else { return }
-        if chosen { leftoverSelection.insert(leftover.url) } else { leftoverSelection.remove(leftover.url) }
+        guard canUninstall, !leftover.needsAdministrator, let plan else { return }
+        choices[plan.app.url, default: [:]][leftover.url] =
+            LeftoverChoice(chosen: chosen, note: leftover.note, wasPreselected: leftover.isPreselected)
     }
 
     func toggle(_ urls: Set<URL>) {
@@ -217,12 +250,11 @@ public final class UninstallModel {
         for leftover in targets { setChosen(turnOn, leftover) }
     }
 
-    var chosenLeftovers: [Leftover] {
-        (plan?.leftovers ?? []).filter { isChosen($0) && !$0.needsAdministrator }
-    }
+    var chosenLeftovers: [Leftover] { (plan?.leftovers ?? []).filter(isChosen) }
 
+    /// Only for the selected app: a plan still shown for an app the search hid must not be uninstalled.
     var canUninstall: Bool {
-        guard let plan else { return false }
+        guard let plan, plan.app.id == selectedApp else { return false }
         return plan.app.kind != .builtIn && plan.blocker == nil
     }
 
@@ -251,7 +283,7 @@ public final class UninstallModel {
             apply(report, to: pending.plan)
             confirmation?.report = report
         } catch {
-            confirmation?.errorMessage = "The uninstall stopped before moving anything: \(error.localizedDescription)"
+            confirmation?.errorMessage = pending.failureMessage(for: error)
             // The plan may be stale (an update replaced the bundle, the app recreated a folder), and retrying it
             // would fail the same way. Read the app and its leftovers again for the next try.
             if uninstaller != nil { await rescan() }
@@ -273,7 +305,8 @@ public final class UninstallModel {
             }
             return
         }
-        var remaining = plan
+        // A plan found while the sheet was open is newer than the sheet's; take the moved items out of that one.
+        var remaining = plans[appID] ?? plan
         remaining.leftovers.removeAll { trashed.contains($0.url) }
         plans[appID] = remaining
         if self.plan?.app.id == appID {

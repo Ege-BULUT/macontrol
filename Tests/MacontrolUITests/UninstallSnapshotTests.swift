@@ -15,6 +15,17 @@ import Uninstaller
         try Snapshot.write(RootView(model: app), "uninstall-\(kind.rawValue)")
     }
 
+    /// A root-owned App Store app: the blocker with Reveal in Finder, no Apple notice, leftover checkboxes off.
+    @Test func blockedAppRenders() throws {
+        let plan = DemoApps.plans.first { $0.app.id == DemoApps.pages.id }
+        let uninstall = UninstallModel(uninstaller: nil, apps: DemoApps.apps, plan: plan, engine: nil)
+        let app = AppModel(
+            selection: .uninstall, fullDiskAccess: .granted, volume: nil, diskMap: .demo(),
+            clean: .demo(), uninstall: uninstall, history: .demo()
+        )
+        try Snapshot.write(RootView(model: app), "uninstall-blocked")
+    }
+
     @Test func confirmationSheetRenders() throws {
         let model = UninstallModel.demo()
         model.beginUninstall()

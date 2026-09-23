@@ -65,9 +65,10 @@ struct AppDetailView: View {
         let fallback = app.kind == .builtIn ? "Part of macOS. It lives on the sealed system volume and can't be removed." : nil
         VStack(alignment: .leading, spacing: 8) {
             if let text = blocker ?? fallback {
-                Notice(text: text, systemImage: "lock.fill", tint: .secondary)
+                // A root-owned bundle (most App Store apps) is removed in Finder; built-in apps not at all.
+                Notice(text: text, systemImage: "lock.fill", tint: .secondary, reveal: app.kind == .builtIn ? nil : app.url)
             }
-            if app.kind == .appleAppStore {
+            if app.kind == .appleAppStore && blocker == nil {
                 Notice(text: "Made by Apple. You can remove it and download it again for free from the App Store.",
                        systemImage: "apple.logo", tint: .blue)
             }
@@ -118,7 +119,7 @@ struct AppDetailView: View {
                 let members = plan.leftovers.filter { $0.evidence == evidence }
                 Section {
                     ForEach(members) { leftover in
-                        LeftoverRow(leftover: leftover, isChosen: Binding(
+                        LeftoverRow(leftover: leftover, canChoose: model.canUninstall, isChosen: Binding(
                             get: { model.isChosen(leftover) },
                             set: { model.setChosen($0, leftover) }
                         ))
@@ -165,12 +166,19 @@ private struct Notice: View {
     let text: String
     let systemImage: String
     let tint: Color
+    var reveal: URL?
 
     var body: some View {
-        Label {
-            Text(text).fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: systemImage).foregroundStyle(tint)
+        HStack(spacing: 12) {
+            Label {
+                Text(text).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: systemImage).foregroundStyle(tint)
+            }
+            Spacer(minLength: 0)
+            if let reveal {
+                Button("Reveal in Finder") { reveal.revealInFinder() }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -203,6 +211,8 @@ private struct EvidenceHeader: View {
 
 private struct LeftoverRow: View {
     let leftover: Leftover
+    /// False for an app that can't be uninstalled: nothing would act on the checkbox.
+    let canChoose: Bool
     @Binding var isChosen: Bool
 
     var body: some View {
@@ -214,6 +224,7 @@ private struct LeftoverRow: View {
                     Toggle("Remove \(leftover.url.lastPathComponent)", isOn: $isChosen)
                         .toggleStyle(.checkbox)
                         .labelsHidden()
+                        .disabled(!canChoose)
                 }
             }
             .frame(width: 20)

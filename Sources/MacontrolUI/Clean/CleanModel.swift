@@ -80,6 +80,8 @@ public final class CleanModel {
         scanError = nil
         items = []
         selection = []
+        // The last figure belongs to the last selection; the footer must not pair it with the new one.
+        estimate = .working
         await Task { await consume(cleaner.scan()) }.value
         isScanning = false
         hasScanned = true
@@ -107,8 +109,15 @@ public final class CleanModel {
         // Fixed category order, so sections do not jump while results stream in.
         return CleanupCategory.allCases.compactMap { category in
             guard let items = byCategory[category] else { return nil }
-            return CleanGroup(category: category, items: items.sorted { $0.measurement.allocated > $1.measurement.allocated })
+            return CleanGroup(category: category, items: items.sorted(by: Self.inScreenOrder))
         }
+    }
+
+    /// Category order, then largest first: the list and the review sheet read the same way.
+    private static func inScreenOrder(_ a: CleanupItem, _ b: CleanupItem) -> Bool {
+        let categories = CleanupCategory.allCases
+        let (first, second) = (categories.firstIndex(of: a.rule.category) ?? 0, categories.firstIndex(of: b.rule.category) ?? 0)
+        return (first, b.measurement.allocated) < (second, a.measurement.allocated)
     }
 
     var selectedItems: [CleanupItem] {
@@ -162,7 +171,7 @@ public final class CleanModel {
     // MARK: Review and Move to Trash
 
     func beginReview() {
-        let selected = selectedItems
+        let selected = selectedItems.sorted(by: Self.inScreenOrder)
         guard !selected.isEmpty, review == nil, !isScanning else { return }
         let kept = Set(selected.map(\.url).removingNested())
         let listed = selected.filter { kept.contains($0.url) }
@@ -191,7 +200,8 @@ public final class CleanModel {
             )
         }
         let batch = toMove.map(\.trashItem)
-        let report = if let trash {
+        // No cleaner means no recheck, so nothing may reach a real Trash either.
+        let report = if let trash, cleaner != nil {
             batch.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await trash.moveToTrash(batch)
         } else {
             // Demo data: nothing real to move.
@@ -214,6 +224,8 @@ public final class CleanModel {
         let trashed = report.trashedURLs.map(\.path)
         let gone = items.filter { item in trashed.contains { item.url.path == $0 || item.url.path.hasPrefix($0 + "/") } }
         let goneURLs = Set(gone.map(\.url))
+        // A cache recreated and trashed again is one row, not two with the same id.
+        inTrash.removeAll { goneURLs.contains($0.url) }
         inTrash += gone
         items.removeAll { goneURLs.contains($0.url) }
         selection.subtract(goneURLs)

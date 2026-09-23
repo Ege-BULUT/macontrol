@@ -91,10 +91,13 @@ import TestSupport
 
     /// F-0050: the batch sent to TrashService is exactly the list the sheet showed.
     /// The paths do not exist, so nothing can move with either the scaffold or the real service.
-    @Test func theTrashReceivesExactlyTheReviewedItems() async throws {
+    /// Review round 2, item 10: without a cleaner there is no recheck, so a real Trash gets nothing. The files
+    /// live in the temp folder and must still be there.
+    @Test func withoutACleanerNothingReachesTheTrash() async throws {
         let temp = try TemporaryDirectory()
         let rule = Self.rule(.safe)
-        let items = (0..<3).map { Self.item(rule, temp.url.appendingPathComponent("missing-\($0)").path) }
+        let files = try (0..<3).map { try temp.file("cache-\($0)", size: 1_000) }
+        let items = files.map { Self.item(rule, $0.path) }
         let model = CleanModel(
             cleaner: nil, trash: TrashService(journalURL: temp.url.appendingPathComponent("journal.jsonl")), engine: nil, items: items
         )
@@ -103,7 +106,28 @@ import TestSupport
         let report = try #require(model.review?.report)
         #expect(report.outcomes.map(\.url) == items.map(\.url))
         #expect(report.trashedURLs.isEmpty)
+        #expect(files.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
         #expect(model.items.count == 3 && model.inTrash.isEmpty)
+    }
+
+    /// Review round 2, item 10: the review lists items as the screen does, by category and largest first.
+    @Test func reviewRowsFollowTheScreenOrder() {
+        func item(_ category: CleanupCategory, _ path: String, _ bytes: UInt64) -> CleanupItem {
+            CleanupItem(
+                rule: CleanupRule(id: path, title: path, category: category, safety: .safe, paths: [], minimumAgeDays: nil, note: ""),
+                url: URL(fileURLWithPath: path), identity: nil,
+                measurement: ItemMeasurement(allocated: bytes, logical: bytes, fileCount: 1, newestModification: nil, isIncomplete: false),
+                skipReason: nil
+            )
+        }
+        let model = CleanModel(cleaner: nil, trash: nil, engine: nil, items: [
+            item(.logs, "/Users/demo/Library/Logs/a", 9_000),
+            item(.appCaches, "/Users/demo/Library/Caches/small", 1_000),
+            item(.appCaches, "/Users/demo/Library/Caches/large", 5_000),
+        ])
+        model.beginReview()
+        #expect(model.review?.items.map(\.name) == ["large", "small", "a"])
+        #expect(model.review?.items.map(\.url) == model.groups.flatMap(\.items).map(\.url))
     }
 
     /// F-0042: trashed rows leave the list and are counted as "In Trash", not freed.
@@ -121,6 +145,34 @@ import TestSupport
         #expect(Set(model.inTrash.map(\.url)) == [folder.url, inside.url])
         #expect(model.selection == [kept.url])
         #expect(model.inTrashBytes == folder.measurement.allocated + inside.measurement.allocated)
+    }
+
+    /// Review round 2, item 5: a cache recreated and trashed again is one In Trash row, so ids stay unique.
+    @Test func aCacheTrashedTwiceIsOneInTrashRow() async throws {
+        let temp = try TemporaryDirectory()
+        try Self.oldFile(temp, "home/Library/Caches/com.example.a/blob")
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+                               trash: nil, engine: nil)
+        for _ in 0..<2 {
+            await model.scan()
+            let cache = try #require(model.items.first)
+            // A made-up outcome: nothing moves, so the next scan finds the cache again.
+            model.apply(TrashReport(batch: UUID(), outcomes: [.trashed(original: cache.url, trashedTo: temp.url.appendingPathComponent("t"))]))
+        }
+        #expect(model.inTrash.count == 1)
+    }
+
+    /// Review round 2, item 4: Scan Again drops the last estimate instead of pairing it with the new selection.
+    @Test func scanningAgainResetsTheEstimate() async throws {
+        let temp = try TemporaryDirectory()
+        try Self.oldFile(temp, "home/Library/Caches/com.example.a/blob")
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+                               trash: nil, engine: nil)
+        await model.scan()
+        await model.refreshEstimate()
+        #expect(model.estimate != .working)
+        await model.scan()
+        #expect(model.estimate == .working)
     }
 
     /// F-0015: the trash gets only what passes the in-use guard again at confirm time. An app launched

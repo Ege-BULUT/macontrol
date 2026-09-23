@@ -40,9 +40,6 @@ import Uninstaller
         model.toggle(Set(leftovers.map(\.url)))
         #expect(!model.isChosen(admin))
         #expect(model.chosenLeftovers.count == leftovers.count - 1)
-
-        // Even if the selection were corrupted, the batch never carries a root-owned item.
-        model.leftoverSelection.insert(admin.url)
         model.beginUninstall()
         #expect(model.confirmation?.rows.contains { $0.url == admin.url } == false)
     }
@@ -55,14 +52,53 @@ import Uninstaller
         #expect(model.confirmation == nil)
     }
 
-    @Test func aBlockedThirdPartyAppHasNoUninstall() async {
-        let app = DemoApps.editor
-        let model = UninstallModel(uninstaller: nil, apps: [app], engine: nil)
-        model.plans[app.url] = UninstallPlan(app: app, appMeasurement: .zero, leftovers: [], blocker: "Owned by root.")
-        model.selectedApp = app.id
+    /// A root-owned App Store app: no Uninstall, and its leftover checkboxes are off, since nothing would act on them.
+    @Test func aBlockedAppHasNoUninstallAndNoChosenLeftovers() async throws {
+        let model = UninstallModel.demo()
+        model.selectedApp = DemoApps.pages.id
         await model.loadPlan()
-        #expect(model.plan?.blocker == "Owned by root.")
-        #expect(!model.canUninstall)
+        let plan = try #require(model.plan)
+        #expect(plan.blocker != nil && !model.canUninstall)
+        let cache = try #require(plan.leftovers.first { $0.isPreselected })
+        #expect(!model.isChosen(cache))
+        model.setChosen(true, cache)
+        model.toggle([cache.url])
+        #expect(model.leftoverSelection.isEmpty)
+        model.beginUninstall()
+        #expect(model.confirmation == nil)
+    }
+
+    /// Review round 2, item 1 (F-0011, F-0022): a leftover checked by default, or even by the user, is unchecked
+    /// when a re-plan says another installed app uses it. Checking it again after that is the user's call.
+    @Test(arguments: [false, true])
+    func aLeftoverThatGainsANoteIsNoLongerChosen(userCheckedIt: Bool) async throws {
+        let temp = try TemporaryDirectory()
+        let model = UninstallModel(uninstaller: try Self.sampleUninstaller(temp, actions: RecordedActions().actions), engine: nil)
+        let cache = try #require(try await Self.selectSample(model).leftovers.first)
+        #expect(cache.isPreselected && model.isChosen(cache))
+        if userCheckedIt { model.setChosen(true, cache) }
+
+        try Self.bundle(temp, "Probe Beta", "com.example.macontrol-probe")  // a second copy, same identifier
+        await model.rescan()
+        let shared = try #require(model.plan?.leftovers.first { $0.url == cache.url })
+        #expect(shared.note != nil && !shared.isPreselected)
+        #expect(!model.isChosen(shared))
+        model.beginUninstall()
+        #expect(model.confirmation?.rows.contains { $0.url == cache.url } == false)
+
+        model.confirmation = nil
+        model.setChosen(true, shared)
+        await model.rescan()
+        #expect(model.isChosen(shared))
+    }
+
+    /// Review round 2, item 6: Return must not uninstall an app the search hides.
+    @Test func searchingAwayFromTheSelectedAppDeselectsIt() {
+        let model = UninstallModel.demo()
+        model.query = "edit"
+        #expect(model.selectedApp == DemoApps.editor.id && model.canUninstall)
+        model.query = "garage"
+        #expect(model.selectedApp == nil && !model.canUninstall)
         model.beginUninstall()
         #expect(model.confirmation == nil)
     }
@@ -208,6 +244,36 @@ import Uninstaller
         model.setChosen(false, agent)
         model.beginUninstall()
         #expect(model.confirmation?.notes == ["Stops background item com.example.Editor.helper"] + plan.notes)
+    }
+
+    /// F-0069: a stop after the quit or a bootout says those steps may have run.
+    @Test func aLateStopSaysWhatAlreadyRan() throws {
+        let model = UninstallModel.demo()
+        model.beginUninstall()
+        let confirmation = try #require(model.confirmation)
+        let late = confirmation.failureMessage(for: UninstallError.bootoutFailed(label: "com.example.Editor.updater", status: 5))
+        #expect(late.hasPrefix("Nothing was moved to the Trash, but Editor was asked to quit"))
+        #expect(late.contains("com.example.Editor.helper, com.example.Editor.updater"))
+        #expect(confirmation.failureMessage(for: UninstallError.stillRunning("Editor")).contains("was asked to quit"))
+        let early = confirmation.failureMessage(for: UninstallError.changedSincePlan(DemoApps.editor.url))
+        #expect(early.hasPrefix("The uninstall stopped before moving anything"))
+    }
+
+    /// A plan found while the sheet was open is newer than the sheet's; applying the outcome keeps what it found.
+    @Test func outcomesApplyToTheNewestPlan() async throws {
+        let model = UninstallModel.demo()
+        let stale = try #require(model.plan)
+        var extra = stale.leftovers[1]
+        extra.url = extra.url.appendingPathExtension("new")
+        var fresher = stale
+        fresher.leftovers.append(extra)
+        model.plans[stale.app.url] = fresher
+        await model.loadPlan()
+
+        model.apply(TrashReport(batch: UUID(), outcomes: [
+            .trashed(original: stale.leftovers[0].url, trashedTo: URL(fileURLWithPath: "/Users/demo/.Trash/x")),
+        ]), to: stale)
+        #expect(model.plan?.leftovers.map(\.url) == fresher.leftovers.dropFirst().map(\.url))
     }
 
     @Test func anUninstalledAppLeavesTheList() throws {
