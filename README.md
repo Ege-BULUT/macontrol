@@ -33,7 +33,7 @@ Most disk tools either show you where the space went or offer to clean it up. ma
 
 - **See it.** A sunburst or a treemap of your home folder, the whole disk or any folder, sized by what each item takes up on disk.
 - **Free it.** Caches, logs and developer leftovers from a vetted catalog, and apps together with the files they leave behind.
-- **Trust the numbers.** Hard links count once, folders it cannot read say "not scanned" instead of 0 B, and every confirmation tells you how much emptying the Trash will actually free.
+- **Trust the numbers.** Hard links count once, folders it cannot read say "not scanned" instead of 0 B, and Clean and the Disk Map tell you how much emptying the Trash will actually free before anything moves.
 - **Change your mind.** Every removal goes to the Trash and into a journal. History puts a whole batch back in one click.
 
 ## Features
@@ -68,7 +68,7 @@ Most disk tools either show you where the space went or offer to clean it up. ma
   <img src="docs/assets/screenshots/clean-light.png" alt="Clean: app caches, logs and developer data grouped by category, each item labelled Safe, Review or Manual with its size">
 </picture>
 
-- **A vetted catalog** of 27 rules, compiled into the app: browser caches (Safari, Chrome, Firefox, Edge, Brave, Arc), Xcode build data, device support files and simulator caches, package manager caches (Homebrew, npm, Yarn, pnpm, pip, Cargo, Go, Gradle, Maven, CocoaPods, Carthage, SwiftPM), app caches and logs.
+- **A vetted catalog** of 27 rules, shipped inside the signed app: browser caches (Safari, Chrome, Firefox, Edge, Brave, Arc), Xcode build data, device support files and simulator caches, package manager caches (Homebrew, npm, Yarn, pnpm, pip, Cargo, Go, Gradle, Maven, CocoaPods, Carthage, SwiftPM), app caches and logs.
 - **Safe, Review, Manual.** Only Safe items are preselected. Review items wait for you. Manual items (iPhone and iPad backups, Xcode archives, macOS installer leftovers) show their size and a Reveal in Finder button, and are never cleaned in bulk.
 - **Hands off live data.** Anything changed in the last 10 minutes, or belonging to an app that is running, is skipped and the reason is shown.
 - **Rules fail closed.** Every rule is checked when the catalog loads. A pattern that reaches outside the folders the catalog is meant for drops the whole rule.
@@ -80,10 +80,10 @@ Most disk tools either show you where the space went or offer to clean it up. ma
   <img src="docs/assets/screenshots/uninstall-light.png" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
 </picture>
 
-- **Leftovers with evidence.** Files named with the app's bundle identifier in the places apps keep data (Application Support, Caches, Preferences, Containers, Saved Application State, logs and more), sandbox containers that name the app, and group containers from its entitlements. Each group says why it matched.
+- **Leftovers with evidence.** Files named with the app's bundle identifier in the places apps keep data (Application Support, Caches, Preferences, Saved Application State, Logs and more), sandbox containers that macOS records as the app's, group containers from its entitlements, and launchd jobs that start a program inside it. Each group says why it matched.
 - **Cautious by default.** Folders that only share the app's name are shown but not preselected. Data that another installed app also uses is never preselected.
-- **In the right order.** The app is asked to quit (never force-quit) and its own background agents are stopped first. Then the app and the leftovers you chose go to the Trash as one batch, so a single Undo brings everything back.
-- **Honest about Apple's apps.** Apps that are part of macOS live on the sealed system volume and are listed with the reason no app can remove them. Apple's App Store apps and root-owned files show "Needs admin" with Reveal in Finder for now.
+- **In the right order.** The app is asked to quit (never force-quit) and its own background agents are stopped first. Then the app goes to the Trash, and the leftovers you chose follow only once it is there. History shows the two batches, each with its own Undo.
+- **Apple's own apps.** Apps that are part of macOS live on the sealed system volume and are listed with the reason they can't be removed. Root-owned apps, which usually include Apple's App Store apps, and root-owned leftovers are marked as needing an administrator, with Reveal in Finder.
 
 ### Overview and History
 
@@ -144,7 +144,7 @@ macontrol is built to be boring about your files:
 
 ## Install
 
-1. Download **Macontrol-0.1.0.zip** from the [latest release](https://github.com/Ege-BULUT/macontrol/releases/tag/v0.1.0) and unzip it.
+1. Download **Macontrol-0.1.0.zip** from the [v0.1.0 release](https://github.com/Ege-BULUT/macontrol/releases/tag/v0.1.0) and unzip it.
 2. Move **Macontrol.app** to Applications.
 3. Open it. macOS blocks the first launch because the app is not notarized yet: open **System Settings › Privacy & Security** and click **Open Anyway**.
 4. Allow **Full Disk Access** when asked. macontrol walks you through it and continues by itself once access is on.
@@ -163,7 +163,7 @@ Without Full Disk Access the app still works. Mail, Messages, Safari, cookies an
 **Known limits in 0.1.0**
 
 - The app is ad-hoc signed, so Full Disk Access has to be granted again after installing a new version.
-- Root-owned items and Apple's App Store apps (GarageBand, iMovie, iWork) are shown as "Needs admin" but cannot be removed from the app yet.
+- Root-owned items, usually including Apple's App Store apps (GarageBand, iMovie, iWork), need an administrator and cannot be removed from the app yet.
 - While an iOS Simulator is running, Clean skips the caches it cannot inspect.
 
 ## Build from source
