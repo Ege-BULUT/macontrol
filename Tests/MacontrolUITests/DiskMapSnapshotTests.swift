@@ -5,12 +5,12 @@ import MacontrolCore
 import Testing
 
 /// Renders the map in both styles and the review sheet, light and dark, with demo data.
-/// Set MACONTROL_SHOTS=<folder> to keep the PNGs.
+/// Set MACONTROL_SNAPSHOT_DIR=<folder> to keep the PNGs.
 @Suite(.serialized) struct DiskMapSnapshotTests {
     private func write(_ data: Data, _ name: String) throws {
         #expect(Array(data.prefix(4)) == [0x89, 0x50, 0x4E, 0x47], "\(name)")
         #expect(data.count > 20_000, "\(name) rendered almost nothing")
-        guard let folder = ProcessInfo.processInfo.environment["MACONTROL_SHOTS"] else { return }
+        guard let folder = ProcessInfo.processInfo.environment["MACONTROL_SNAPSHOT_DIR"] else { return }
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
         try data.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(name).png"))
     }
