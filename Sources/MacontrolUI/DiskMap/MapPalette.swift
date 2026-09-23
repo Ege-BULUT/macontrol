@@ -38,23 +38,25 @@ nonisolated enum MapPalette {
         return slot
     }
 
-    /// Slots for the top-level children in size order. `preferred[i]` is a colour the `i`-th child keeps (a scan's
-    /// first-seen colours, T-0063), or nil for its rank slot. A child whose colour matches the one before it, or the
-    /// first one when it is the last, takes the first colour neither neighbour nor the next child wants.
-    static func slots(preferring preferred: [Int?]) -> [Int] {
-        let wanted = preferred.indices.map { preferred[$0] ?? slot(for: $0, of: preferred.count) }
-        var result: [Int] = []
-        for (index, slot) in wanted.enumerated() {
-            var taken = [result.last]
-            if index == wanted.count - 1, index > 0 { taken.append(result.first) }
-            guard taken.contains(slot) else {
-                result.append(slot)
+    /// Slots for the top-level children in size order. `firstSeen[i]` is when a scan first showed the `i`-th child
+    /// (T-0063), or nil. A child keeps slot `firstSeen % branches.count` through the scan and on the finished map,
+    /// else its rank slot. Earlier-seen children choose first, so when two neighbours (the ring closes) want one
+    /// colour, the later-seen one takes a colour neither neighbour has. Without a scan order this is `slot(for:of:)`.
+    static func slots(firstSeen: [Int?]) -> [Int] {
+        let count = firstSeen.count
+        let wanted = firstSeen.indices.map { firstSeen[$0].map { $0 % branches.count } ?? slot(for: $0, of: count) }
+        var result = [Int?](repeating: nil, count: count)
+        for index in firstSeen.indices.sorted(by: { (firstSeen[$0] ?? .max, $0) < (firstSeen[$1] ?? .max, $1) }) {
+            let neighbours = [(index + count - 1) % count, (index + 1) % count].filter { $0 != index }
+            let held = neighbours.compactMap { result[$0] }
+            guard held.contains(wanted[index]) else {
+                result[index] = wanted[index]
                 continue
             }
-            if index + 1 < wanted.count { taken.append(wanted[index + 1]) }
-            result.append(branches.indices.first { !taken.contains($0) } ?? slot)
+            let avoid = held + neighbours.filter { result[$0] == nil }.map { wanted[$0] }
+            result[index] = branches.indices.first { !avoid.contains($0) }
         }
-        return result
+        return result.map { $0 ?? 0 }
     }
 
     /// Share of the way to the background at `depth`.

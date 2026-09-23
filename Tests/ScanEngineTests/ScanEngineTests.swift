@@ -40,6 +40,50 @@ import TestSupport
         #expect(preview.allocatedSize(of: ScanTree.root) == completed.allocatedSize(of: ScanTree.root))
     }
 
+    /// T-0063: previews taken after every listing of a real multi-threaded walk, under the walk's lock as the
+    /// engine takes its four a second, only grow, never pass the finished sizes, and leave the finished tree
+    /// exactly as a scan without previews builds it.
+    @Test func previewsDuringARealWalkOnlyGrowAndLeaveTheTreeAsAPlainScanBuildsIt() async throws {
+        let tmp = try TemporaryDirectory()
+        try tmp.file("top.bin", size: 50_000)
+        try tmp.file("a/one.bin", size: 1 << 20)
+        try tmp.file("a/b/c/two.bin", size: 300_000)
+        try tmp.hardLink("noise/one-link.bin", to: "a/one.bin")
+        try tmp.hardLink("top-link.bin", to: "a/b/c/two.bin")
+        _ = try Fixtures.makeBushyTree(tmp, under: "noise", width: 3, depth: 4)
+        try tmp.directory("empty")
+        let identity = try #require(FileIdentity(url: tmp.url))
+        let sink = PreviewingSink(TreeSink(tree: ScanTree(rootURL: tmp.url, rootIdentity: identity), dataVolume: nil))
+
+        try ScanEngine.walk([WalkRoot(path: tmp.url.path, identity: identity, node: 0)], sink: sink, options: ScanOptions(workerCount: 4), cancellation: Cancellation())
+        sink.inner.tree.finalizeTotals()
+        let plain = try await Fixtures.scanTree(tmp.url)
+
+        #expect(sink.previews.count > 100)
+        #expect(Self.describe(sink.inner.tree) == Self.describe(plain))
+        let finished = Self.topLevel(plain)
+        var last: [String: UInt64] = [:]
+        for preview in sink.previews.map(Self.topLevel) {
+            #expect(last.allSatisfy { preview[$0.key, default: 0] >= $0.value }, "\(last) -> \(preview)")
+            #expect(preview.allSatisfy { $0.value <= finished[$0.key, default: 0] }, "\(preview) vs \(finished)")
+            last = preview
+        }
+        let linked = try ["a/one.bin", "a/b/c/two.bin"].map { try #require(Fixtures.node($0, in: plain)) }.reduce(0) { $0 + plain.allocatedSize(of: $1) }
+        #expect(linked > 0 && finished["a"] == last["a"].map { $0 + linked }, "a's hard-linked files join it only when the map opens")
+    }
+
+    static func topLevel(_ tree: ScanTree) -> [String: UInt64] {
+        Dictionary(uniqueKeysWithValues: tree.children(of: ScanTree.root).map { (tree.name(of: $0), tree.allocatedSize(of: $0)) })
+    }
+
+    /// Every node by its path: sizes, count, flags and identity.
+    static func describe(_ tree: ScanTree) -> [[UInt8]: String] {
+        Dictionary(uniqueKeysWithValues: (0..<tree.count).map { node in
+            let identity = tree.identity(of: node)
+            return (tree.relativePathBytes(of: node), "\(tree.allocatedSize(of: node)) \(tree.logicalSize(of: node)) \(tree.fileCount(of: node)) \(tree.flags(of: node).rawValue) \(identity.device):\(identity.inode)")
+        })
+    }
+
     /// The progress bar's goal for a whole volume: its own bytes in use, never a folder's volume.
     @Test func volumeBytesInUseOnlyForAVolumeRoot() throws {
         let tmp = try TemporaryDirectory()
@@ -234,4 +278,20 @@ import TestSupport
         #expect(ScanOptions().resolvedWorkerCount >= min(2, ProcessInfo.processInfo.activeProcessorCount))
         #expect(ScanOptions(workerCount: 3).resolvedWorkerCount == 3)
     }
+}
+
+/// Takes a preview after every listing, under the walk's lock like the engine's own.
+private final class PreviewingSink: WalkSink {
+    static var extras: BulkReader.Extras { TreeSink.extras }
+    let inner: TreeSink
+    var previews: [ScanTree] = []
+
+    init(_ inner: TreeSink) { self.inner = inner }
+
+    func add(_ listing: Listing, to folder: Int32, walkableNodes: inout [Int32]) {
+        inner.add(listing, to: folder, walkableNodes: &walkableNodes)
+        previews.append(inner.preview())
+    }
+
+    func flag(_ folder: Int32, _ flags: NodeFlags) { inner.flag(folder, flags) }
 }

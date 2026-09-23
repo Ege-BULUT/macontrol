@@ -39,6 +39,35 @@ import Testing
         }
     }
 
+    /// T-0063 review 2: colours a scan fixed by first sight never put one colour on two neighbours (the ring
+    /// closes), with more names than colours too. The name seen earlier keeps its colour and the later one gives
+    /// way, so the first eight names seen never change colour. Without a scan order, these are the rank slots.
+    @Test func firstSeenColoursKeepNeighboursApartAndTheEarliestNames() {
+        let count = MapPalette.branches.count
+        for total in 1...(count * 3 + 1) {
+            #expect(MapPalette.slots(firstSeen: Array(repeating: nil, count: total)) == (0..<total).map { MapPalette.slot(for: $0, of: total) })
+        }
+        // The ninth name seen wants the first one's colour and has grown past it, so they sit side by side.
+        let grown = MapPalette.slots(firstSeen: [8, 0, 1, 2, 3, 4, 5, 6, 7])
+        #expect(grown[1] == 0, "the first name seen keeps its colour: \(grown)")
+        #expect(grown[0] != 0 && grown[0] != grown[8], "the ninth gives way, also to its ring neighbour: \(grown)")
+
+        var random = SeededRandom(seed: 11)
+        for _ in 0..<2_000 {
+            let total = random.next(in: 1...40)
+            var seen = Array(0..<(total + 10))
+            for index in seen.indices.reversed() { seen.swapAt(index, random.next(in: 0...index)) }
+            let order: [Int?] = (0..<total).map { random.next(in: 0...4) == 0 ? nil : seen[$0] }
+            let slots = MapPalette.slots(firstSeen: order)
+            for index in slots.indices where total > 1 {
+                #expect(slots[index] != slots[(index + 1) % total], "\(order) -> \(slots)")
+            }
+            for (index, first) in order.enumerated() {
+                if let first, first < count { #expect(slots[index] == first, "\(order) -> \(slots)") }
+            }
+        }
+    }
+
     // MARK: Reference maths
 
     /// Printed by `python3 -c "from palette_probe import *; print(de2000(simulate((0,255,0),'deutan'), simulate((255,255,0),'deutan')))"`.

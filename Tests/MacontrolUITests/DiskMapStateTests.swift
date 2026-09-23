@@ -2,6 +2,7 @@ import Foundation
 import MacontrolCore
 @testable import MacontrolUI
 import ScanEngine
+import TestSupport
 import Testing
 
 /// Model state that outlives one layout or one scan: hover, focus, scans replacing each other, and the
@@ -67,20 +68,9 @@ import Testing
         let model = DiskMapModel(engine: nil, trash: nil)
         let generation = model.beginScan()
         func colours(_ sizes: [String: UInt64]) throws -> [String: Int] {
-            var preview = ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 1))
-            for (offset, entry) in sizes.enumerated() {
-                preview.addChild(
-                    of: ScanTree.root, name: entry.key, flags: .directory, allocated: entry.value, logical: 0,
-                    identity: FileIdentity(device: 1, inode: UInt64(offset + 2))
-                )
-            }
-            preview.finalizeTotals()
+            let preview = Self.topLevel(sizes)
             model.receive(.preview(preview), generation: generation)
-            let layout = try MapLayoutBuilder.build(preview, DiskMapFixtures.key(style, version: model.previewVersion), slots: model.previewSlots)
-            return Dictionary(uniqueKeysWithValues: layout.topLevel.compactMap { index in
-                guard case .node(let node) = layout.elements[index].item, let branch = layout.elements[index].branch else { return nil }
-                return (preview.name(of: node), branch)
-            })
+            return try Self.colours(MapLayoutBuilder.build(preview, DiskMapFixtures.key(style, version: model.previewVersion), firstSeen: model.previewFirstSeen), preview)
         }
         let first = try colours(["A": 300, "B": 200, "C": 100])
         let second = try colours(["A": 300, "B": 250, "C": 900, "D": 50])
@@ -89,10 +79,92 @@ import Testing
         #expect(second["D"].map { !first.values.contains($0) } == true, "a newcomer takes a colour not in use yet")
     }
 
-    /// T-0063: the progress bar's goal is read off the main actor; on a hung network mount statfs froze the UI.
-    @Test func volumeGoalIsReadOffTheMainActor() async {
-        let readOnMain = await DiskMapModel.bytesInUse(URL(fileURLWithPath: "/")) { _ in Thread.isMainThread ? 1 : 0 }
-        #expect(readOnMain == 0)
+    /// T-0063 review 2: the finished map keeps the colours the scan's previews gave its folders. Coloured by
+    /// rank, it recoloured 5 of 6 named folders at the moment it replaced the preview.
+    @Test(arguments: MapStyle.allCases)
+    func finishedMapKeepsThePreviewColours(style: MapStyle) async throws {
+        let model = DiskMapModel(engine: nil, trash: nil)
+        let generation = model.beginScan()
+        model.receive(.preview(Self.topLevel(["C": 900, "A": 300, "B": 200])), generation: generation)
+        let final = Self.topLevel(["A": 3_000, "B": 2_500, "C": 1_000, "D": 400])
+        model.receive(.preview(final), generation: generation)
+        let lastPreview = try Self.colours(MapLayoutBuilder.build(final, DiskMapFixtures.key(style), firstSeen: model.previewFirstSeen), final)
+        model.receive(.completed(final), generation: generation)
+        model.finishScan(generation)
+        await model.prepareLayout(model.layoutKey(width: 800, height: 600, scale: 2))
+        let map = try Self.colours(#require(model.layout), final)
+        #expect(map == lastPreview)
+        #expect(map == ["C": 0, "A": 1, "B": 2, "D": 3], "first seen C, A, B, then D; by rank it would be A, B, C, D")
+    }
+
+    /// T-0063: the bar's goal for a new folder is the volume's bytes in use, read off the main actor while the
+    /// scan runs. An older scan's goal, or one that arrives after its scan ended, is dropped.
+    @Test func volumeGoalIsReadOffTheMainActorForTheRunningScanOnly() async {
+        let model = DiskMapModel(engine: nil, trash: nil)
+        let root = URL(fileURLWithPath: "/")
+        model.readBytesInUse = { _ in Thread.isMainThread ? 1 : 2 }
+        let generation = model.beginScan()
+        await model.readGoal(of: root, generation: generation).value
+        #expect(model.expectedTotal?.bytes == 2, "1 means statfs ran on the main thread")
+        #expect(model.expectedTotal?.isLastScan == false)
+        let newer = model.beginScan()
+        await model.readGoal(of: root, generation: generation).value
+        #expect(model.expectedTotal == nil, "an older scan's goal")
+        model.finishScan(newer)
+        await model.readGoal(of: root, generation: newer).value
+        #expect(model.expectedTotal == nil, "a goal that came after its scan ended")
+    }
+
+    /// T-0063: scanning the map's folder again aims at its last total at once, without reading the volume.
+    @Test func aRescanAimsAtTheLastTotal() {
+        let tree = DiskMapFixtures.mixed()
+        let model = DiskMapModel(engine: nil, trash: nil, tree: tree)
+        model.readBytesInUse = { _ in 1 }
+        _ = model.beginScan(of: tree.rootURL)
+        #expect(model.expectedTotal?.bytes == tree.allocatedSize(of: ScanTree.root))
+        #expect(model.expectedTotal?.isLastScan == true)
+        _ = model.beginScan(of: URL(fileURLWithPath: "/elsewhere"))
+        #expect(model.expectedTotal == nil, "another folder waits for its volume's bytes in use")
+    }
+
+    /// T-0063 review 2: the walk never waits for the volume's bytes in use. On a hung network mount statfs does
+    /// not return, and the scan (and Stop) waited for it.
+    @Test func theWalkNeverWaitsForTheVolumeGoal() async throws {
+        let folder = try TemporaryDirectory()
+        try folder.file("a/one.bin", size: 8192)
+        let model = DiskMapModel(engine: ScanEngine(), trash: nil)
+        let hung = DispatchSemaphore(value: 0)
+        defer { hung.signal() }
+        model.readBytesInUse = { _ in
+            _ = hung.wait(timeout: .now() + 10)
+            return 1
+        }
+        let started = ContinuousClock.now
+        await model.scan(folder.url)
+        #expect(started.duration(to: .now) < .seconds(5), "the scan waited for statfs")
+        #expect(model.tree?.allocatedSize(of: ScanTree.root) ?? 0 >= 8192)
+        #expect(!model.isScanning)
+    }
+
+    /// One level of folders with these sizes, like a preview.
+    static func topLevel(_ sizes: [String: UInt64]) -> ScanTree {
+        var tree = ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 1))
+        for (offset, entry) in sizes.sorted(by: { $0.key < $1.key }).enumerated() {
+            tree.addChild(
+                of: ScanTree.root, name: entry.key, flags: .directory, allocated: entry.value, logical: 0,
+                identity: FileIdentity(device: 1, inode: UInt64(offset + 2))
+            )
+        }
+        tree.finalizeTotals()
+        return tree
+    }
+
+    /// Each top-level folder's colour slot in `layout`.
+    static func colours(_ layout: MapLayout, _ tree: ScanTree) -> [String: Int] {
+        Dictionary(uniqueKeysWithValues: layout.topLevel.compactMap { index in
+            guard case .node(let node) = layout.elements[index].item, let branch = layout.elements[index].branch else { return nil }
+            return (tree.name(of: node), branch)
+        })
     }
 
     /// Stop keeps the map and the pile. A rescan keeps staged items it finds again at the same path

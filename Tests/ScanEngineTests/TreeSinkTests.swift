@@ -133,6 +133,22 @@ import Testing
         #expect(running <= sink.tree.allocatedSize(of: ScanTree.root), "\(running)")
     }
 
+    /// T-0063: a preview is one level of at most `limit` entries, the largest, so what the main actor gets a few
+    /// times a second stays small however big the scan is.
+    @Test func previewHoldsOnlyTheLargestEntriesOneLevelDeep() {
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
+        var walkable: [Int32] = []
+        let files = (0..<300).map { ("f\($0)", file(inode: UInt64($0 + 10), allocated: UInt64($0 + 1) * 4096)) }
+        sink.add(listing([("A", folder(inode: 3))] + files), to: 0, walkableNodes: &walkable)
+        sink.add(listing([("deep.bin", file(inode: 4, allocated: 1 << 30))]), to: walkable[0], walkableNodes: &walkable)
+        let preview = sink.preview(limit: 256)
+        let top = preview.children(of: ScanTree.root)
+        #expect(top.count == 256)
+        #expect(preview.count == 257, "one level: A's contents are only its size")
+        #expect(top.map(preview.name(of:)).contains("A"))
+        #expect(top.map(preview.allocatedSize(of:)).min() == 46 * 4096, "f45 to f299 and A")
+    }
+
     @Test func mountPointEntryIsALeafWithItsFlag() {
         let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
         var mount = folder(inode: 3)

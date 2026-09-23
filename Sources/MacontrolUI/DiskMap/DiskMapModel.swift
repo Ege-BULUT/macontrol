@@ -18,14 +18,15 @@ public final class DiskMapModel {
     public private(set) var preview: ScanTree?
     /// Counts previews, so each one gets a layout of its own.
     private(set) var previewVersion = 0
-    /// Each top-level name's colour for the whole scan. Colour by size rank reshuffled most of the legend on
-    /// every preview, because ranks keep changing while sizes grow (T-0063).
-    private(set) var previewSlots: [String: Int] = [:]
-    /// The scan's colours for the tree on the map, so the finished map keeps the colours its preview showed.
-    private(set) var treeSlots: [String: Int] = [:]
+    /// When each top-level name first showed in this scan's previews, which fixes its colour for the whole scan.
+    /// Colour by size rank reshuffled most of the legend on every preview, as ranks change while sizes grow (T-0063).
+    private(set) var previewFirstSeen: [String: Int] = [:]
+    /// The same for the scan the map shows, so the finished map keeps the colours its previews had.
+    private(set) var treeFirstSeen: [String: Int] = [:]
     /// What the running scan should reach, for its progress bar: the last scan's total when the same folder
     /// is scanned again, else the space in use when a whole volume is scanned.
     var expectedTotal: (bytes: UInt64, isLastScan: Bool)?
+    /// What `readGoal` calls; tests put a hung or thread-checking reader here.
     @ObservationIgnored var readBytesInUse: @Sendable (URL) -> UInt64? = { ScanEngine.volumeBytesInUse(at: $0) }
     /// The folder the map is drilled into. Only a folder the map can open is accepted: the Overview sets
     /// this directly, and a stale index must not put the map inside a file, a package or the Trash.
@@ -89,18 +90,7 @@ public final class DiskMapModel {
     func scan(_ root: URL) async {
         guard let engine = scanEngine else { return }
         scanTask?.cancel()
-        let lastTotal = tree.flatMap { $0.rootURL.standardizedFileURL == root.standardizedFileURL ? $0.allocatedSize(of: ScanTree.root) : nil }
-        let generation = beginScan()
-        expectedTotal = lastTotal.map { ($0, true) }
-        if lastTotal == nil {
-            // The walk never waits for this goal: statfs can hang on a network mount, and nothing cancels it.
-            // ponytail: each scan of a hung mount parks one GCD thread until statfs returns.
-            Task { [read = readBytesInUse] in
-                if let used = await Self.bytesInUse(root, read: read), generation == scanGeneration, isScanning {
-                    expectedTotal = (used, false)
-                }
-            }
-        }
+        let generation = beginScan(of: root)
         let task = Task {
             do {
                 for try await event in engine.scan(root) {
@@ -122,24 +112,34 @@ public final class DiskMapModel {
         scanTask?.cancel()
     }
 
-    /// The volume's bytes in use, read on a GCD thread: statfs and getattrlist wait on a hung network mount, and
-    /// blocking I/O never runs on the cooperative pool (ARCHITECTURE §2).
-    nonisolated static func bytesInUse(_ root: URL, read: @escaping @Sendable (URL) -> UInt64?) async -> UInt64? {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async { continuation.resume(returning: read(root)) }
-        }
-    }
-
-    /// Makes a new scan the only one allowed to change what is shown.
-    func beginScan() -> Int {
+    /// Makes a new scan the only one allowed to change what is shown. With `root`, also sets the goal of its
+    /// progress bar: the last scan's total when the same folder is scanned again, else the volume's bytes in use.
+    func beginScan(of root: URL? = nil) -> Int {
+        let lastTotal = tree.flatMap { $0.rootURL.standardizedFileURL == root?.standardizedFileURL ? $0.allocatedSize(of: ScanTree.root) : nil }
         scanGeneration += 1
         scanError = nil
         progress = nil
         preview = nil
-        previewSlots = [:]
-        expectedTotal = nil
+        previewFirstSeen = [:]
+        expectedTotal = lastTotal.map { ($0, true) }
         isScanning = true
+        if let root, lastTotal == nil { readGoal(of: root, generation: scanGeneration) }
         return scanGeneration
+    }
+
+    /// Reads the volume's bytes in use on a GCD thread, in a Task of its own: statfs can hang on a network mount
+    /// and nothing cancels it, so the walk never waits for it, and blocking I/O stays off the cooperative pool
+    /// (ARCHITECTURE §2). A goal that arrives after its scan ended is dropped.
+    /// ponytail: each scan of a hung mount parks one GCD thread until statfs returns.
+    @discardableResult
+    func readGoal(of root: URL, generation: Int) -> Task<Void, Never> {
+        let read = readBytesInUse
+        return Task {
+            let used = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async { continuation.resume(returning: read(root)) }
+            }
+            if let used, generation == scanGeneration, isScanning { expectedTotal = (used, false) }
+        }
     }
 
     func receive(_ event: ScanEvent, generation: Int) {
@@ -147,13 +147,13 @@ public final class DiskMapModel {
         switch event {
         case .progress(let update): progress = update
         case .preview(let tree):
-            for name in tree.sortedChildren(of: ScanTree.root).map(tree.name(of:)) where previewSlots[name] == nil {
-                previewSlots[name] = previewSlots.count % MapPalette.branches.count
+            for name in tree.sortedChildren(of: ScanTree.root).map(tree.name(of:)) where previewFirstSeen[name] == nil {
+                previewFirstSeen[name] = previewFirstSeen.count
             }
             preview = tree
             previewVersion += 1
         case .completed(let result):
-            treeSlots = previewSlots
+            treeFirstSeen = previewFirstSeen
             replaceTree(result)
         }
     }
@@ -163,7 +163,7 @@ public final class DiskMapModel {
         isScanning = false
         progress = nil
         preview = nil
-        previewSlots = [:]
+        previewFirstSeen = [:]
         expectedTotal = nil
     }
 
@@ -307,7 +307,7 @@ public final class DiskMapModel {
             return
         }
         guard let tree, key.treeVersion == treeVersion else { return }
-        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key, slots: treeSlots), result.key.treeVersion == treeVersion else { return }
+        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key, firstSeen: treeFirstSeen), result.key.treeVersion == treeVersion else { return }
         layoutCache[key] = result
         cacheOrder.append(key)
         if cacheOrder.count > 12 { layoutCache[cacheOrder.removeFirst()] = nil }
