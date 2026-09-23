@@ -43,6 +43,7 @@ TOOLS=(
   "diskus|diskus {}|diskus -b {}"
   "bulkwalk|$BENCH/tools/bulkwalk {}|-"
   "bulkwalk-ext|$BENCH/tools/bulkwalk -x {}|-"
+  "mcscan|$BENCH/../../.build/release/mcscan {}|$BENCH/../../.build/release/mcscan -A {}"
 )
 # bulkwalk.c: serial fd-relative getattrlistbulk baseline; -x adds the APFS
 # PRIVATESIZE|CLONEID|EXT_FLAGS attributes (cost question from T-0009).
