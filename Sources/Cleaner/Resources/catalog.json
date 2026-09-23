@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "user-app-caches",
+      "title": "App caches",
+      "category": "appCaches",
+      "safety": "safe",
+      "paths": ["~/Library/Caches/*"],
+      "note": "Apps rebuild their caches when needed. Caches of running apps are skipped."
+    },
+    {
+      "id": "user-logs",
+      "title": "App logs",
+      "category": "logs",
+      "safety": "safe",
+      "paths": ["~/Library/Logs/*"],
+      "minimumAgeDays": 7,
+      "note": "Diagnostic logs older than a week."
+    },
+    {
+      "id": "xcode-derived-data",
+      "title": "Xcode build data",
+      "category": "developer",
+      "safety": "safe",
+      "paths": ["~/Library/Developer/Xcode/DerivedData/*"],
+      "note": "Build products and indexes. Xcode rebuilds them on the next build."
+    },
+    {
+      "id": "xcode-archives",
+      "title": "Xcode archives",
+      "category": "developer",
+      "safety": "manual",
+      "paths": ["~/Library/Developer/Xcode/Archives/*"],
+      "note": "Archived builds you may need for crash symbolication or resubmission."
+    },
+    {
+      "id": "ios-device-backups",
+      "title": "iPhone and iPad backups",
+      "category": "system",
+      "safety": "manual",
+      "paths": ["~/Library/Application Support/MobileSync/Backup/*"],
+      "note": "Local device backups. Deleting one cannot be undone once the Trash is emptied."
+    }
+  ]
+}
