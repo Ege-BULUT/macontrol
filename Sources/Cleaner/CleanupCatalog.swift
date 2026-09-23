@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// How much trust a rule's matches get in the UI (F-0027).
 public enum SafetyLevel: String, Codable, Sendable, CaseIterable {
@@ -51,7 +52,17 @@ public struct CleanupCatalog: Codable, Sendable {
         self.rules = rules
     }
 
+    /// The catalog shipped inside the signed app, with invalid rules dropped and logged (F-0021, F-0032).
     public static func bundled() throws -> CleanupCatalog {
+        let (catalog, rejections) = try unvalidatedBundled().validated()
+        for rejection in rejections {
+            Logger(subsystem: "Macontrol", category: "Cleaner")
+                .error("dropped rule \(rejection.ruleID, privacy: .public): \(rejection.pattern, privacy: .public) is \(rejection.reason, privacy: .public)")
+        }
+        return catalog
+    }
+
+    static func unvalidatedBundled() throws -> CleanupCatalog {
         // SwiftPM's Bundle.module only looks beside the executable; in the .app the resource
         // bundle sits in Contents/Resources (scripts/bundle-app.sh), where code signing allows it.
         let resources = Bundle.main.url(forResource: "macontrol_Cleaner", withExtension: "bundle").flatMap(Bundle.init(url:))
