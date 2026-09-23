@@ -18,7 +18,9 @@ import Testing
         model.stage(file)
         model.beginReview()
         let move = Task { await model.confirmReview() }
-        while model.review?.phase != .moving { await Task.yield() }
+        // Sleep, not yield: a yielding loop on the main actor can outrank the move task once another test escalates
+        // its priority, and then spins forever. The move may also finish between two looks, so `.done` ends the wait.
+        while model.review?.phase == .confirm { try? await Task.sleep(for: .milliseconds(1)) }
         model.review = nil
         await move.value
         #expect(model.pile.items.first?.note != nil, "the report was not applied")
