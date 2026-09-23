@@ -7,6 +7,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/com.apple.Safari"],
+      "owners": ["com.apple.Safari", "Safari"],
       "note": "Downloaded page resources. History, bookmarks, passwords and open tabs live elsewhere and are not touched. Skipped while Safari is running."
     },
     {
@@ -15,6 +16,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/Google/Chrome"],
+      "owners": ["com.google.Chrome", "Google Chrome"],
       "note": "Chrome's disk cache only, never the profile in Application Support. Skipped while Chrome is running."
     },
     {
@@ -23,6 +25,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/Firefox/Profiles/*"],
+      "owners": ["org.mozilla.firefox", "Firefox"],
       "note": "The per-profile cache Firefox keeps under Caches. The profiles themselves are in Application Support and are not touched."
     },
     {
@@ -31,6 +34,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/Microsoft Edge"],
+      "owners": ["com.microsoft.edgemac", "Microsoft Edge"],
       "note": "Edge's disk cache only, never the profile. Skipped while Edge is running."
     },
     {
@@ -39,6 +43,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/BraveSoftware/Brave-Browser"],
+      "owners": ["com.brave.Browser", "Brave Browser"],
       "note": "Brave's disk cache only, never the profile. Skipped while Brave is running."
     },
     {
@@ -47,6 +52,7 @@
       "category": "browsers",
       "safety": "safe",
       "paths": ["~/Library/Caches/Arc", "~/Library/Caches/company.thebrowser.Browser"],
+      "owners": ["company.thebrowser.Browser", "Arc"],
       "note": "Arc's disk cache only, never its spaces or profile. Skipped while Arc is running."
     },
     {
@@ -55,6 +61,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Developer/Xcode/DerivedData/*"],
+      "owners": ["com.apple.dt.Xcode", "Xcode", "xcodebuild"],
       "note": "Build products and indexes, one folder per project. Xcode rebuilds them on the next build. Skipped while Xcode is running."
     },
     {
@@ -63,6 +70,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Developer/CoreSimulator/Caches/*"],
+      "owners": ["com.apple.iphonesimulator", "Simulator", "com.apple.CoreSimulator.CoreSimulatorService", "CoreSimulatorService"],
       "note": "Dyld and runtime caches the Simulator regenerates. Simulator devices and their app data are not touched."
     },
     {
@@ -71,6 +79,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/org.swift.swiftpm"],
+      "owners": ["swift-build", "swift-package", "com.apple.dt.Xcode", "xcodebuild"],
       "note": "Downloaded package repositories and manifests. Packages are fetched again on the next resolve."
     },
     {
@@ -79,6 +88,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/CocoaPods"],
+      "owners": ["pod"],
       "note": "Downloaded pod sources and specs. pod install fetches them again."
     },
     {
@@ -87,6 +97,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/org.carthage.CarthageKit"],
+      "owners": ["carthage"],
       "note": "Downloaded dependency repositories and binaries. Carthage fetches them again."
     },
     {
@@ -95,6 +106,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/.npm/_cacache/*"],
+      "owners": ["npm"],
       "note": "npm's content-addressed download cache. npm verifies and refills it on the next install."
     },
     {
@@ -103,6 +115,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/Yarn"],
+      "owners": ["yarn"],
       "note": "Yarn's global package cache. Projects using Plug'n'Play zero-installs keep their own copy."
     },
     {
@@ -111,6 +124,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/pip"],
+      "owners": ["pip", "pip3"],
       "note": "Downloaded and built Python wheels. pip downloads them again when needed."
     },
     {
@@ -119,6 +133,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/Homebrew/downloads"],
+      "owners": ["brew"],
       "note": "Bottles and source archives Homebrew already installed. Installed packages are not touched."
     },
     {
@@ -127,6 +142,7 @@
       "category": "developer",
       "safety": "safe",
       "paths": ["~/Library/Caches/go-build"],
+      "owners": ["go"],
       "note": "Compiled Go packages. go build fills it again; the module cache in ~/go is not touched."
     },
     {
@@ -140,6 +156,7 @@
         "~/Library/Developer/Xcode/tvOS DeviceSupport/*",
         "~/Library/Developer/Xcode/visionOS DeviceSupport/*"
       ],
+      "owners": ["com.apple.dt.Xcode", "Xcode"],
       "note": "Symbols copied from each device OS version you debugged on. Xcode copies them again the next time that device connects, which can take several minutes."
     },
     {
@@ -148,6 +165,7 @@
       "category": "developer",
       "safety": "review",
       "paths": ["~/Library/pnpm/store/*"],
+      "owners": ["pnpm"],
       "note": "Every project installed with pnpm hard-links its packages from here, so little space may come back until those projects are gone. Global installs are not touched."
     },
     {
@@ -156,6 +174,7 @@
       "category": "developer",
       "safety": "review",
       "paths": ["~/.gradle/caches/*"],
+      "owners": ["gradle"],
       "note": "Downloaded dependencies and build caches. The next build downloads everything again, which is slow offline."
     },
     {
@@ -164,6 +183,7 @@
       "category": "developer",
       "safety": "review",
       "paths": ["~/.m2/repository/*"],
+      "owners": ["mvn"],
       "note": "Downloaded artifacts. Artifacts you installed locally with mvn install exist only here."
     },
     {
@@ -172,6 +192,7 @@
       "category": "developer",
       "safety": "review",
       "paths": ["~/.cargo/registry/*"],
+      "owners": ["cargo"],
       "note": "Downloaded crate sources and the registry index. Cargo fetches them again; builds need the network until it has."
     },
     {
@@ -180,6 +201,7 @@
       "category": "developer",
       "safety": "manual",
       "paths": ["~/Library/Developer/Xcode/Archives/*"],
+      "owners": ["com.apple.dt.Xcode", "Xcode"],
       "note": "Builds you shipped, with the symbols needed to read their crash reports. Not part of a clean: review each one and remove it in Finder."
     },
     {
@@ -188,6 +210,7 @@
       "category": "system",
       "safety": "manual",
       "paths": ["~/Library/Application Support/MobileSync/Backup/*"],
+      "owners": ["AMPDevicesAgent"],
       "note": "Local device backups, often the only one. Not part of a clean: check the date in Finder's device list before removing one."
     },
     {
@@ -196,6 +219,7 @@
       "category": "system",
       "safety": "manual",
       "paths": ["/System/Volumes/Data/macOS Install Data"],
+      "owners": [],
       "note": "Left behind by a macOS update, owned by the system. Not part of a clean: it needs an administrator, and an update in progress still uses it."
     },
     {
@@ -212,7 +236,7 @@
       "category": "appCaches",
       "safety": "safe",
       "paths": ["~/Library/Caches/*"],
-      "note": "Apps rebuild their caches when needed. A cache is skipped while its app runs, a file in it is open, or it changed in the last 10 minutes."
+      "note": "Apps rebuild their caches when needed. A cache is skipped while its app runs, a file in it is open, or it changed in the last 10 minutes. A cache whose app cannot be told from its name is listed but not selected."
     },
     {
       "id": "user-logs",
@@ -220,6 +244,7 @@
       "category": "logs",
       "safety": "safe",
       "paths": ["~/Library/Logs/*"],
+      "owners": [],
       "minimumAgeDays": 7,
       "note": "Diagnostic logs not written to for a week."
     }

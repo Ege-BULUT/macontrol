@@ -65,4 +65,13 @@ import Testing
         let specific = catalog.rules.enumerated().filter { $0.element.paths.contains { $0.hasPrefix("~/Library/Caches/") } && $0.element.id != "user-app-caches" }
         #expect(specific.allSatisfy { $0.offset < catchAll })
     }
+
+    /// F-0015: only the catch-all cache rules read the owner from the folder name; every other rule names it.
+    @Test func everyRuleButTheCacheCatchAllsDeclaresItsOwners() {
+        let undeclared = catalog.rules.filter { $0.owners == nil }
+        #expect(Set(undeclared.map(\.id)) == ["apple-caches", "user-app-caches"])
+        for rule in undeclared {
+            #expect(rule.paths.allSatisfy { $0.hasPrefix("~/Library/Caches/") && !$0.dropFirst("~/Library/Caches/".count).contains("/") }, "\(rule.id)")
+        }
+    }
 }

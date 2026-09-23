@@ -7,16 +7,23 @@ public struct RuleRejection: Sendable, Hashable {
     public var reason: String
 }
 
-/// Decides whether a catalog pattern may ever be expanded (F-0032). Fails closed: anything it does
-/// not positively recognise as a narrow, home-relative or allowlisted location is refused.
+/// Decides whether a catalog pattern may ever be expanded (F-0032). Fails closed: a pattern must lie
+/// inside one of the few folders the catalog is for; everything else, including every never-touch
+/// area (Keychains, ~/.ssh, Mail, Messages, Containers, the user's documents, iCloud), is refused.
 public enum PatternValidator {
     /// Absolute locations outside home that a rule may name. Everything else absolute is refused.
     static let allowedAbsoluteRoots = ["/System/Volumes/Data/macOS Install Data"]
 
-    /// First components under home that hold the user's own files (F-0066, PureMac #142).
-    static let userContentRoots: Set = ["documents", "desktop", "downloads", "music", "pictures", "movies", "public"]
+    /// Folders under home a rule may reach into, as lowercased components.
+    static let allowedHomeRoots: [[String]] = [
+        "Library/Caches", "Library/Logs", "Library/Developer", "Library/pnpm", "Library/Application Support/MobileSync/Backup",
+        ".npm", ".gradle", ".m2", ".cargo",
+    ].map { $0.lowercased().split(separator: "/").map(String.init) }
 
-    /// `~/Library/<folder>/*` is allowed only for these; `~/Library/Application Support/*` would be every app's data.
+    /// Patterns here may only belong to `manual` rules: device backups and installer data are listed, never cleaned.
+    static let manualOnlyRoots = ["~/library/application support/mobilesync/backup", "/system/volumes/data/macos install data"]
+
+    /// `~/Library/<folder>/*` is allowed only for these; `~/Library/Developer/*` would take Xcode and every simulator.
     static let libraryFoldersOpenToGlobs: Set = ["caches", "logs"]
 
     static let globCharacters = CharacterSet(charactersIn: "*?[]")
@@ -34,16 +41,23 @@ public enum PatternValidator {
         return "must start with ~/ or an allowed absolute root"
     }
 
+    /// Why `pattern` may not be used by a rule of this safety level, or `nil`.
+    public static func problem(with pattern: String, safety: SafetyLevel) -> String? {
+        if let problem = problem(with: pattern) { return problem }
+        let lowercased = pattern.lowercased()
+        let manualOnly = manualOnlyRoots.contains { lowercased == $0 || lowercased.hasPrefix($0 + "/") }
+        return manualOnly && safety != .manual ? "may only be listed for manual review" : nil
+    }
+
     private static func problem(withHomeComponents components: [String]) -> String? {
         if let problem = problem(withComponents: components) { return problem }
         guard components.count >= 3 else { return "less than three levels below home" }
         let lowercased = components.map { $0.lowercased() }
-        if userContentRoots.contains(lowercased[0]) { return "inside the user's \(components[0]) folder" }
-        if lowercased[0] == "library" {
-            if ["mobile documents", "cloudstorage"].contains(lowercased[1]) { return "inside iCloud or a cloud provider folder" }
-            if components.count == 3 && hasGlob(components[2]) && !libraryFoldersOpenToGlobs.contains(lowercased[1]) {
-                return "a glob directly inside ~/Library/\(components[1])"
-            }
+        guard allowedHomeRoots.contains(where: { lowercased.count > $0.count && lowercased.starts(with: $0) }) else {
+            return "outside the folders cleanup rules may use"
+        }
+        if lowercased[0] == "library" && components.count == 3 && hasGlob(components[2]) && !libraryFoldersOpenToGlobs.contains(lowercased[1]) {
+            return "a glob directly inside ~/Library/\(components[1])"
         }
         return nil
     }
@@ -73,7 +87,7 @@ extension CleanupCatalog {
         var rejections: [RuleRejection] = []
         let valid = rules.filter { rule in
             let problems = rule.paths.compactMap { pattern in
-                PatternValidator.problem(with: pattern).map { RuleRejection(ruleID: rule.id, pattern: pattern, reason: $0) }
+                PatternValidator.problem(with: pattern, safety: rule.safety).map { RuleRejection(ruleID: rule.id, pattern: pattern, reason: $0) }
             }
             rejections += problems
             return problems.isEmpty && !rule.paths.isEmpty

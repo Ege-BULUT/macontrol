@@ -30,8 +30,16 @@ public struct CleanupRule: Codable, Sendable, Identifiable, Hashable {
     public var minimumAgeDays: Int?
     /// Why this is safe (or not), shown to the user.
     public var note: String
+    /// Apps and tools that use the matches (bundle ids, app or executable names); a match is skipped
+    /// while any of them runs. `[]` declares the matches ownerless. `nil`, for catch-all cache rules
+    /// only, takes the owner from a reverse-DNS folder name, and a match without one is never
+    /// preselected (F-0015).
+    public var owners: [String]?
 
-    public init(id: String, title: String, category: CleanupCategory, safety: SafetyLevel, paths: [String], minimumAgeDays: Int?, note: String) {
+    public init(
+        id: String, title: String, category: CleanupCategory, safety: SafetyLevel, paths: [String],
+        minimumAgeDays: Int?, note: String, owners: [String]? = nil
+    ) {
         self.id = id
         self.title = title
         self.category = category
@@ -39,6 +47,7 @@ public struct CleanupRule: Codable, Sendable, Identifiable, Hashable {
         self.paths = paths
         self.minimumAgeDays = minimumAgeDays
         self.note = note
+        self.owners = owners
     }
 }
 

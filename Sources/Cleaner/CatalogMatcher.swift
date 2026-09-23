@@ -7,8 +7,8 @@ struct CatalogMatch: Sendable, Hashable {
 }
 
 /// Turns validated patterns into concrete items, in-process (F-0025: a glob handed to a shell as a
-/// quoted string matched nothing while the preview counted it).
-struct CatalogMatcher {
+/// quoted string matched nothing while the preview counted it). Blocking: call it off the cooperative pool.
+struct CatalogMatcher: Sendable {
     /// Real path of home, so a symlinked home still works and results name the real objects.
     let home: URL
 
@@ -20,28 +20,27 @@ struct CatalogMatcher {
     /// from the generic cache rule gives way to `Caches/Google/Chrome` from the browser rule, and of
     /// two equal paths the rule listed first keeps it. So no byte is offered twice.
     func matches(for rules: [CleanupRule]) -> [CatalogMatch] {
-        let all = rules.flatMap { rule in rule.paths.flatMap(expand).map { CatalogMatch(rule: rule, url: $0) } }
         var seen = Set<String>()
-        // ponytail: O(n²) containment check; fine for the few hundred matches a catalog yields.
-        return all.filter { match in
-            guard seen.insert(match.url.path).inserted else { return false }
-            let folder = match.url.path + "/"
-            return !all.contains { $0.url.path.hasPrefix(folder) }
-        }
+        let unique = rules
+            .flatMap { rule in rule.paths.flatMap(expand).map { (match: CatalogMatch(rule: rule, url: $0), folder: $0.path + "/") } }
+            .filter { seen.insert($0.folder).inserted }
+        // Sorted bytewise, everything inside `folder/` directly follows it, so neighbours tell containment.
+        let folders = unique.map(\.folder).sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+        let containers = Set(zip(folders, folders.dropFirst()).filter { $1.utf8.starts(with: $0.utf8) }.map(\.0))
+        return unique.filter { !containers.contains($0.folder) }.map(\.match)
     }
 
+    /// Matches carry the on-disk spelling, so a rule and the catch-all name the same folder the same way
+    /// on a case-insensitive volume.
     func expand(_ pattern: String) -> [URL] {
         let url = pattern.hasPrefix("~/") ? home.appendingPathComponent(String(pattern.dropFirst(2))) : URL(fileURLWithPath: pattern)
-        let parent = url.deletingLastPathComponent()
+        let parent = url.deletingLastPathComponent().path
         // A symlink anywhere above the match could point the rule at user files: refuse the whole pattern.
-        guard Self.realPath(parent.path) == parent.path else { return [] }
+        // Only the letter case may differ from the rule's spelling.
+        guard let real = Self.realPath(parent), real.compare(parent, options: .caseInsensitive) == .orderedSame else { return [] }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: real)) ?? []
         let leaf = url.lastPathComponent
-        guard PatternValidator.hasGlob(leaf) else {
-            var info = stat()
-            return lstat(url.path, &info) == 0 ? [url] : []
-        }
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
-        return names.sorted().filter { fnmatch(leaf, $0, 0) == 0 }.map { parent.appendingPathComponent($0) }
+        return names.sorted().filter { fnmatch(leaf, $0, FNM_CASEFOLD) == 0 }.map { URL(fileURLWithPath: real).appendingPathComponent($0) }
     }
 
     static func realPath(_ path: String) -> String? {
