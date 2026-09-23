@@ -16,7 +16,7 @@ public struct TrashItem: Sendable, Hashable {
     }
 }
 
-public enum RefusalReason: Sendable, Hashable {
+public enum RefusalReason: Error, Sendable, Hashable {
     /// A location macontrol never deletes, or never deletes inside; the string names it for the user.
     case protectedLocation(String)
     /// SIP-restricted, sealed or read-only.
