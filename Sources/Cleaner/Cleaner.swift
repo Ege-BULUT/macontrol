@@ -42,6 +42,7 @@ public final class Cleaner: Sendable {
     private let matcher: CatalogMatcher
     private let engine: ScanEngine
     private let processes: @Sendable (URL) -> ProcessSnapshot
+    private let now: @Sendable () -> Date
 
     /// Items measured at once. Each measure is its own walk; a few in parallel keep the disk busy
     /// without starving the disk map scan.
@@ -51,13 +52,16 @@ public final class Cleaner: Sendable {
         catalog: CleanupCatalog,
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
         engine: ScanEngine = ScanEngine(),
-        processes: @escaping @Sendable (URL) -> ProcessSnapshot = { ProcessSnapshot.current(under: $0) }
+        processes: @escaping @Sendable (URL) -> ProcessSnapshot = { ProcessSnapshot.current(under: $0) },
+        // Tests move the clock instead of the files: an item's age includes its ctime, which no API can backdate.
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.catalog = catalog.validated().catalog
         self.home = home
         self.matcher = CatalogMatcher(home: home)
         self.engine = engine
         self.processes = processes
+        self.now = now
     }
 
     /// Streams items as they are measured, in no particular order. There is no time limit per item:
@@ -108,7 +112,7 @@ public final class Cleaner: Sendable {
     }
 
     private func currentGuard() -> InUseGuard {
-        InUseGuard(processes: processes(matcher.home), now: Date())
+        InUseGuard(processes: processes(matcher.home), now: now())
     }
 
     /// Measures and judges every job, a few at a time, reporting each by its index as it finishes.

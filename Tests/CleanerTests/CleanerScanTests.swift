@@ -18,7 +18,15 @@ import TestSupport
     }
 
     func scan(_ rules: [CleanupRule], processes: ProcessSnapshot = ProcessSnapshot(apps: [], openFiles: [])) async throws -> [CleanupItem] {
-        try await scan(with: Cleaner(catalog: CleanupCatalog(version: 1, rules: rules), home: home.url, processes: { _ in processes }))
+        try await scan(with: cleaner(rules, processes: { _ in processes }))
+    }
+
+    /// Every fixture's ctime is "now" and cannot be backdated, so the cleaner's clock runs a year
+    /// ahead: an untouched file reads as a year old, and `age` sets times relative to that clock.
+    static let clock = Date().addingTimeInterval(365 * 86_400)
+
+    func cleaner(_ rules: [CleanupRule], processes: @escaping @Sendable (URL) -> ProcessSnapshot = { _ in ProcessSnapshot(apps: [], openFiles: []) }) -> Cleaner {
+        Cleaner(catalog: CleanupCatalog(version: 1, rules: rules), home: home.url, processes: processes, now: { Self.clock })
     }
 
     func scan(with cleaner: Cleaner) async throws -> [CleanupItem] {
@@ -28,7 +36,7 @@ import TestSupport
     }
 
     func age(_ path: String, days: Double) throws {
-        let date = Date().addingTimeInterval(-days * 86_400)
+        let date = Self.clock.addingTimeInterval(-days * 86_400)
         try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: home.url.appendingPathComponent(path).path)
     }
 
@@ -95,6 +103,7 @@ import TestSupport
         try home.file("Library/Caches/com.example.Fresh/tile", size: 100)
         try home.file("Library/Caches/com.example.Old/tile", size: 100)
         try age("Library/Caches/com.example.Editor/index", days: 2)
+        try age("Library/Caches/com.example.Fresh/tile", days: 0)
         try age("Library/Caches/com.example.Old/tile", days: 2)
         let editor = RunningApp(bundleIdentifier: "com.example.Editor", bundleName: "Editor", executableName: "Editor")
 
@@ -114,7 +123,7 @@ import TestSupport
         let handle = try FileHandle(forReadingFrom: open)
         defer { try? handle.close() }
 
-        let items = try await scan(with: Cleaner(catalog: CleanupCatalog(version: 1, rules: [rule("caches", ["~/Library/Caches/*"])]), home: home.url))
+        let items = try await scan(with: cleaner([rule("caches", ["~/Library/Caches/*"])], processes: { ProcessSnapshot.current(under: $0) }))
         let reasons = Dictionary(uniqueKeysWithValues: items.map { ($0.url.lastPathComponent, $0.skipReason) })
 
         #expect(reasons["Idle"] == .some(nil))
@@ -192,16 +201,14 @@ import TestSupport
         try home.file("Library/Caches/com.example.Idle/tile", size: 100)
         for name in ["Editor/index", "Viewer/tile", "Gone/tile", "Idle/tile"] { try age("Library/Caches/com.example." + name, days: 2) }
         let running = OSAllocatedUnfairLock(initialState: ProcessSnapshot(apps: [], openFiles: []))
-        let cleaner = Cleaner(
-            catalog: CleanupCatalog(version: 1, rules: [rule("caches", ["~/Library/Caches/*"])]), home: home.url,
-            processes: { _ in running.withLock { $0 } }
-        )
+        let cleaner = self.cleaner([rule("caches", ["~/Library/Caches/*"])], processes: { _ in running.withLock { $0 } })
         let scanned = try await scan(with: cleaner)
         #expect(scanned.allSatisfy { $0.isPreselected })
 
         let editor = RunningApp(bundleIdentifier: "com.example.Editor", bundleName: "Editor", executableName: "Editor")
         running.withLock { $0 = ProcessSnapshot(apps: [editor], openFiles: []) }
         try home.file("Library/Caches/com.example.Viewer/new-tile", size: 100)
+        try age("Library/Caches/com.example.Viewer/new-tile", days: 0)
         try FileManager.default.removeItem(at: home.url.appendingPathComponent("Library/Caches/com.example.Gone"))
         let rechecked = await cleaner.recheck(scanned)
 

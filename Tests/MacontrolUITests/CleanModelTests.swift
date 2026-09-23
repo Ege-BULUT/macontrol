@@ -151,7 +151,7 @@ import TestSupport
     @Test func aCacheTrashedTwiceIsOneInTrashRow() async throws {
         let temp = try TemporaryDirectory()
         try Self.oldFile(temp, "home/Library/Caches/com.example.a/blob")
-        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home"), now: Self.clock),
                                trash: nil, engine: nil)
         for _ in 0..<2 {
             await model.scan()
@@ -166,7 +166,7 @@ import TestSupport
     @Test func scanningAgainResetsTheEstimate() async throws {
         let temp = try TemporaryDirectory()
         try Self.oldFile(temp, "home/Library/Caches/com.example.a/blob")
-        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home"), now: Self.clock),
                                trash: nil, engine: nil)
         await model.scan()
         await model.refreshEstimate()
@@ -185,7 +185,7 @@ import TestSupport
         let cleaner = Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home"), processes: { [editorIsRunning] _ in
             let editor = RunningApp(bundleIdentifier: "com.example.Editor", bundleName: "Editor", executableName: "Editor")
             return ProcessSnapshot(apps: editorIsRunning.withLock { $0 } ? [editor] : [], openFiles: [])
-        })
+        }, now: Self.clock)
         let model = CleanModel(cleaner: cleaner, trash: nil, engine: nil)
         await model.scan()
         #expect(model.selectedItems.count == 2)
@@ -208,7 +208,7 @@ import TestSupport
     @Test func leavingTheScreenMidScanDoesNotCutTheScanShort() async throws {
         let temp = try TemporaryDirectory()
         for name in ["a", "b", "c"] { try temp.file("home/Library/Caches/com.example.\(name)/blob", size: 40_000) }
-        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home"), now: Self.clock),
                                trash: nil, engine: nil)
         let visit = Task { await model.scanIfNeeded() }
         visit.cancel()
@@ -220,7 +220,7 @@ import TestSupport
     @Test func theEstimateWaitsForTheScanToEnd() async throws {
         let temp = try TemporaryDirectory()
         try Self.oldFile(temp, "home/Library/Caches/com.example.a/blob")
-        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home")),
+        let model = CleanModel(cleaner: Cleaner(catalog: Self.cachesCatalog, home: temp.url.appendingPathComponent("home"), now: Self.clock),
                                trash: nil, engine: nil)
         let scan = Task { await model.scan() }
         while !model.isScanning { await Task.yield() }
@@ -242,7 +242,7 @@ import TestSupport
             CleanupRule(id: "archives", title: "Archives", category: .developer, safety: .manual,
                         paths: ["~/Library/Developer/Xcode/Archives/*"], minimumAgeDays: nil, note: ""),
         ])
-        let model = CleanModel(cleaner: Cleaner(catalog: catalog, home: temp.url.appendingPathComponent("home")), trash: nil)
+        let model = CleanModel(cleaner: Cleaner(catalog: catalog, home: temp.url.appendingPathComponent("home"), now: Self.clock), trash: nil)
 
         await model.scanIfNeeded()
 
@@ -266,14 +266,13 @@ import TestSupport
         CleanupRule(id: "caches", title: "Caches", category: .appCaches, safety: .safe, paths: ["~/Library/Caches/*"], minimumAgeDays: nil, note: ""),
     ])
 
-    /// A 40 KB file whose folders, up to the temp root, were last changed a month ago: past every recency guard.
+    /// The cleaners here read time from this clock, two months ahead. A fixture's ctime is "now" and cannot be
+    /// backdated, so moving the clock is what puts every file past the recency guards.
+    static let clock: @Sendable () -> Date = { Date(timeIntervalSinceNow: 60 * 86_400) }
+
+    /// A 40 KB file, old by `clock`.
     static func oldFile(_ temp: TemporaryDirectory, _ path: String) throws {
-        let old = Date(timeIntervalSinceNow: -30 * 86_400)
-        var url = try temp.file(path, size: 40_000)
-        while url.path != temp.url.path {
-            try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: url.path)
-            url.deleteLastPathComponent()
-        }
+        try temp.file(path, size: 40_000)
     }
 
     static func rule(_ safety: SafetyLevel) -> CleanupRule {

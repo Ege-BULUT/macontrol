@@ -81,9 +81,8 @@ import Testing
         #expect(model.pile.add(app, in: model.tree!) == nil)
     }
 
-    /// F-0063 residual, owned by the scan engine (T-0043): trashing the hard link that carries the bytes
-    /// while another link survives drops the totals, although the data stays on disk. This fails until
-    /// the surviving link is re-charged; when it passes, the known issue turns into a failure to remove.
+    /// F-0063: trashing the hard link that carries the bytes while another link survives must not drop
+    /// the totals, because the data stays on disk. The engine's splice re-charges the surviving link.
     @Test func trashingTheCarryingHardLinkKeepsBytesThatStayOnDisk() {
         var builder = DiskMapFixtures.Builder()
         let shared = FileIdentity(device: 1, inode: 999)
@@ -97,8 +96,6 @@ import Testing
         model.stage(carrier)
         let url = model.pile.items[0].url
         model.apply(TrashReport(batch: UUID(), outcomes: [.trashed(original: url, trashedTo: URL(fileURLWithPath: "/nonexistent/.Trash/data.bin"))]))
-        withKnownIssue("F-0063: T-0043 has to re-charge the surviving hard link") {
-            #expect(model.tree!.allocatedSize(of: ScanTree.root) == before)
-        }
+        #expect(model.tree!.allocatedSize(of: ScanTree.root) == before)
     }
 }

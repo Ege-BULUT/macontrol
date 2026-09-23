@@ -7,7 +7,7 @@ import Testing
 @Suite struct OverviewSummaryTests {
     @Test func largestItemsAreSortedCappedAndScaledToTheBiggest() {
         let summary = OverviewSummary(volume: nil, tree: .demo(), cleanItems: [], limit: 3)
-        #expect(summary.largest.map(\.name) == ["Library", "Movies", "projects"])
+        #expect(summary.largest.map(\.name) == ["Library", "Pictures", "Movies"])
         #expect(summary.largest.first?.share == 1)
         #expect(summary.largest.map(\.bytes) == summary.largest.map(\.bytes).sorted(by: >))
         #expect(summary.largest.first?.isFolder == true)
@@ -24,10 +24,10 @@ import Testing
     @Test func safeToCleanCountsOnlyPreselectedItemsAndWaitsForAScan() {
         #expect(OverviewSummary(volume: nil, tree: nil, cleanItems: []).safeToClean == nil)
 
-        // Demo: two safe items (1.3 + 6.8 GB), one skipped because its app runs, one manual-only.
+        // Demo: six safe items; skipped, cautioned, review and manual rows do not count.
         let safe = OverviewSummary(volume: nil, tree: nil, cleanItems: CleanModel.demo().items).safeToClean
-        #expect(safe?.count == 2)
-        #expect(safe?.bytes == 8_100_000_000)
+        #expect(safe?.count == 6)
+        #expect(safe?.bytes == 13_330_000_000)
     }
 
     @Test func purgeableSpaceIsNeverAddedToAvailable() throws {
@@ -52,8 +52,10 @@ import Testing
         #expect(model.selection == .diskMap)
         #expect(model.diskMap.focus == projects.id)
 
-        let movies = try #require(model.overview.largest.first { !$0.isFolder })
-        model.openInDiskMap(movies)
+        // The demo's top level holds only folders, so a file row is made up.
+        var file = projects
+        file.isFolder = false
+        model.openInDiskMap(file)
         #expect(model.diskMap.focus == ScanTree.root)
     }
 }
