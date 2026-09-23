@@ -58,7 +58,7 @@ private struct SidebarAccessNote: View {
         Button { access.showOnboarding() } label: {
             Label("Full Disk Access is off", systemImage: "lock.trianglebadge.exclamationmark")
                 .font(.callout)
-                .foregroundStyle(Theme.caution)
+                .foregroundStyle(Theme.cautionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
                 .contentShape(.rect)

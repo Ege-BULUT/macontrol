@@ -28,7 +28,7 @@ struct CleanReviewSheet: View {
         case .atMost(let bytes): "Frees at most \(bytes.formattedBytes) once you empty the Trash."
         case .working: "Space is freed once you empty the Trash."
         }
-        return "\(frees) You can put everything back from History."
+        return "\(frees) Put them back from History until you empty the Trash."
     }
 
     private func warning(_ review: CleanReview) -> String? {

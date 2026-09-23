@@ -141,7 +141,7 @@ private struct MapTooltip: View {
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundStyle(.secondary)
             if let node = element.node, let note = DiskMapText.notes(for: tree.flags(of: node)).first {
-                Label(note.text, systemImage: note.symbol).font(.system(size: 11)).foregroundStyle(.orange).lineLimit(2)
+                Label(note.text, systemImage: note.symbol).font(.system(size: 11)).foregroundStyle(Theme.cautionText).lineLimit(2)
             } else if case .smallerItems = element.item {
                 Text("Double-click to list them").font(.system(size: 11)).foregroundStyle(.secondary)
             } else if let node = element.node, tree.flags(of: node).contains(.directory) {

@@ -20,20 +20,20 @@ struct ReviewSheet: View {
 
     private var confirmation: some View {
         Group {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Move \(DiskMapText.itemCount(review.items.count)) to the Trash?").font(.title2.weight(.semibold))
-                Text("You can put them back from the Trash in Finder until it is emptied.")
-                    .foregroundStyle(.secondary)
-            }
+            header(
+                Image(systemName: "trash.circle.fill").foregroundStyle(Color.accentColor),
+                title: "Move \(DiskMapText.itemCount(review.items.count)) to the Trash?",
+                message: "Put them back from History until you empty the Trash."
+            )
             List(review.items) { item in
                 HStack(spacing: 10) {
                     Image(systemName: item.isFolder ? "folder.fill" : "doc.fill").foregroundStyle(.tint).frame(width: 20)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.name).lineLimit(1)
                         Text(item.url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                        if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(.orange) }
-                        if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-                        if let note = item.note { Text(note).font(.caption).foregroundStyle(.orange) }
+                        if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(Theme.cautionText) }
+                        if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.cautionText) }
+                        if let note = item.note { Text(note).font(.caption).foregroundStyle(Theme.cautionText) }
                     }
                     Spacer()
                     Text(DiskMapText.size(item.bytes, isLowerBound: item.isIncomplete)).monospacedDigit().foregroundStyle(.secondary)
@@ -52,15 +52,30 @@ struct ReviewSheet: View {
             }
             HStack {
                 Spacer()
+                if review.phase == .moving { ProgressView().controlSize(.small) }
                 // Closing the sheet mid-move would hide the outcome; the model applies it either way.
-                Button("Cancel") { model.review = nil }
+                Button("Cancel", role: .cancel) { model.review = nil }
                     .keyboardShortcut(.cancelAction)
                     .disabled(review.phase == .moving)
-                Button("Move to Trash") { Task { await model.confirmReview() } }
-                    .keyboardShortcut(.defaultAction)
+                // Destructive, like TrashSheet, and never the default button: Return drills into the map,
+                // so a keyboard user must not be one Return away from the Trash (T-0058).
+                Button("Move to Trash", role: .destructive) { Task { await model.confirmReview() } }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
                     .disabled(!review.canConfirm)
             }
             .controlSize(.large)
+        }
+    }
+
+    /// The same header as TrashSheet, which Clean and Uninstall confirm with.
+    private func header(_ icon: some View, title: String, message: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            icon.font(.system(size: 36))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.title3.weight(.semibold))
+                Text(message).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -78,7 +93,7 @@ struct ReviewSheet: View {
                     }
                     Text("\(DiskMapText.size(review.totalBytes, isLowerBound: review.isIncomplete)) on disk").font(.callout).foregroundStyle(.secondary)
                 case .measured(let estimate):
-                    Text("Frees \(review.isIncomplete ? "at least" : "about") \(estimate.freesNow.formattedBytes) once the Trash is emptied")
+                    Text("Frees \(review.isIncomplete ? "at least" : "about") \(estimate.freesNow.formattedBytes) once you empty the Trash")
                         .font(.headline.monospacedDigit())
                     if estimate.sharedElsewhere > 0 {
                         Text("\(estimate.sharedElsewhere.formattedBytes) stays in use: shared with clones, snapshots or other hard links.")
@@ -103,14 +118,14 @@ struct ReviewSheet: View {
         let moved = outcomes.filter { $0.status == .inTrash }
         let movedBytes = moved.reduce(0) { $0 + $1.bytes }
         return Group {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(moved.isEmpty ? "Nothing was moved" : "Moved \(DiskMapText.itemCount(moved.count)) to the Trash")
-                    .font(.title2.weight(.semibold))
-                Text(moved.isEmpty
-                     ? "The items stay on the map and in the Discard Pile."
-                     : "\(movedBytes.formattedBytes) is In Trash. The space returns when the Trash is emptied.")
-                    .foregroundStyle(.secondary)
-            }
+            header(
+                Image(systemName: moved.count == outcomes.count ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(moved.count == outcomes.count ? .green : .orange),
+                title: moved.isEmpty ? "Nothing was moved" : "Moved \(DiskMapText.itemCount(moved.count)) to the Trash",
+                message: moved.isEmpty
+                    ? "The items stay on the map and in the Discard Pile."
+                    : "\(movedBytes.formattedBytes) is in the Trash and frees once you empty it. Put them back from History until you empty the Trash."
+            )
             List(Array(outcomes.enumerated()), id: \.offset) { _, outcome in
                 HStack(alignment: .top, spacing: 10) {
                     switch outcome.status {
@@ -123,7 +138,7 @@ struct ReviewSheet: View {
                         Text(outcome.name).lineLimit(1)
                         switch outcome.status {
                         case .inTrash: Text("In Trash").font(.caption).foregroundStyle(.secondary)
-                        case .notMoved(let reason): Text(reason).font(.caption).foregroundStyle(.orange)
+                        case .notMoved(let reason): Text(reason).font(.caption).foregroundStyle(Theme.cautionText)
                         }
                     }
                     Spacer()

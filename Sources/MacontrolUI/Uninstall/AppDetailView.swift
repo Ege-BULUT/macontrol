@@ -238,7 +238,7 @@ private struct LeftoverRow: View {
                 if let note = leftover.note {
                     Label(note, systemImage: "info.circle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.cautionText)
                 }
             }
             Spacer(minLength: 12)
