@@ -24,10 +24,12 @@ nonisolated enum MapLayoutBuilder {
         try build(tree, key)
     }
 
-    static func build(_ tree: ScanTree, _ key: LayoutKey) throws -> MapLayout {
+    /// `slots` fixes a top-level name's colour, so a scan preview keeps each folder's colour while sizes
+    /// change rank (T-0063). Names it lacks are coloured by rank.
+    static func build(_ tree: ScanTree, _ key: LayoutKey, slots: [String: Int] = [:]) throws -> MapLayout {
         switch key.style {
-        case .sunburst: try sunburst(tree, key)
-        case .treemap: try treemap(tree, key)
+        case .sunburst: try sunburst(tree, key, slots)
+        case .treemap: try treemap(tree, key, slots)
         }
     }
 
@@ -46,7 +48,7 @@ nonisolated enum MapLayoutBuilder {
         return (children[..<cut], Array(children[cut...]))
     }
 
-    static func sunburst(_ tree: ScanTree, _ key: LayoutKey) throws -> MapLayout {
+    static func sunburst(_ tree: ScanTree, _ key: LayoutKey, _ slots: [String: Int]) throws -> MapLayout {
         let radius = MapLayout.chartRadius(in: key.size)
         guard tree.allocatedSize(of: key.focus) > 0, radius > 0 else { return .empty(key) }
         let ringWidth = (1 - MapLayout.holeRadius) / Double(maxDepth)
@@ -76,7 +78,7 @@ nonisolated enum MapLayoutBuilder {
             }
             for (offset, child) in named.enumerated() {
                 let bytes = tree.allocatedSize(of: child)
-                let branch = pending.branch ?? MapPalette.slot(for: offset, of: named.count)
+                let branch = pending.branch ?? slots[tree.name(of: child)] ?? MapPalette.slot(for: offset, of: named.count)
                 let shape = wedge(adding: bytes)
                 elements.append(MapElement(item: .node(child), parent: pending.node, bytes: bytes, depth: pending.depth, branch: branch, shape: shape))
                 if pending.depth + 1 < maxDepth, bytes > 0, tree.isExpandable(child), case .wedge(let start, let end) = shape {
@@ -96,7 +98,7 @@ nonisolated enum MapLayoutBuilder {
         return MapLayout(key: key, elements: elements, topLevel: topLevel, ringCount: elements.isEmpty ? 0 : deepest + 1)
     }
 
-    static func treemap(_ tree: ScanTree, _ key: LayoutKey) throws -> MapLayout {
+    static func treemap(_ tree: ScanTree, _ key: LayoutKey, _ slots: [String: Int]) throws -> MapLayout {
         let bounds = CGRect(origin: .zero, size: key.size)
         guard tree.allocatedSize(of: key.focus) > 0, bounds.width > 0, bounds.height > 0 else { return .empty(key) }
         let minimumArea = minimumTilePixels / (key.scale * key.scale)
@@ -120,7 +122,7 @@ nonisolated enum MapLayoutBuilder {
             // of the area as an undrawn gap, so every drawn tile keeps exact proportions.
             enum Entry { case child(Int, branch: Int), smallerItems, gap }
             var entries: [(entry: Entry, bytes: UInt64)] = named.enumerated().map { offset, child in
-                (.child(child, branch: pending.branch ?? MapPalette.slot(for: offset, of: named.count)), tree.allocatedSize(of: child))
+                (.child(child, branch: pending.branch ?? slots[tree.name(of: child)] ?? MapPalette.slot(for: offset, of: named.count)), tree.allocatedSize(of: child))
             }
             let restBytes = rest.reduce(0) { $0 + tree.allocatedSize(of: $1) }
             if !rest.isEmpty { entries.append((.smallerItems, restBytes)) }

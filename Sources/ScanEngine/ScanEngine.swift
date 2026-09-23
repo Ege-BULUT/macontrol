@@ -47,6 +47,7 @@ public struct ScanOptions: Sendable {
 
 public struct ScanProgress: Sendable, Equatable {
     public var filesVisited: Int
+    /// Without hard-linked files, so it never passes the finished tree's total.
     public var bytesVisited: UInt64
     public var currentPath: String?
 
@@ -60,7 +61,7 @@ public struct ScanProgress: Sendable, Equatable {
 public enum ScanEvent: Sendable {
     case progress(ScanProgress)
     /// The scan so far, one level deep: the root's largest children with the bytes found inside each yet.
-    /// Sizes only grow; the completed tree is the exact one (T-0063).
+    /// Sizes only grow and never pass the completed tree's, which is the exact one (T-0063).
     case preview(ScanTree)
     case completed(ScanTree)
 }

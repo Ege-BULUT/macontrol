@@ -18,6 +18,9 @@ public final class DiskMapModel {
     public private(set) var preview: ScanTree?
     /// Counts previews, so each one gets a layout of its own.
     private(set) var previewVersion = 0
+    /// Each top-level name's colour for the whole scan. Colour by size rank reshuffled most of the legend on
+    /// every preview, because ranks keep changing while sizes grow (T-0063).
+    private(set) var previewSlots: [String: Int] = [:]
     /// What the running scan should reach, for its progress bar: the last scan's total when the same folder
     /// is scanned again, else the space in use when a whole volume is scanned.
     var expectedTotal: (bytes: UInt64, isLastScan: Bool)?
@@ -83,14 +86,13 @@ public final class DiskMapModel {
     func scan(_ root: URL) async {
         guard let engine = scanEngine else { return }
         scanTask?.cancel()
-        let expected: (bytes: UInt64, isLastScan: Bool)? = if let tree, tree.rootURL.standardizedFileURL == root.standardizedFileURL {
-            (tree.allocatedSize(of: ScanTree.root), true)
-        } else {
-            ScanEngine.volumeBytesInUse(at: root).map { ($0, false) }
-        }
+        let lastTotal = tree.flatMap { $0.rootURL.standardizedFileURL == root.standardizedFileURL ? $0.allocatedSize(of: ScanTree.root) : nil }
         let generation = beginScan()
-        expectedTotal = expected
+        expectedTotal = lastTotal.map { ($0, true) }
         let task = Task {
+            if lastTotal == nil, let used = await Self.bytesInUse(root), generation == scanGeneration {
+                expectedTotal = (used, false)
+            }
             do {
                 for try await event in engine.scan(root) {
                     if Task.isCancelled { break }
@@ -111,12 +113,19 @@ public final class DiskMapModel {
         scanTask?.cancel()
     }
 
+    /// The volume's bytes in use, read off the main actor: statfs and getattrlist wait on a hung network mount.
+    @concurrent
+    nonisolated static func bytesInUse(_ root: URL, read: @Sendable (URL) -> UInt64? = { ScanEngine.volumeBytesInUse(at: $0) }) async -> UInt64? {
+        read(root)
+    }
+
     /// Makes a new scan the only one allowed to change what is shown.
     func beginScan() -> Int {
         scanGeneration += 1
         scanError = nil
         progress = nil
         preview = nil
+        previewSlots = [:]
         expectedTotal = nil
         isScanning = true
         return scanGeneration
@@ -127,6 +136,9 @@ public final class DiskMapModel {
         switch event {
         case .progress(let update): progress = update
         case .preview(let tree):
+            for name in tree.sortedChildren(of: ScanTree.root).map(tree.name(of:)) where previewSlots[name] == nil {
+                previewSlots[name] = previewSlots.count % MapPalette.branches.count
+            }
             preview = tree
             previewVersion += 1
         case .completed(let result): replaceTree(result)
@@ -138,6 +150,7 @@ public final class DiskMapModel {
         isScanning = false
         progress = nil
         preview = nil
+        previewSlots = [:]
         expectedTotal = nil
     }
 

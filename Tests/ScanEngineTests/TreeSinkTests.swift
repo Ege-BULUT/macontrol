@@ -110,6 +110,29 @@ import Testing
         #expect(finished == ["A": 35, "B": 7, "top.bin": 100])
     }
 
+    /// T-0063: the finished tree charges a hard-linked file once, to its smallest path. Running totals leave
+    /// such files out, so neither the preview nor the progress bytes pass it: counting every link put a
+    /// node_modules 53% over its final size.
+    @Test func runningTotalsLeaveOutHardLinksAndNeverPassTheFinishedTree() {
+        let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
+        var walkable: [Int32] = []
+        var linked = file(inode: 9, allocated: 1000)
+        linked.linkCount = 3
+        sink.add(listing([("A", folder(inode: 3)), ("B", folder(inode: 4)), ("top-link", linked)]), to: 0, walkableNodes: &walkable)
+        let (a, b) = (walkable[0], walkable[1])
+        sink.add(listing([("link", linked), ("own.bin", file(inode: 5, allocated: 10))]), to: a, walkableNodes: &walkable)
+        sink.add(listing([("link", linked)]), to: b, walkableNodes: &walkable)
+        let preview = sink.preview()
+        let running = sink.progress.bytesVisited
+        sink.tree.finalizeTotals()
+
+        let shown = Dictionary(uniqueKeysWithValues: preview.children(of: ScanTree.root).map { (preview.name(of: $0), preview.allocatedSize(of: $0)) })
+        let finished = Dictionary(uniqueKeysWithValues: sink.tree.children(of: ScanTree.root).map { (sink.tree.name(of: $0), sink.tree.allocatedSize(of: $0)) })
+        #expect(finished == ["A": 1010, "B": 0, "top-link": 0], "A/link is the smallest path")
+        #expect(shown.allSatisfy { $0.value <= finished[$0.key, default: 0] }, "\(shown) vs \(finished)")
+        #expect(running <= sink.tree.allocatedSize(of: ScanTree.root), "\(running)")
+    }
+
     @Test func mountPointEntryIsALeafWithItsFlag() {
         let sink = TreeSink(tree: ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 2)), dataVolume: nil)
         var mount = folder(inode: 3)

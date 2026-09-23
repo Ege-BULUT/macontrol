@@ -96,7 +96,7 @@ private struct ScanningView: View {
             header
             Divider()
             if let preview = model.preview {
-                ScanPreviewChart(tree: preview, version: model.previewVersion, style: model.style)
+                ScanPreviewChart(tree: preview, version: model.previewVersion, style: model.style, slots: model.previewSlots)
                     .equatable()
                     .padding(Theme.spacing)
                 Text("Sizes grow as the scan finds more. The full map, with the folders inside, opens when it finishes.")
@@ -152,6 +152,8 @@ private struct ScanPreviewChart: View, Equatable {
     let tree: ScanTree
     let version: Int
     let style: MapStyle
+    /// Changes only with `version`.
+    let slots: [String: Int]
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
 
@@ -167,7 +169,7 @@ private struct ScanPreviewChart: View, Equatable {
                 treeVersion: version, focus: ScanTree.root, style: style,
                 width: Int(chart.width), height: Int(chart.height), scale: displayScale
             )
-            let layout = (try? MapLayoutBuilder.build(tree, key)) ?? .empty(key)
+            let layout = (try? MapLayoutBuilder.build(tree, key, slots: slots)) ?? .empty(key)
             HStack(spacing: 0) {
                 ZStack {
                     MapFillLayer(layout: layout, tree: tree).equatable()
@@ -189,6 +191,7 @@ private struct ScanPreviewChart: View, Equatable {
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Map of the scan so far")
+        .accessibilityValue(tree.sortedChildren(of: ScanTree.root).prefix(12).map { "\(tree.name(of: $0)), \(tree.allocatedSize(of: $0).formattedBytes)" }.joined(separator: "; "))
     }
 
     private func legend(_ layout: MapLayout) -> some View {

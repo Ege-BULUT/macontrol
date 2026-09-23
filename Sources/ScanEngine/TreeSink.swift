@@ -9,6 +9,8 @@ final class TreeSink: WalkSink {
 
     var tree: ScanTree
     private(set) var filesVisited = 0
+    /// Leaves out hard-linked files: the finished tree charges each once, so counting every link ran 53%
+    /// ahead of a node_modules full of them. Running totals never pass the finished ones (T-0063).
     private(set) var bytesVisited: UInt64 = 0
     private(set) var lastFolder = Int32(ScanTree.root)
     private let dataVolume: DataVolumeLayout?
@@ -43,14 +45,14 @@ final class TreeSink: WalkSink {
     }
 
     /// The scan so far, one level deep: the root's largest children with the bytes found inside each
-    /// yet, a few times a second while the walk runs (T-0063). Sizes only grow from one call to the next.
-    /// Hard links are charged once only in the finished tree, so a preview can run ahead of it by the
-    /// size of their extra links.
+    /// yet, a few times a second while the walk runs (T-0063). Sizes only grow from one call to the next,
+    /// and leave out hard-linked files, so they never pass the finished tree's.
     func preview(limit: Int = 256) -> ScanTree {
         // One read of the stored tree, not one per child: 3 ms instead of 300 ms for 200k entries at the top.
         let tree = tree
         let children = tree.children(of: ScanTree.root).map { node in
-            (node, tree.flags(of: node).contains(.directory) ? bytesUnderTopLevel[node, default: 0] : tree.allocatedSize(of: node))
+            let flags = tree.flags(of: node)
+            return (node, flags.contains(.directory) ? bytesUnderTopLevel[node, default: 0] : flags.contains(.hardLinked) ? 0 : tree.allocatedSize(of: node))
         }
         var preview = ScanTree(rootURL: tree.rootURL, rootIdentity: tree.identity(of: ScanTree.root))
         // ponytail: past `limit` entries at the top, the smallest are left out, so the preview's total
@@ -78,7 +80,7 @@ final class TreeSink: WalkSink {
         let flags = flags(of: entry, listing: listing)
         let countsBytes = !entry.isDirectory && !flags.contains(.dataless) && entry.error == 0
         let allocated = countsBytes ? entry.allocated : 0
-        bytesVisited += allocated
+        if !flags.contains(.hardLinked) { bytesVisited += allocated }
         return listing.names.withUnsafeBufferPointer { names in
             tree.addChild(
                 of: parent,

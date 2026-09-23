@@ -60,6 +60,41 @@ import Testing
         #expect(model.tree != nil)
     }
 
+    /// T-0063: a folder keeps its colour for the whole scan while sizes change rank. Colour by rank changed
+    /// up to 10 of the 12 legend colours from one preview to the next on a real walk.
+    @Test(arguments: MapStyle.allCases)
+    func previewColoursStayWithTheirFolderWhileRanksChange(style: MapStyle) throws {
+        let model = DiskMapModel(engine: nil, trash: nil)
+        let generation = model.beginScan()
+        func colours(_ sizes: [String: UInt64]) throws -> [String: Int] {
+            var preview = ScanTree(rootURL: URL(fileURLWithPath: "/x"), rootIdentity: FileIdentity(device: 1, inode: 1))
+            for (offset, entry) in sizes.enumerated() {
+                preview.addChild(
+                    of: ScanTree.root, name: entry.key, flags: .directory, allocated: entry.value, logical: 0,
+                    identity: FileIdentity(device: 1, inode: UInt64(offset + 2))
+                )
+            }
+            preview.finalizeTotals()
+            model.receive(.preview(preview), generation: generation)
+            let layout = try MapLayoutBuilder.build(preview, DiskMapFixtures.key(style, version: model.previewVersion), slots: model.previewSlots)
+            return Dictionary(uniqueKeysWithValues: layout.topLevel.compactMap { index in
+                guard case .node(let node) = layout.elements[index].item, let branch = layout.elements[index].branch else { return nil }
+                return (preview.name(of: node), branch)
+            })
+        }
+        let first = try colours(["A": 300, "B": 200, "C": 100])
+        let second = try colours(["A": 300, "B": 250, "C": 900, "D": 50])
+        #expect(first.count == 3 && second.count == 4)
+        #expect(second.filter { first[$0.key] != nil } == first, "C overtook A and B, and each kept its colour: \(first) -> \(second)")
+        #expect(second["D"].map { !first.values.contains($0) } == true, "a newcomer takes a colour not in use yet")
+    }
+
+    /// T-0063: the progress bar's goal is read off the main actor; on a hung network mount statfs froze the UI.
+    @Test func volumeGoalIsReadOffTheMainActor() async {
+        let readOnMain = await DiskMapModel.bytesInUse(URL(fileURLWithPath: "/")) { _ in Thread.isMainThread ? 1 : 0 }
+        #expect(readOnMain == 0)
+    }
+
     /// Stop keeps the map and the pile. A rescan keeps staged items it finds again at the same path
     /// as the same file, and drops the ones that changed.
     @Test func stopKeepsTheMapAndARescanKeepsThePile() {
