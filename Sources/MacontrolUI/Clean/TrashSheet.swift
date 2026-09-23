@@ -138,7 +138,7 @@ private struct TrashSheetRowView: View {
     }
 }
 
-/// The item's Finder icon; a generic app, folder or document icon when it is not on this Mac (demo data).
+/// The item's Finder icon; a generic app or folder icon when it is not on this Mac (demo data).
 struct FileIcon: View {
     let url: URL
     let size: CGFloat
@@ -147,7 +147,7 @@ struct FileIcon: View {
         let icon = if FileManager.default.fileExists(atPath: url.path) {
             NSWorkspace.shared.icon(forFile: url.path)
         } else {
-            NSWorkspace.shared.icon(for: url.pathExtension == "app" ? .applicationBundle : url.pathExtension.isEmpty ? .folder : .data)
+            NSWorkspace.shared.icon(for: url.pathExtension == "app" ? .applicationBundle : .folder)
         }
         Image(nsImage: icon)
             .resizable()
