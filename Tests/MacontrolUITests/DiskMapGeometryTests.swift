@@ -89,8 +89,10 @@ import Testing
     @Test func aHugeFileAmongTinyFilesIsNeverMergedAway() throws {
         var builder = DiskMapFixtures.Builder()
         let folder = builder.folder(ScanTree.root, "mixed")
-        for index in 0..<6_000 { builder.file(folder, "tiny-\(index)", 1_024) }
+        // In the middle of the listing, where a sampling heuristic would skip it.
+        for index in 0..<3_001 { builder.file(folder, "tiny-\(index)", 1_024) }
         let huge = builder.file(folder, "huge.bin", 2 << 30)
+        for index in 3_001..<6_000 { builder.file(folder, "tiny-\(index)", 1_024) }
         let tree = builder.finished()
         for style in MapStyle.allCases {
             let layout = try MapLayoutBuilder.build(tree, DiskMapFixtures.key(style, focus: folder))
