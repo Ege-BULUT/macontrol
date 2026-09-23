@@ -93,6 +93,55 @@ import TestSupport
         #expect(ProtectedPaths.refusal(for: file, home: fixture.home) == .needsAdministrator)
     }
 
+    // An item nested past PATH_MAX exists; only its path is out of reach.
+    @Test func aDeepItemIsNotReportedMissing() throws {
+        let fixture = try TrashFixture()
+        let name = String(repeating: "d", count: 60)
+        var path = fixture.home.path
+        var fd = open(path, O_RDONLY | O_DIRECTORY)
+        var middle: Int32 = -1
+        for level in 1...20 {
+            #expect(mkdirat(fd, name, 0o755) == 0)
+            let next = openat(fd, name, O_RDONLY | O_DIRECTORY)
+            if level == 10 { middle = fd } else { close(fd) }
+            fd = next
+            path += "/" + name
+        }
+        close(fd)
+        // Cut the chain in two, so the temporary folder can remove both halves by path.
+        defer {
+            renameat(middle, name, AT_FDCWD, fixture.tmp.url.appendingPathComponent("tail").path)
+            close(middle)
+        }
+
+        #expect(path.utf8.count > Int(MAXPATHLEN))
+        #expect(ProtectedPaths.refusal(for: URL(fileURLWithPath: path), home: fixture.home) == .needsAdministrator)
+    }
+
+    // ARCHITECTURE 5: a folder holding a live volume is refused, or the volume rides into the Trash.
+    // Env-gated: attaches a small disk image inside the test's own folder.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["MACONTROL_DISK_IMAGE_TESTS"] == "1"))
+    func refusesAFolderThatContainsAMountPoint() throws {
+        let fixture = try TrashFixture()
+        let projects = try fixture.tmp.directory("home/Projects")
+        let mount = try fixture.tmp.directory("home/Projects/mnt")
+        let image = fixture.tmp.url.appendingPathComponent("volume.dmg").path
+        try hdiutil("create", "-quiet", "-size", "20m", "-fs", "APFS", image)
+        try hdiutil("attach", "-quiet", "-nobrowse", "-mountpoint", mount.path, image)
+        defer { try? hdiutil("detach", "-force", fixture.home.appendingPathComponent("Projects/mnt").path) }
+
+        #expect(ProtectedPaths.refusal(for: mount, home: fixture.home) == .protectedLocation(mount.path))
+        #expect(ProtectedPaths.refusal(for: projects, home: fixture.home) == .protectedLocation(mount.path))
+        let shouted = fixture.home.appendingPathComponent("PROJECTS")
+        #expect(ProtectedPaths.refusal(for: shouted, home: fixture.home) == .protectedLocation(mount.path))
+    }
+
+    private func hdiutil(_ arguments: String...) throws {
+        let process = try Process.run(URL(fileURLWithPath: "/usr/bin/hdiutil"), arguments: arguments)
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CocoaError(.executableLoad) }
+    }
+
     @Test func missingItemsAreReportedAsMissing() throws {
         let fixture = try TrashFixture()
         let absent = fixture.tmp.url.appendingPathComponent("absent/file.txt")

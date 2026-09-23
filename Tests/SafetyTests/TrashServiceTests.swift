@@ -105,6 +105,69 @@ import TestSupport
         #expect(left == ["src", "src/notes.md"])
     }
 
+    // F-0026, fail closed: a kept path that cannot be resolved stops the whole item.
+    @Test func keepSurvivesWhenItsFolderCannotBeOpened() async throws {
+        let fixture = try TrashFixture()
+        let root = try fixture.tmp.directory("home/Projects/old")
+        try fixture.tmp.file("home/Projects/old/build.log", size: 10)
+        let kept = try fixture.tmp.file("home/Projects/old/private/keep-me.txt", size: 10)
+        let folder = kept.deletingLastPathComponent()
+        #expect(chmod(folder.path, 0o300) == 0) // search but no read: open(O_RDONLY) fails
+        defer { chmod(folder.path, 0o755) }
+
+        let report = await fixture.service().moveToTrash([TrashItem(url: root, expectedIdentity: FileIdentity(url: root), keep: [kept])])
+
+        guard case .failed(root, _) = report.outcomes.first else { Issue.record("\(report.outcomes)"); return }
+        #expect(report.outcomes.count == 1)
+        #expect(fixture.backendCalls.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: kept.path))
+    }
+
+    // F-0026: APFS ignores case, so `OLD` is `old` and its kept file stays while the rest goes.
+    @Test func keepSurvivesWhenTheItemIsSpelledInAnotherCase() async throws {
+        let fixture = try TrashFixture()
+        let log = try fixture.tmp.file("home/Projects/old/build.log", size: 10)
+        let kept = try fixture.tmp.file("home/Projects/old/src/notes.md", size: 10)
+        let spelled = fixture.home.appendingPathComponent("Projects/OLD")
+
+        let report = await fixture.service().moveToTrash([TrashItem(url: spelled, expectedIdentity: nil, keep: [kept])])
+
+        #expect(FileManager.default.fileExists(atPath: kept.path), "backend got \(fixture.backendCalls.map(\.path))")
+        #expect(!FileManager.default.fileExists(atPath: log.path))
+        #expect(report.outcomes.map(\.paths) == [[spelled.path + "/build.log", fixture.trash.path + "/build.log"]])
+    }
+
+    // A folder whose every child is kept moves nothing, and still says so under its own URL.
+    @Test func anItemWithNothingLeftToMoveReportsItself() async throws {
+        let fixture = try TrashFixture()
+        let root = try fixture.tmp.directory("home/Projects/old")
+        let kept = try fixture.tmp.file("home/Projects/old/notes.md", size: 10)
+
+        let report = await fixture.service().moveToTrash([
+            TrashItem(url: root, expectedIdentity: nil, keep: [kept]),
+            TrashItem(url: kept, expectedIdentity: nil, keep: [kept]),
+        ])
+
+        guard case .failed(root, _) = report.outcomes.first, case .failed(kept, _) = report.outcomes.last else {
+            Issue.record("\(report.outcomes)")
+            return
+        }
+        #expect(report.outcomes.count == 2)
+        #expect(fixture.backendCalls.isEmpty)
+    }
+
+    @Test func aDuplicateSelectionIsReportedAsTrashed() async throws {
+        let fixture = try TrashFixture()
+        let file = try fixture.tmp.file("home/Library/Caches/dup.bin", size: 10)
+        let shouted = fixture.home.appendingPathComponent("Library/Caches/DUP.BIN")
+
+        let report = await fixture.service().moveToTrash([file, file, shouted].map { TrashItem(url: $0, expectedIdentity: nil) })
+
+        let destination = fixture.trash.appendingPathComponent("dup.bin")
+        #expect(report.outcomes.map(\.trashedTo) == [destination, destination, destination], "\(report.outcomes)")
+        #expect(fixture.backendCalls == [file])
+    }
+
     // F-0050: a folder and something selected inside it are trashed once, as the folder.
     @Test func trashesAnAncestorAndItsSelectedDescendantOnce() async throws {
         let fixture = try TrashFixture()

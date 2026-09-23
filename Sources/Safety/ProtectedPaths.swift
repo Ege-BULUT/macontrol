@@ -13,11 +13,21 @@ public enum ProtectedPaths {
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
         cloudConfirmed: Bool = false
     ) -> RefusalReason? {
+        let policy = home.path == defaultHome.path ? defaultPolicy : ProtectionPolicy(home: home)
         do {
-            return ProtectionPolicy(home: home).refusal(canonical: try canonicalPath(of: url), cloudConfirmed: cloudConfirmed)
+            return policy.refusal(canonical: try canonicalPath(of: url), cloudConfirmed: cloudConfirmed)
         } catch {
             return error
         }
+    }
+
+    // Built once: callers check every row, and building reads /usr/share/firmlinks.
+    private static let defaultHome = FileManager.default.homeDirectoryForCurrentUser
+    private static let defaultPolicy = ProtectionPolicy(home: defaultHome)
+
+    /// Permission errors and paths past PATH_MAX mean the item may well exist, just out of reach.
+    static func unreachable(_ code: Int32) -> RefusalReason {
+        code == EACCES || code == EPERM || code == ENAMETOOLONG ? .needsAdministrator : .missing
     }
 
     /// The kernel's path for `url`: the parent folder resolved with `F_GETPATH` (`realpath` keeps
@@ -33,7 +43,7 @@ public enum ProtectedPaths {
         let folder = resolvesItself ? path : (slash == path.startIndex ? "/" : String(path[..<slash]))
 
         let fd = open(folder, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
-        guard fd >= 0 else { throw errno == EACCES || errno == EPERM ? .needsAdministrator : .missing }
+        guard fd >= 0 else { throw unreachable(errno) }
         defer { close(fd) }
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
         guard fcntl(fd, F_GETPATH, &buffer) != -1 else { throw .missing }
@@ -75,10 +85,11 @@ struct ProtectionPolicy: Sendable {
         let folder = (path as NSString).deletingLastPathComponent
         var item = stat()
         var parent = stat()
-        guard lstat(path, &item) == 0 else { return errno == EACCES || errno == EPERM ? .needsAdministrator : .missing }
-        guard lstat(folder, &parent) == 0 else { return .missing }
+        guard lstat(path, &item) == 0 else { return ProtectedPaths.unreachable(errno) }
+        guard lstat(folder, &parent) == 0 else { return ProtectedPaths.unreachable(errno) }
         // A mount point or firmlink root lives on another volume than the folder it appears in.
         if item.st_dev != parent.st_dev { return .protectedLocation(path) }
+        if let volume = Self.mountPoint(inside: path) { return .protectedLocation(volume) }
 
         if let reason = Self.flagRefusal(item: item.st_flags, parent: parent.st_flags) { return reason }
         if Self.isReadOnlyVolume(folder) || Self.hasRootlessAttribute(path) { return .systemProtected }
@@ -124,6 +135,20 @@ struct ProtectionPolicy: Sendable {
         let user = UInt32(UF_IMMUTABLE) | UInt32(UF_APPEND)
         if item & (system | noUnlink) != 0 || parent & system != 0 { return .systemProtected }
         if item & user != 0 || parent & user != 0 { return .locked }
+        return nil
+    }
+
+    /// A volume mounted below `path` (a disk image, an SMB or sshfs mount): moving the folder would
+    /// carry the live volume into the Trash, where emptying it reaches the volume's files.
+    private static func mountPoint(inside path: String) -> String? {
+        let prefix = path.lowercased() + "/"
+        var mounts = Array(repeating: statfs(), count: Int(max(getfsstat(nil, 0, MNT_NOWAIT), 0)) + 8)
+        let count = getfsstat(&mounts, Int32(mounts.count * MemoryLayout<statfs>.stride), MNT_NOWAIT)
+        guard count >= 0 else { return path } // No mount table: refuse rather than guess.
+        for mount in mounts.prefix(Int(count)) {
+            let name = withUnsafeBytes(of: mount.f_mntonname) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+            if name.lowercased().hasPrefix(prefix) { return name }
+        }
         return nil
     }
 

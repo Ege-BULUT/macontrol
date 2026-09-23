@@ -31,8 +31,11 @@ public enum RefusalReason: Error, Sendable, Hashable {
     case missing
     /// Inside iCloud Drive or a cloud provider folder: deleting there deletes on every device.
     case needsCloudConfirmation
-    /// Not writable by this user (root-owned, as a rule). v1 has no privileged helper; the UI offers Reveal in Finder.
+    /// Not writable by this user (root-owned, as a rule), or nested past PATH_MAX. v1 has no privileged
+    /// helper; the UI offers Reveal in Finder.
     case needsAdministrator
+    /// Used by callers that have no TrashService (previews, demo mode). TrashService never returns it.
+    case notImplemented
 }
 
 public enum TrashOutcome: Sendable, Hashable {

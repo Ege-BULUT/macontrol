@@ -10,7 +10,7 @@ struct TrashBatch {
     let backend: TrashBackend
     let journal: FileHandle
     let cloudConfirmed: Bool
-    /// Canonical path of every item trashed so far, and where it went.
+    /// Canonical path of every item trashed so far, lowercased as the policy compares them, and where it went.
     private var trashed: [String: URL] = [:]
     /// Set when a journal line could not be written: nothing more is trashed without an undo record.
     private var journalError: String?
@@ -45,12 +45,24 @@ struct TrashBatch {
         guard let identity = FileIdentity(url: URL(fileURLWithPath: path)) else { return [.refused(item.url, .missing)] }
         if let expected = item.expectedIdentity, expected != identity { return [.refused(item.url, .identityChanged)] }
 
-        let keep = Set(item.keep.compactMap { try? ProtectedPaths.canonicalPath(of: $0) }.filter { $0.hasPrefix(path + "/") })
+        // Fail closed: a kept path we cannot resolve may well lie inside this item.
+        guard let kept = try? item.keep.map({ try ProtectedPaths.canonicalPath(of: $0).lowercased() }) else {
+            return [.failed(item.url, message: "An item you chose to keep could not be checked, so nothing here was moved.")]
+        }
+        let lowered = path.lowercased()
+        if kept.contains(lowered) { return [.failed(item.url, message: Self.nothingMoved)] }
+        let keep = Set(kept.filter { $0.hasPrefix(lowered + "/") })
         if keep.isEmpty { return [trash(item.url, canonical: path, identity: identity, allocated: item.allocated)] }
-        return trashKeeping(keep, in: path, shownAs: item.url)
+        let pieces = trashKeeping(keep, in: path, shownAs: item.url)
+        // Callers match outcomes to items by URL, so an item with no piece moved reports itself.
+        let accounted = pieces.contains { if case .trashed = $0 { true } else { $0.url == item.url } }
+        return accounted ? pieces : pieces + [.failed(item.url, message: Self.nothingMoved)]
     }
 
+    private static let nothingMoved = "Nothing in it was moved: everything left in it is kept or refused."
+
     /// Trashes everything in `folder` except the kept paths, descending only into folders that hold one (F-0026).
+    /// `keep` is lowercased: APFS matches names without case, so `OLD/src` must keep `old/src`.
     private mutating func trashKeeping(_ keep: Set<String>, in folder: String, shownAs shown: URL) -> [TrashOutcome] {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder) else {
             return [.failed(shown, message: "The folder could not be read.")]
@@ -59,13 +71,16 @@ struct TrashBatch {
         for name in names.sorted() {
             let child = folder + "/" + name
             let childShown = shown.appendingPathComponent(name)
-            if keep.contains(child) { continue }
-            if keep.contains(where: { $0.hasPrefix(child + "/") }) && Self.isRealFolder(child) {
+            let key = child.lowercased()
+            if keep.contains(key) { continue }
+            if keep.contains(where: { $0.hasPrefix(key + "/") }) && Self.isRealFolder(child) {
                 outcomes += trashKeeping(keep, in: child, shownAs: childShown)
             } else if let reason = policy.refusal(canonical: child, cloudConfirmed: cloudConfirmed) {
                 outcomes.append(.refused(childShown, reason))
             } else if let identity = FileIdentity(url: URL(fileURLWithPath: child)) {
                 outcomes.append(trash(childShown, canonical: child, identity: identity, allocated: Self.fileSize(child)))
+            } else {
+                outcomes.append(.refused(childShown, .missing))
             }
         }
         return outcomes
@@ -79,7 +94,7 @@ struct TrashBatch {
         } catch {
             return .failed(shown, message: error.localizedDescription)
         }
-        trashed[path] = destination
+        trashed[path.lowercased()] = destination
         let entry = JournalEntry(
             batch: id, date: Date(), originalPath: path, trashedPath: destination.path,
             identity: identity, allocated: allocated, restored: false
@@ -92,17 +107,18 @@ struct TrashBatch {
         return .trashed(original: shown, trashedTo: destination)
     }
 
+    /// Where `path` went if it, or a folder holding it, was trashed earlier in this batch.
     private func trashedAncestor(of path: String) -> URL? {
         var ancestor = path
         var relative: [String] = []
-        while ancestor != "/" {
-            relative.insert((ancestor as NSString).lastPathComponent, at: 0)
-            ancestor = (ancestor as NSString).deletingLastPathComponent
-            if let destination = trashed[ancestor] {
+        while true {
+            if let destination = trashed[ancestor.lowercased()] {
                 return relative.reduce(destination) { $0.appendingPathComponent($1) }
             }
+            guard ancestor != "/" else { return nil }
+            relative.insert((ancestor as NSString).lastPathComponent, at: 0)
+            ancestor = (ancestor as NSString).deletingLastPathComponent
         }
-        return nil
     }
 
     private func depth(_ path: Result<String, RefusalReason>) -> Int {
@@ -119,5 +135,13 @@ struct TrashBatch {
         var info = stat()
         guard lstat(path, &info) == 0, info.st_mode & S_IFMT != S_IFDIR else { return 0 }
         return UInt64(info.st_blocks) * 512
+    }
+}
+
+private extension TrashOutcome {
+    var url: URL {
+        switch self {
+        case .trashed(let url, _), .refused(let url, _), .failed(let url, _): url
+        }
     }
 }
