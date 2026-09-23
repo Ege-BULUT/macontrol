@@ -21,9 +21,12 @@ public final class DiskMapModel {
     /// Each top-level name's colour for the whole scan. Colour by size rank reshuffled most of the legend on
     /// every preview, because ranks keep changing while sizes grow (T-0063).
     private(set) var previewSlots: [String: Int] = [:]
+    /// The scan's colours for the tree on the map, so the finished map keeps the colours its preview showed.
+    private(set) var treeSlots: [String: Int] = [:]
     /// What the running scan should reach, for its progress bar: the last scan's total when the same folder
     /// is scanned again, else the space in use when a whole volume is scanned.
     var expectedTotal: (bytes: UInt64, isLastScan: Bool)?
+    @ObservationIgnored var readBytesInUse: @Sendable (URL) -> UInt64? = { ScanEngine.volumeBytesInUse(at: $0) }
     /// The folder the map is drilled into. Only a folder the map can open is accepted: the Overview sets
     /// this directly, and a stale index must not put the map inside a file, a package or the Trash.
     public var focus: Int {
@@ -89,10 +92,16 @@ public final class DiskMapModel {
         let lastTotal = tree.flatMap { $0.rootURL.standardizedFileURL == root.standardizedFileURL ? $0.allocatedSize(of: ScanTree.root) : nil }
         let generation = beginScan()
         expectedTotal = lastTotal.map { ($0, true) }
-        let task = Task {
-            if lastTotal == nil, let used = await Self.bytesInUse(root), generation == scanGeneration {
-                expectedTotal = (used, false)
+        if lastTotal == nil {
+            // The walk never waits for this goal: statfs can hang on a network mount, and nothing cancels it.
+            // ponytail: each scan of a hung mount parks one GCD thread until statfs returns.
+            Task { [read = readBytesInUse] in
+                if let used = await Self.bytesInUse(root, read: read), generation == scanGeneration, isScanning {
+                    expectedTotal = (used, false)
+                }
             }
+        }
+        let task = Task {
             do {
                 for try await event in engine.scan(root) {
                     if Task.isCancelled { break }
@@ -113,10 +122,12 @@ public final class DiskMapModel {
         scanTask?.cancel()
     }
 
-    /// The volume's bytes in use, read off the main actor: statfs and getattrlist wait on a hung network mount.
-    @concurrent
-    nonisolated static func bytesInUse(_ root: URL, read: @Sendable (URL) -> UInt64? = { ScanEngine.volumeBytesInUse(at: $0) }) async -> UInt64? {
-        read(root)
+    /// The volume's bytes in use, read on a GCD thread: statfs and getattrlist wait on a hung network mount, and
+    /// blocking I/O never runs on the cooperative pool (ARCHITECTURE §2).
+    nonisolated static func bytesInUse(_ root: URL, read: @escaping @Sendable (URL) -> UInt64?) async -> UInt64? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async { continuation.resume(returning: read(root)) }
+        }
     }
 
     /// Makes a new scan the only one allowed to change what is shown.
@@ -141,7 +152,9 @@ public final class DiskMapModel {
             }
             preview = tree
             previewVersion += 1
-        case .completed(let result): replaceTree(result)
+        case .completed(let result):
+            treeSlots = previewSlots
+            replaceTree(result)
         }
     }
 
@@ -294,7 +307,7 @@ public final class DiskMapModel {
             return
         }
         guard let tree, key.treeVersion == treeVersion else { return }
-        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key), result.key.treeVersion == treeVersion else { return }
+        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key, slots: treeSlots), result.key.treeVersion == treeVersion else { return }
         layoutCache[key] = result
         cacheOrder.append(key)
         if cacheOrder.count > 12 { layoutCache[cacheOrder.removeFirst()] = nil }

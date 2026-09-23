@@ -20,14 +20,16 @@ nonisolated enum MapLayoutBuilder {
 
     /// Runs on the cooperative pool, never the main actor; cancelling the calling task stops it.
     @concurrent
-    static func layout(of tree: ScanTree, for key: LayoutKey) async throws -> MapLayout {
-        try build(tree, key)
+    static func layout(of tree: ScanTree, for key: LayoutKey, slots: [String: Int] = [:]) async throws -> MapLayout {
+        try build(tree, key, slots: slots)
     }
 
-    /// `slots` fixes a top-level name's colour, so a scan preview keeps each folder's colour while sizes
-    /// change rank (T-0063). Names it lacks are coloured by rank.
+    /// `slots` fixes the colour of a folder at the top of the scan by name, so the preview and the finished map
+    /// keep each folder's colour while sizes change rank (T-0063). Names it lacks are coloured by rank, and
+    /// a colour that would sit next to itself changes (`MapPalette.slots`). Ignored below the scan root.
     static func build(_ tree: ScanTree, _ key: LayoutKey, slots: [String: Int] = [:]) throws -> MapLayout {
-        switch key.style {
+        let slots = key.focus == ScanTree.root ? slots : [:]
+        return switch key.style {
         case .sunburst: try sunburst(tree, key, slots)
         case .treemap: try treemap(tree, key, slots)
         }
@@ -76,9 +78,10 @@ nonisolated enum MapLayoutBuilder {
                 cumulative += bytes
                 return .wedge(start: start, end: pending.wedge.start + pending.wedge.span * Double(cumulative) / total)
             }
+            let top = pending.branch == nil ? MapPalette.slots(preferring: named.map { slots[tree.name(of: $0)] }) : []
             for (offset, child) in named.enumerated() {
                 let bytes = tree.allocatedSize(of: child)
-                let branch = pending.branch ?? slots[tree.name(of: child)] ?? MapPalette.slot(for: offset, of: named.count)
+                let branch = pending.branch ?? top[offset]
                 let shape = wedge(adding: bytes)
                 elements.append(MapElement(item: .node(child), parent: pending.node, bytes: bytes, depth: pending.depth, branch: branch, shape: shape))
                 if pending.depth + 1 < maxDepth, bytes > 0, tree.isExpandable(child), case .wedge(let start, let end) = shape {
@@ -121,8 +124,9 @@ nonisolated enum MapLayoutBuilder {
             // Entries in squarify order. The folder's own bytes (its directory entries) take their share
             // of the area as an undrawn gap, so every drawn tile keeps exact proportions.
             enum Entry { case child(Int, branch: Int), smallerItems, gap }
+            let top = pending.branch == nil ? MapPalette.slots(preferring: named.map { slots[tree.name(of: $0)] }) : []
             var entries: [(entry: Entry, bytes: UInt64)] = named.enumerated().map { offset, child in
-                (.child(child, branch: pending.branch ?? slots[tree.name(of: child)] ?? MapPalette.slot(for: offset, of: named.count)), tree.allocatedSize(of: child))
+                (.child(child, branch: pending.branch ?? top[offset]), tree.allocatedSize(of: child))
             }
             let restBytes = rest.reduce(0) { $0 + tree.allocatedSize(of: $1) }
             if !rest.isEmpty { entries.append((.smallerItems, restBytes)) }

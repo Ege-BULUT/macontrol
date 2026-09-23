@@ -38,6 +38,25 @@ nonisolated enum MapPalette {
         return slot
     }
 
+    /// Slots for the top-level children in size order. `preferred[i]` is a colour the `i`-th child keeps (a scan's
+    /// first-seen colours, T-0063), or nil for its rank slot. A child whose colour matches the one before it, or the
+    /// first one when it is the last, takes the first colour neither neighbour nor the next child wants.
+    static func slots(preferring preferred: [Int?]) -> [Int] {
+        let wanted = preferred.indices.map { preferred[$0] ?? slot(for: $0, of: preferred.count) }
+        var result: [Int] = []
+        for (index, slot) in wanted.enumerated() {
+            var taken = [result.last]
+            if index == wanted.count - 1, index > 0 { taken.append(result.first) }
+            guard taken.contains(slot) else {
+                result.append(slot)
+                continue
+            }
+            if index + 1 < wanted.count { taken.append(wanted[index + 1]) }
+            result.append(branches.indices.first { !taken.contains($0) } ?? slot)
+        }
+        return result
+    }
+
     /// Share of the way to the background at `depth`.
     static func fade(atDepth depth: Int) -> Double {
         min(Double(depth) * 0.1, 0.5)
