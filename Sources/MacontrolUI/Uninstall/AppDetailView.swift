@@ -53,10 +53,12 @@ struct AppDetailView: View {
 
     @ViewBuilder
     private func notices(_ app: InstalledApp) -> some View {
-        let blocker = app.kind == .builtIn ? (model.plan?.blocker ?? "Part of macOS. It lives on the sealed system volume and can't be removed.") : nil
+        // The uninstaller also blocks apps that are not built in (a root-owned bundle, macontrol itself).
+        let blocker = model.plan?.app.id == app.id ? model.plan?.blocker : nil
+        let fallback = app.kind == .builtIn ? "Part of macOS. It lives on the sealed system volume and can't be removed." : nil
         VStack(alignment: .leading, spacing: 8) {
-            if let blocker {
-                Notice(text: blocker, systemImage: "lock.fill", tint: .secondary)
+            if let text = blocker ?? fallback {
+                Notice(text: text, systemImage: "lock.fill", tint: .secondary)
             }
             if app.kind == .appleAppStore {
                 Notice(text: "Made by Apple. You can remove it and download it again for free from the App Store.",
@@ -96,19 +98,17 @@ struct AppDetailView: View {
                     .foregroundStyle(.secondary)
                     .selectionDisabled()
             }
-            ForEach(LeftoverEvidence.displayOrder, id: \.self) { evidence in
+            ForEach(LeftoverEvidence.sections(of: plan.leftovers), id: \.self) { evidence in
                 let members = plan.leftovers.filter { $0.evidence == evidence }
-                if !members.isEmpty {
-                    Section {
-                        ForEach(members) { leftover in
-                            LeftoverRow(leftover: leftover, isChosen: Binding(
-                                get: { model.isChosen(leftover) },
-                                set: { model.setChosen($0, leftover) }
-                            ))
-                        }
-                    } header: {
-                        EvidenceHeader(evidence: evidence, members: members)
+                Section {
+                    ForEach(members) { leftover in
+                        LeftoverRow(leftover: leftover, isChosen: Binding(
+                            get: { model.isChosen(leftover) },
+                            set: { model.setChosen($0, leftover) }
+                        ))
                     }
+                } header: {
+                    EvidenceHeader(evidence: evidence, members: members)
                 }
             }
         }

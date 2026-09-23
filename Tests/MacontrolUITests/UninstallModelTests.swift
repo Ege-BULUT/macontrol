@@ -54,6 +54,25 @@ import Uninstaller
         #expect(model.confirmation == nil)
     }
 
+    @Test func aBlockedThirdPartyAppHasNoUninstall() async {
+        let app = DemoApps.editor
+        let model = UninstallModel(uninstaller: nil, apps: [app], engine: nil)
+        model.plans[app.url] = UninstallPlan(app: app, appMeasurement: .zero, leftovers: [], blocker: "Owned by root.")
+        model.selectedApp = app.id
+        await model.loadPlan()
+        #expect(model.plan?.blocker == "Owned by root.")
+        #expect(!model.canUninstall)
+        model.beginUninstall()
+        #expect(model.confirmation == nil)
+    }
+
+    @Test func everyLeftoverKindGetsASectionInDisplayOrder() throws {
+        let leftovers = try #require(UninstallModel.demo().plan?.leftovers)
+        let sections = LeftoverEvidence.sections(of: leftovers.reversed())
+        #expect(Set(sections) == Set(leftovers.map(\.evidence)))
+        #expect(sections == LeftoverEvidence.displayOrder.filter(sections.contains))
+    }
+
     @Test func appleAppsCanBeUninstalled() {
         let model = UninstallModel.demo(showing: .appleAppStore)
         #expect(model.canUninstall)

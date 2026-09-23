@@ -17,6 +17,14 @@ extension LeftoverEvidence {
     /// Display order: strongest evidence first, the unselected exact-name matches last.
     static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName]
 
+    /// The evidence kinds present in `leftovers`, in display order. A kind missing from `displayOrder`
+    /// still gets its section at the end, so no leftover is ever hidden.
+    static func sections(of leftovers: [Leftover]) -> [LeftoverEvidence] {
+        var present: [LeftoverEvidence] = []
+        for leftover in leftovers where !present.contains(leftover.evidence) { present.append(leftover.evidence) }
+        return displayOrder.filter(present.contains) + present.filter { !displayOrder.contains($0) }
+    }
+
     var title: String {
         switch self {
         case .bundleIdentifier: "Named with the app's ID"
