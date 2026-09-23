@@ -2,8 +2,9 @@ import Darwin
 import Foundation
 import MacontrolCore
 
-/// One `moveToTrash` call. Per item, in order: skip it if a selected ancestor already went (F-0050),
-/// apply the protected-path policy, re-check its identity, expand `keep`, trash, journal.
+/// One `moveToTrash` call. Per item, in order: leave it if the batch keeps it, skip it if a selected
+/// ancestor already went (F-0050), apply the protected-path policy, re-check its identity, trash
+/// around kept descendants, journal.
 struct TrashBatch {
     let id: UUID
     let policy: ProtectionPolicy
@@ -14,6 +15,8 @@ struct TrashBatch {
     private var trashed: [String: URL] = [:]
     /// Set when a journal line could not be written: nothing more is trashed without an undo record.
     private var journalError: String?
+    /// Every item's `keep`, canonical and lowercased: an unchecked path stays whichever item covers it (F-0026).
+    private var keep: Set<String> = []
 
     init(id: UUID, policy: ProtectionPolicy, backend: TrashBackend, journal: FileHandle, cloudConfirmed: Bool) {
         self.id = id
@@ -24,6 +27,11 @@ struct TrashBatch {
     }
 
     mutating func process(_ items: [TrashItem]) -> [TrashOutcome] {
+        // Fail closed: a kept path we cannot resolve may well lie inside any item.
+        guard let keep = try? Set(items.flatMap(\.keep).map({ try ProtectedPaths.canonicalPath(of: $0).lowercased() })) else {
+            return items.map { .failed($0.url, message: "An item you chose to keep could not be checked, so nothing was moved.") }
+        }
+        self.keep = keep
         let canonical = items.map { item in Result { () throws(RefusalReason) in try ProtectedPaths.canonicalPath(of: item.url) } }
         // Shallowest first, so a folder goes before anything selected inside it.
         let order = items.indices.sorted { depth(canonical[$0]) < depth(canonical[$1]) }
@@ -38,6 +46,8 @@ struct TrashBatch {
     }
 
     private mutating func process(_ item: TrashItem, canonical path: String) -> [TrashOutcome] {
+        let lowered = path.lowercased()
+        if isKept(lowered) { return [.failed(item.url, message: "You chose to keep this, so it was not moved.")] }
         if let destination = trashedAncestor(of: path) {
             return [.trashed(original: item.url, trashedTo: destination)]
         }
@@ -45,21 +55,13 @@ struct TrashBatch {
         guard let identity = FileIdentity(url: URL(fileURLWithPath: path)) else { return [.refused(item.url, .missing)] }
         if let expected = item.expectedIdentity, expected != identity { return [.refused(item.url, .identityChanged)] }
 
-        // Fail closed: a kept path we cannot resolve may well lie inside this item.
-        guard let kept = try? item.keep.map({ try ProtectedPaths.canonicalPath(of: $0).lowercased() }) else {
-            return [.failed(item.url, message: "An item you chose to keep could not be checked, so nothing here was moved.")]
-        }
-        let lowered = path.lowercased()
-        if kept.contains(lowered) { return [.failed(item.url, message: Self.nothingMoved)] }
-        let keep = Set(kept.filter { $0.hasPrefix(lowered + "/") })
-        if keep.isEmpty { return [trash(item.url, canonical: path, identity: identity, allocated: item.allocated)] }
-        let pieces = trashKeeping(keep, in: path, shownAs: item.url)
+        let inside = keep.filter { $0.hasPrefix(lowered + "/") }
+        if inside.isEmpty { return [trash(item.url, canonical: path, identity: identity, allocated: item.allocated)] }
+        let pieces = trashKeeping(inside, in: path, shownAs: item.url)
         // Callers match outcomes to items by URL, so an item with no piece moved reports itself.
         let accounted = pieces.contains { if case .trashed = $0 { true } else { $0.url == item.url } }
-        return accounted ? pieces : pieces + [.failed(item.url, message: Self.nothingMoved)]
+        return accounted ? pieces : pieces + [.failed(item.url, message: "Nothing in it was moved: everything left in it is kept or refused.")]
     }
-
-    private static let nothingMoved = "Nothing in it was moved: everything left in it is kept or refused."
 
     /// Trashes everything in `folder` except the kept paths, descending only into folders that hold one (F-0026).
     /// `keep` is lowercased: APFS matches names without case, so `OLD/src` must keep `old/src`.
@@ -107,13 +109,26 @@ struct TrashBatch {
         return .trashed(original: shown, trashedTo: destination)
     }
 
+    /// The path, or a folder holding it, was unchecked somewhere in the batch.
+    private func isKept(_ lowered: String) -> Bool {
+        var path = lowered
+        while !keep.contains(path) {
+            guard path != "/" else { return false }
+            path = (path as NSString).deletingLastPathComponent
+        }
+        return true
+    }
+
     /// Where `path` went if it, or a folder holding it, was trashed earlier in this batch.
     private func trashedAncestor(of path: String) -> URL? {
         var ancestor = path
         var relative: [String] = []
         while true {
-            if let destination = trashed[ancestor.lowercased()] {
-                return relative.reduce(destination) { $0.appendingPathComponent($1) }
+            if let folder = trashed[ancestor.lowercased()] {
+                let destination = relative.reduce(folder) { $0.appendingPathComponent($1) }
+                // Keys ignore case, so on a case-sensitive volume `Cache` matches `cache`: believe the
+                // match only when the item really left its path and is at that place in the Trash.
+                return !Self.exists(path) && Self.exists(destination.path) ? destination : nil
             }
             guard ancestor != "/" else { return nil }
             relative.insert((ancestor as NSString).lastPathComponent, at: 0)
@@ -123,6 +138,11 @@ struct TrashBatch {
 
     private func depth(_ path: Result<String, RefusalReason>) -> Int {
         (try? path.get())?.split(separator: "/").count ?? 0
+    }
+
+    private static func exists(_ path: String) -> Bool {
+        var info = stat()
+        return lstat(path, &info) == 0
     }
 
     private static func isRealFolder(_ path: String) -> Bool {

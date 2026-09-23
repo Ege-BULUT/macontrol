@@ -12,22 +12,43 @@ import Testing
         "removeItem(", "trashItem(", "moveItem(", "replaceItem", "recycle(", "unlink(", "unlinkat(",
         "rmdir(", "rename(", "renameat", "renamex_np", "NSAppleScript", "osascript", "\"/bin/sh\"",
         "\"/bin/bash\"", "\"/bin/zsh\"", "\"/bin/rm\"",
+        // Finder scripting by other doors (F-0018).
+        "OSAScript", "NSUserAppleScriptTask", "SBApplication",
     ]
 
     @Test func destructiveCallsLiveOnlyInSafety() throws {
         var offenders: [String] = []
         for file in try Self.swiftFiles() where !file.path.contains("/Sources/Safety/") {
             let text = try String(contentsOf: file, encoding: .utf8)
-            for token in Self.destructive where text.contains(token) {
-                offenders.append("\(file.lastPathComponent): \(token)")
-            }
-            offenders += Self.cCalls(in: text).map { "\(file.lastPathComponent): \($0)(" }
             // Launching tools is allowed only for launchd control, with an argument array.
-            if text.contains("Process(") && !file.path.contains("/Sources/Uninstaller/Launchd") {
-                offenders.append("\(file.lastPathComponent): Process(")
-            }
+            let launchd = file.path.contains("/Sources/Uninstaller/Launchd")
+            offenders += Self.offenses(in: text).filter { !(launchd && $0 == "Process") }.map { "\(file.lastPathComponent): \($0)" }
         }
         #expect(offenders.isEmpty, "move these calls behind Safety: \(offenders)")
+    }
+
+    static func offenses(in text: String) -> [String] {
+        destructive.filter(text.contains) + cCalls(in: text).map { $0 + "(" } + (usesProcess(text) ? ["Process"] : [])
+    }
+
+    /// Any use of the type, not only `Process(`: `Process.run(`, `.launchedProcess(`, `let p: Process = .init()`.
+    static func usesProcess(_ text: String) -> Bool {
+        text.contains(#/(?:^|\W)Process(?:\W|$)/#)
+    }
+
+    @Test func everyWayToLaunchOrScriptIsFound() {
+        let launches = [
+            "_ = try Process.run(URL(fileURLWithPath: \"/usr/bin/true\"), arguments: [])", "let p = Process()",
+            "let p: Process = .init()", "Process.launchedProcess(launchPath: a, arguments: [])", "Process\n.init()",
+            "try OSAScript(source: s).executeAndReturnError(nil)", "NSUserAppleScriptTask(url: u)",
+            "SBApplication(bundleIdentifier: \"com.apple.finder\")",
+        ]
+        for sample in launches {
+            #expect(!Self.offenses(in: sample).isEmpty, "\(sample)")
+        }
+        for sample in ["ProcessInfo.processInfo.environment", "let processed = scanProcess(x)", "struct ScanProcess {}", "// processes"] {
+            #expect(Self.offenses(in: sample).isEmpty, "\(sample)")
+        }
     }
 
     /// C calls that delete, move or launch, matched as whole words so `.font(.system(size:))` passes.
@@ -52,7 +73,7 @@ import Testing
 /// ownership to force a move (F-0024, F-0070).
 @Suite struct SafetySinkTests {
     static let forbidden = [
-        "removeItem(", "unlink", "rmdir(", "recycle(", "AppleScript", "osascript", "Process(", "/bin/",
+        "removeItem(", "unlink", "rmdir(", "recycle(", "AppleScript", "osascript", "OSAScript", "SBApplication", "/bin/",
         "posix_spawn", "system(", "popen(", "execv", "execl", "removefile", "copyfile", "chmod(", "chown(", "chflags(",
         "setattrlist", "exchangedata", "moveItem(",
     ]
@@ -66,6 +87,7 @@ import Testing
             for token in Self.forbidden where code.contains(token) {
                 offenders.append("\(file.lastPathComponent): \(token)")
             }
+            if SinkAuditTests.usesProcess(code) { offenders.append("\(file.lastPathComponent): Process") }
             trashCalls += code.components(separatedBy: "FileManager.default.trashItem(at:").count - 1
         }
         #expect(offenders.isEmpty, "Safety must not do this: \(offenders)")

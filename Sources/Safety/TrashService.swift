@@ -83,7 +83,7 @@ public struct TrashBackend: Sendable {
 public actor TrashService {
     public let journalURL: URL
     private let backend: TrashBackend
-    private let policy: ProtectionPolicy
+    private let home: URL
     // Trashing blocks on file I/O, so the actor runs on its own queue, not the cooperative pool.
     private let queue = DispatchSerialQueue(label: "macontrol.trash")
 
@@ -96,7 +96,7 @@ public actor TrashService {
     ) {
         self.journalURL = journalURL
         self.backend = backend
-        self.policy = ProtectionPolicy(home: home)
+        self.home = home
     }
 
     public static var defaultJournalURL: URL {
@@ -114,6 +114,8 @@ public actor TrashService {
             let message = "The undo journal could not be opened: \(error.localizedDescription)"
             return TrashReport(batch: batch, outcomes: items.map { .failed($0.url, message: message) })
         }
+        // Built after the journal's folder exists, so the policy protects it under its real path.
+        let policy = ProtectionPolicy(home: home, journal: journalURL)
         var run = TrashBatch(id: batch, policy: policy, backend: backend, journal: journal, cloudConfirmed: cloudConfirmed)
         return TrashReport(batch: batch, outcomes: run.process(items))
     }
@@ -144,11 +146,13 @@ public actor TrashService {
             return .failed(original, message: "It is no longer in the Trash.")
         }
         // RENAME_EXCL makes "only if the original path is free" atomic: nothing is ever replaced.
-        guard renamex_np(entry.trashedPath, entry.originalPath, UInt32(RENAME_EXCL)) == 0 else {
+        // RENAME_NOFOLLOW_ANY: a link put in place of a folder on the way cannot send it elsewhere.
+        guard renamex_np(entry.trashedPath, entry.originalPath, UInt32(RENAME_EXCL | RENAME_NOFOLLOW_ANY)) == 0 else {
             let code = errno
             let message = switch code {
             case EEXIST: "Something else is at its original location now."
             case ENOENT: "The folder it came from no longer exists."
+            case ELOOP: "A folder it came from was replaced by a link."
             default: String(cString: strerror(code))
             }
             return .failed(original, message: message)

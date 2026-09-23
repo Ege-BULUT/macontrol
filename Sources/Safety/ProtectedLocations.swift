@@ -267,8 +267,7 @@ enum ProtectedLocations {
 
     /// Nothing at or inside these is ever trashed. `/usr/local` is carved out of `/usr` in `ProtectedPaths`.
     static let systemNeverTouch = [
-        "/System", "/usr", "/bin", "/sbin", "/dev", "/private/var/vm",
-        "/.Spotlight-V100", "/.fseventsd", "/.DocumentRevisions-V100", "/.vol",
+        "/System", "/usr", "/bin", "/sbin", "/dev", "/private/var/vm", "/.vol",
         "/Library/Keychains", "/Library/Application Support/com.apple.TCC",
     ]
 
@@ -285,10 +284,12 @@ enum ProtectedLocations {
     /// A bundle with one of these extensions is never trashed, nor anything inside it.
     static let neverTouchExtensions = ["photoslibrary", "photolibrary", "migratedphotolibrary"]
 
-    /// Folders with these names are never trashed, nor anything inside them: every volume's Trash.
-    static let neverTouchNames = [".trashes"]
+    /// Folders with these names are never trashed, nor anything inside them: every volume's Trash,
+    /// Spotlight index, event log and saved document versions, wherever the volume is mounted.
+    static let neverTouchNames = [".trashes", ".spotlight-v100", ".fseventsd", ".documentrevisions-v100"]
 
-    /// Deleting here deletes on every device, so it needs the user's explicit confirmation.
+    /// Deleting here deletes on every device, so it needs the user's explicit confirmation. Each
+    /// folder directly inside one is a root: its contents can go, never the whole provider.
     static let homeCloud = ["Library/Mobile Documents", "Library/CloudStorage"]
 
     private static func paths(_ list: String) -> [String] {

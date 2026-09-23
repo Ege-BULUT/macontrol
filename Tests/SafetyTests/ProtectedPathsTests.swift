@@ -83,6 +83,31 @@ import TestSupport
         }
     }
 
+    // A confirmed cloud delete takes what is inside a provider, never the provider itself.
+    @Test func cloudProviderFoldersAreRefusedEvenWhenConfirmed() throws {
+        let fixture = try TrashFixture()
+        let documents = try fixture.tmp.directory("home/Library/Mobile Documents/iCloud~com~example~App/Documents")
+        try fixture.tmp.directory("home/Library/Mobile Documents/com~apple~CloudDocs")
+        try fixture.tmp.directory("home/Library/CloudStorage/Dropbox")
+
+        let providers = ["Mobile Documents/com~apple~CloudDocs", "Mobile Documents/iCloud~com~example~App", "CloudStorage/Dropbox"]
+        for provider in providers.map({ fixture.home.appendingPathComponent("Library/" + $0) }) {
+            #expect(ProtectedPaths.refusal(for: provider, home: fixture.home, cloudConfirmed: true) == .protectedLocation(provider.path))
+        }
+        #expect(ProtectedPaths.refusal(for: documents, home: fixture.home, cloudConfirmed: true) == nil)
+    }
+
+    // Every volume keeps its index, event log and document versions at its root, wherever it is mounted.
+    @Test func refusesVolumeSystemFoldersOnEveryVolume() throws {
+        let fixture = try TrashFixture()
+        for name in [".Spotlight-V100", ".fseventsd", ".DocumentRevisions-V100"] {
+            let inside = try fixture.tmp.file("Volume/\(name)/Store/0001", size: 10)
+            let folder = fixture.tmp.url.appendingPathComponent("Volume/" + name)
+            #expect(ProtectedPaths.refusal(for: folder, home: fixture.home) == .protectedLocation(folder.path))
+            #expect(ProtectedPaths.refusal(for: inside, home: fixture.home) == .protectedLocation(folder.path))
+        }
+    }
+
     @Test func aFolderWeCannotWriteNeedsAdministrator() throws {
         let fixture = try TrashFixture()
         let file = try fixture.tmp.file("readonly/file.txt", size: 10)
@@ -124,22 +149,12 @@ import TestSupport
     func refusesAFolderThatContainsAMountPoint() throws {
         let fixture = try TrashFixture()
         let projects = try fixture.tmp.directory("home/Projects")
-        let mount = try fixture.tmp.directory("home/Projects/mnt")
-        let image = fixture.tmp.url.appendingPathComponent("volume.dmg").path
-        try hdiutil("create", "-quiet", "-size", "20m", "-fs", "APFS", image)
-        try hdiutil("attach", "-quiet", "-nobrowse", "-mountpoint", mount.path, image)
-        defer { try? hdiutil("detach", "-force", fixture.home.appendingPathComponent("Projects/mnt").path) }
+        let mount = try fixture.attachDiskImage("APFS", at: "home/Projects/mnt")
 
         #expect(ProtectedPaths.refusal(for: mount, home: fixture.home) == .protectedLocation(mount.path))
         #expect(ProtectedPaths.refusal(for: projects, home: fixture.home) == .protectedLocation(mount.path))
         let shouted = fixture.home.appendingPathComponent("PROJECTS")
         #expect(ProtectedPaths.refusal(for: shouted, home: fixture.home) == .protectedLocation(mount.path))
-    }
-
-    private func hdiutil(_ arguments: String...) throws {
-        let process = try Process.run(URL(fileURLWithPath: "/usr/bin/hdiutil"), arguments: arguments)
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { throw CocoaError(.executableLoad) }
     }
 
     @Test func missingItemsAreReportedAsMissing() throws {

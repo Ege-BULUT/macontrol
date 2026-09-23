@@ -156,6 +156,61 @@ import TestSupport
         #expect(fixture.backendCalls.isEmpty)
     }
 
+    // F-0026: a deselection wins over every other selected item, from below and from above.
+    @Test func keepHoldsAgainstASelectedDescendant() async throws {
+        let fixture = try TrashFixture()
+        let root = try fixture.tmp.directory("home/Projects/old")
+        let log = try fixture.tmp.file("home/Projects/old/build.log", size: 10)
+        let main = try fixture.tmp.file("home/Projects/old/src/main.c", size: 10)
+        let kept = try fixture.tmp.file("home/Projects/old/src/notes.md", size: 10)
+
+        let report = await fixture.service().moveToTrash([
+            TrashItem(url: root, expectedIdentity: nil, keep: [kept]),
+            TrashItem(url: kept.deletingLastPathComponent(), expectedIdentity: nil),
+        ])
+
+        #expect(FileManager.default.fileExists(atPath: kept.path), "\(report.outcomes)")
+        #expect(![log, main].contains { FileManager.default.fileExists(atPath: $0.path) })
+    }
+
+    @Test func keepHoldsAgainstASelectedAncestor() async throws {
+        let fixture = try TrashFixture()
+        let root = try fixture.tmp.directory("home/Projects/old")
+        let log = try fixture.tmp.file("home/Projects/old/build.log", size: 10)
+        let kept = try fixture.tmp.file("home/Projects/old/src/notes.md", size: 10)
+
+        let report = await fixture.service().moveToTrash([
+            TrashItem(url: root, expectedIdentity: nil),
+            TrashItem(url: kept.deletingLastPathComponent(), expectedIdentity: nil, keep: [kept]),
+            TrashItem(url: kept, expectedIdentity: nil),
+        ])
+
+        #expect(FileManager.default.fileExists(atPath: kept.path), "\(report.outcomes)")
+        #expect(!FileManager.default.fileExists(atPath: log.path))
+        guard case .failed(kept, _) = report.outcomes.last else { Issue.record("\(report.outcomes)"); return }
+    }
+
+    // On a case-sensitive volume `Cache` and `cache` are two folders: trashing one says nothing about the other.
+    // Env-gated: attaches a small disk image inside the test's own folder.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["MACONTROL_DISK_IMAGE_TESTS"] == "1"))
+    func onACaseSensitiveVolumeATwinFolderIsNotReportedAsTrashed() async throws {
+        let fixture = try TrashFixture()
+        let volume = try fixture.attachDiskImage("Case-sensitive APFS", at: "volume")
+        let upper = volume.appendingPathComponent("Cache")
+        let other = volume.appendingPathComponent("cache/b.bin")
+        try FileManager.default.createDirectory(at: upper, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: other.deletingLastPathComponent(), withIntermediateDirectories: false)
+        try Data(count: 10).write(to: other)
+
+        let report = await fixture.service().moveToTrash([
+            TrashItem(url: upper, expectedIdentity: nil), TrashItem(url: other, expectedIdentity: nil),
+        ])
+
+        let expected = [fixture.trash.path + "/Cache", fixture.trash.path + "/b.bin"]
+        #expect(report.outcomes.map { $0.trashedTo?.path } == expected, "\(report.outcomes)")
+        #expect(!FileManager.default.fileExists(atPath: other.path))
+    }
+
     @Test func aDuplicateSelectionIsReportedAsTrashed() async throws {
         let fixture = try TrashFixture()
         let file = try fixture.tmp.file("home/Library/Caches/dup.bin", size: 10)
@@ -198,6 +253,68 @@ import TestSupport
         #expect(info.st_mode & 0o777 == 0o600)
         #expect(stat(fixture.journal.deletingLastPathComponent().path, &info) == 0)
         #expect(info.st_mode & 0o777 == 0o700)
+    }
+
+    // Trashing the journal, or a folder holding it, would take Undo away from every earlier batch.
+    @Test func theJournalAndTheFoldersHoldingItAreRefused() async throws {
+        let fixture = try TrashFixture()
+        let file = try fixture.tmp.file("home/Library/Caches/a.tmp", size: 10)
+        let service = fixture.service()
+        let first = await service.moveToTrash([TrashItem(url: file, expectedIdentity: nil)])
+        let folder = fixture.journal.deletingLastPathComponent()
+
+        let second = await service.moveToTrash(
+            [fixture.journal, folder, folder.deletingLastPathComponent()].map { TrashItem(url: $0, expectedIdentity: nil) }
+        )
+
+        #expect(second.outcomes.count == 3)
+        #expect(second.outcomes.allSatisfy { $0.refusal?.isProtectedLocation == true }, "\(second.outcomes)")
+        #expect(await service.undo(batch: first.batch) == [.restored(file)])
+        // The pre-check the UI runs agrees for the real journal.
+        let realFolder = TrashService.defaultJournalURL.deletingLastPathComponent()
+        #expect(ProtectedPaths.refusal(for: realFolder)?.isProtectedLocation == true)
+    }
+
+    @Test func undoPutsTheItemBackUnderItsOnDiskName() async throws {
+        let fixture = try TrashFixture()
+        let file = try fixture.tmp.file("home/Downloads/report.pdf", size: 10)
+        let shouted = fixture.home.appendingPathComponent("Downloads/REPORT.PDF")
+        let service = fixture.service()
+
+        let report = await service.moveToTrash([TrashItem(url: shouted, expectedIdentity: nil)])
+        #expect(await service.history().map(\.originalPath) == [file.path])
+        #expect(await service.undo(batch: report.batch) == [.restored(file)])
+
+        #expect(try FileManager.default.contentsOfDirectory(atPath: file.deletingLastPathComponent().path) == ["report.pdf"])
+    }
+
+    // A link swapped in for a folder on the way back cannot send the item somewhere else.
+    @Test func undoDoesNotFollowALinkThatReplacedAFolder() async throws {
+        let fixture = try TrashFixture()
+        let file = try fixture.tmp.file("home/Projects/app/notes.txt", size: 10)
+        let elsewhere = try fixture.tmp.directory("elsewhere")
+        let service = fixture.service()
+        let report = await service.moveToTrash([TrashItem(url: file, expectedIdentity: nil)])
+        try FileManager.default.removeItem(at: file.deletingLastPathComponent())
+        try fixture.tmp.symlink("home/Projects/app", to: elsewhere.path)
+
+        let outcomes = await service.undo(batch: report.batch)
+
+        guard case .failed(file, _) = outcomes.first else { Issue.record("\(outcomes)"); return }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: elsewhere.path).isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fixture.trash.appendingPathComponent("notes.txt").path))
+    }
+
+    // The trashed item may itself be a link: only links on the way back are refused.
+    @Test func undoPutsBackATrashedLink() async throws {
+        let fixture = try TrashFixture()
+        let link = try fixture.tmp.symlink("home/Downloads/latest", to: "nowhere")
+        let service = fixture.service()
+
+        let report = await service.moveToTrash([TrashItem(url: link, expectedIdentity: nil)])
+
+        #expect(await service.undo(batch: report.batch) == [.restored(link)])
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == "nowhere")
     }
 
     @Test func undoRestoresTheSameBytesAndIdentity() async throws {

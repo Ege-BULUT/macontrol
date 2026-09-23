@@ -31,8 +31,8 @@ public enum ProtectedPaths {
     }
 
     /// The kernel's path for `url`: the parent folder resolved with `F_GETPATH` (`realpath` keeps
-    /// the Data-volume spelling), plus the last component as written. A symlink at the leaf stays
-    /// the leaf, because moving it to the Trash moves the link, not what it points to.
+    /// the Data-volume spelling), plus the last component under its on-disk name. A symlink at the
+    /// leaf stays the leaf, because moving it to the Trash moves the link, not what it points to.
     static func canonicalPath(of url: URL) throws(RefusalReason) -> String {
         let path = url.path
         guard path.hasPrefix("/"), !path.contains("\0") else { throw .missing }
@@ -49,24 +49,44 @@ public enum ProtectedPaths {
         guard fcntl(fd, F_GETPATH, &buffer) != -1 else { throw .missing }
         let resolved = String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
         if resolvesItself { return resolved }
-        return resolved == "/" ? "/" + leaf : resolved + "/" + leaf
+        let name = storedName(of: leaf, in: fd) ?? leaf
+        return resolved == "/" ? "/" + name : resolved + "/" + name
+    }
+
+    /// The name on disk: APFS finds `report.pdf` as `REPORT.PDF`, and Undo must put back `report.pdf`.
+    /// Nil when the item does not exist.
+    private static func storedName(of leaf: String, in folder: Int32) -> String? {
+        var request = attrlist()
+        request.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
+        request.commonattr = attrgroup_t(ATTR_CMN_NAME)
+        // A length word, then an attrreference_t whose offset counts from itself, then the name.
+        var buffer = [UInt8](repeating: 0, count: 4 + MemoryLayout<attrreference_t>.size + 1024)
+        guard getattrlistat(folder, leaf, &request, &buffer, buffer.count, UInt(FSOPT_NOFOLLOW)) == 0 else { return nil }
+        return buffer.withUnsafeBytes { raw in
+            let reference = raw.loadUnaligned(fromByteOffset: 4, as: attrreference_t.self)
+            let bytes = raw.dropFirst(4 + Int(reference.attr_dataoffset)).prefix(Int(reference.attr_length))
+            return String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
     }
 }
 
-/// The protected-path rules for one home folder, built once per batch.
+/// The protected-path rules for one home folder, built once per batch. The undo journal's folder is
+/// protected too: trashing it would take Undo away from every earlier batch.
 struct ProtectionPolicy: Sendable {
     /// Lowercased: APFS is case-insensitive by default, and a false refusal is the safe mistake.
     private let rootsAndTheirAncestors: Set<String>
     private let neverTouch: Set<String>
     private let cloud: [String]
 
-    init(home: URL) {
+    init(home: URL, journal: URL = TrashService.defaultJournalURL) {
         let home = (try? ProtectedPaths.canonicalPath(of: home)) ?? home.path
+        let journalFolder = journal.deletingLastPathComponent()
+        let ownState = (try? ProtectedPaths.canonicalPath(of: journalFolder)) ?? journalFolder.path
         let inHome = { (relative: String) in home + "/" + relative }
         let firmlinks = (try? String(contentsOfFile: "/usr/share/firmlinks", encoding: .utf8))?
             .split(separator: "\n").compactMap { $0.split(separator: "\t").first.map(String.init) } ?? []
 
-        let roots = ProtectedLocations.systemRoots + firmlinks + [home] + ProtectedLocations.homeRoots.map(inHome)
+        let roots = ProtectedLocations.systemRoots + firmlinks + [home, ownState] + ProtectedLocations.homeRoots.map(inHome)
         var closure = Set<String>()
         for root in roots {
             var path = root.lowercased()
@@ -75,7 +95,8 @@ struct ProtectionPolicy: Sendable {
             }
         }
         rootsAndTheirAncestors = closure
-        neverTouch = Set((ProtectedLocations.systemNeverTouch + ProtectedLocations.homeNeverTouch.map(inHome)).map { $0.lowercased() })
+        let neverTouchPaths = ProtectedLocations.systemNeverTouch + ProtectedLocations.homeNeverTouch.map(inHome) + [ownState]
+        neverTouch = Set(neverTouchPaths.map { $0.lowercased() })
         cloud = ProtectedLocations.homeCloud.map { inHome($0).lowercased() }
     }
 
@@ -102,6 +123,8 @@ struct ProtectionPolicy: Sendable {
     private func protectedLocation(_ path: String) -> String? {
         let lowered = path.lowercased()
         if rootsAndTheirAncestors.contains(lowered) { return path }
+        // Each provider's own folder is a root too: all of iCloud Drive, an app's container, a CloudStorage domain.
+        if cloud.contains((lowered as NSString).deletingLastPathComponent) { return path }
 
         let components = path.split(separator: "/")
         // Every other user's home, and /Users/Shared itself.
