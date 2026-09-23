@@ -45,9 +45,16 @@ struct LeftoverFinder {
         "com.apple.logic10": ["Application Support/Logic", "Audio/Apple Loops"],
     ]
 
+    static let containerMetadata = ".com.apple.containermanagerd.metadata.plist"
+
     private var homeLibrary: URL { home.appendingPathComponent("Library") }
     private var systemLibrary: URL { systemRoot.appendingPathComponent("Library") }
-    private var mainIdentifier: String? { app.bundleIdentifier?.lowercased() }
+    /// Reverse-DNS identifiers only. A one-word "identifier" is a name (PyInstaller's default is the app's name),
+    /// and names are never evidence (F-0011, F-0022).
+    private var mainIdentifier: String? {
+        guard let id = app.bundleIdentifier?.lowercased(), id.split(separator: ".").count >= 2 else { return nil }
+        return id
+    }
 
     func run() -> Result {
         var found: [LeftoverCandidate] = []
@@ -122,8 +129,7 @@ struct LeftoverFinder {
             // Metadata is read only where it can change the answer, not for every app's container.
             guard nameClaim != nil || UUID(uuidString: name) != nil else { return nil }
             let url = folder.appendingPathComponent(name)
-            let metadata = FileSystem.propertyList(at: url.appendingPathComponent(".com.apple.containermanagerd.metadata.plist"))
-            if let owner = metadata?["MCMMetadataIdentifier"] as? String {
+            if let owner = Self.containerOwner(url) {
                 return claim(owner).map { candidate(url, .containerMetadata, note: $0.note) }
             }
             return nameClaim.map { candidate(url, .bundleIdentifier, note: $0.note) }
@@ -131,21 +137,34 @@ struct LeftoverFinder {
     }
 
     /// Group containers (and their Application Scripts) named in the app's `application-groups` entitlement.
+    /// The names are text from the bundle: an empty entry (an undefined `$(APP_GROUP)`) or `../../Documents` must
+    /// not name a folder, so only plain names count, and a group container only when containermanagerd records it
+    /// as that group's. Built-in apps count as other users, so listing `group.com.apple.notes` never takes Notes' store.
     private func groupContainers() -> [LeftoverCandidate] {
-        let groups = AppBundle(url: app.url).appGroups
+        let groups = AppBundle(url: app.url).appGroups.filter(Self.isPlainName)
         guard !groups.isEmpty else { return [] }
         var users: [String: String] = [:]
-        for other in others where other.kind != .builtIn {
+        // ponytail: one signature read per installed app, ~0.3 s for 94 apps here; read them concurrently if plans feel slow.
+        for other in others {
             for group in AppBundle(url: other.url).appGroups where users[group] == nil {
                 users[group] = other.name
             }
         }
-        return ["Group Containers", "Application Scripts"].flatMap { folderName in
-            let folder = homeLibrary.appendingPathComponent(folderName)
-            return groups.map { folder.appendingPathComponent($0) }.filter(FileSystem.exists).map { url in
-                candidate(url, .appGroup, note: users[url.lastPathComponent].map { "Also used by \($0)" })
-            }
+        return groups.flatMap { group -> [LeftoverCandidate] in
+            let container = homeLibrary.appendingPathComponent("Group Containers").appendingPathComponent(group)
+            let scripts = homeLibrary.appendingPathComponent("Application Scripts").appendingPathComponent(group)
+            let found = (Self.containerOwner(container) == group ? [container] : []) + (FileSystem.exists(scripts) ? [scripts] : [])
+            return found.map { candidate($0, .appGroup, note: users[group].map { "Also used by \($0)" }) }
         }
+    }
+
+    private static func isPlainName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+    }
+
+    /// containermanagerd's record of whose container this is.
+    private static func containerOwner(_ container: URL) -> String? {
+        FileSystem.propertyList(at: container.appendingPathComponent(containerMetadata))?["MCMMetadataIdentifier"] as? String
     }
 
     /// launchd plists whose program lies in the bundle, that name the app in `AssociatedBundleIdentifiers`, or whose
@@ -165,14 +184,23 @@ struct LeftoverFinder {
                     return claim(fileKey).map { candidate(url, .bundleIdentifier, note: $0.note) }
                 }
                 let associated = job.associatedBundleIdentifiers.contains { $0.lowercased() == mainIdentifier }
-                if job.runs(inside: app.url) || associated {
-                    return candidate(url, .launchdJob, note: nil, label: job.label)
+                var note: String?
+                if !job.runs(inside: app.url) && !associated {
+                    guard let claim = claim(job.label) ?? claim(fileKey) else { return nil }
+                    note = claim.note
                 }
-                guard let claim = claim(job.label) ?? claim(fileKey) else { return nil }
-                let starter = others.first { job.runs(inside: $0.url) }.map { "Starts \($0.name)" }
-                return candidate(url, .launchdJob, note: claim.note ?? starter, label: job.label)
+                return candidate(url, .launchdJob, note: note ?? otherUser(of: job), label: job.label)
             }
         }
+    }
+
+    /// Another installed app the job also serves (a shared updater lists several apps), or whose program it runs.
+    private func otherUser(of job: LaunchdJob) -> String? {
+        let associated = Set(job.associatedBundleIdentifiers.map { $0.lowercased() })
+        if let user = others.first(where: { $0.bundleIdentifier.map { associated.contains($0.lowercased()) } ?? false }) {
+            return "Also used by \(user.name)"
+        }
+        return others.first { job.runs(inside: $0.url) }.map { "Starts \($0.name)" }
     }
 
     private func contentLibraries() -> [LeftoverCandidate] {

@@ -72,6 +72,9 @@ public final class Uninstaller: Sendable {
     public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>) async throws -> TrashReport {
         if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
         let chosen = plan.leftovers.filter { selected.contains($0.url) }
+        if let stray = chosen.first(where: { !isInsideLibraryFolder($0.url) }) {
+            throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
+        }
         if let administrative = chosen.first(where: \.needsAdministrator) {
             throw UninstallError.needsAdministrator(administrative.url)
         }
@@ -83,6 +86,11 @@ public final class Uninstaller: Sendable {
         var stopped = Set<String>()
         for label in plan.bundleLaunchdLabels + chosen.compactMap(\.launchdLabel) where stopped.insert(label).inserted {
             try await actions.bootout(label)
+        }
+        // Quitting first is politer than launchd's SIGTERM, but a KeepAlive job or login item can relaunch the app
+        // before its bootout (why Homebrew runs launchctl before quit), so look again once nothing can restart it.
+        if !stopped.isEmpty {
+            guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         }
         return await actions.moveToTrash(items)
     }
@@ -125,10 +133,21 @@ public final class Uninstaller: Sendable {
         return nil
     }
 
+    /// Every leftover the finder can produce lies in a folder of a Library (`Library/Caches/<item>`). Checked on the
+    /// standardized path, so a name carrying `..` cannot reach past it.
+    private func isInsideLibraryFolder(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return !path.contains("\0") && [home, systemRoot].contains { base in
+            let library = base.appendingPathComponent("Library").standardizedFileURL.path + "/"
+            return path.hasPrefix(library) && path.dropFirst(library.count).split(separator: "/").count >= 2
+        }
+    }
+
     /// The last look before anything happens: each path still names what the plan saw, and Safety accepts it.
+    /// An item with no recorded identity has nothing to compare, so it counts as changed.
     private func checkUnchanged(_ items: [TrashItem]) throws {
         for item in items {
-            guard let now = FileIdentity(url: item.url), item.expectedIdentity == nil || item.expectedIdentity == now else {
+            guard let expected = item.expectedIdentity, FileIdentity(url: item.url) == expected else {
                 throw UninstallError.changedSincePlan(item.url)
             }
             if let reason = ProtectedPaths.refusal(for: item.url, home: home) {

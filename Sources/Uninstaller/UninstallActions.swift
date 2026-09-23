@@ -34,11 +34,8 @@ public struct UninstallActions: Sendable {
 enum RunningApps {
     /// Polite quit only: `terminate()` lets the app save and ask the user. No force quit, no pattern kill.
     static func quit(_ app: InstalledApp, timeout: Duration = .seconds(10)) async -> Bool {
-        let bundlePath = app.url.standardizedFileURL.path
-        let running = NSWorkspace.shared.runningApplications.filter { process in
-            let path = process.bundleURL?.standardizedFileURL.path ?? ""
-            return path == bundlePath || path.hasPrefix(bundlePath + "/")
-                || (app.bundleIdentifier != nil && process.bundleIdentifier == app.bundleIdentifier)
+        let running = NSWorkspace.shared.runningApplications.filter {
+            isInstance(of: app, bundleURL: $0.bundleURL, bundleIdentifier: $0.bundleIdentifier)
         }
         running.forEach { $0.terminate() }
         let deadline = ContinuousClock.now + timeout
@@ -48,5 +45,14 @@ enum RunningApps {
             try? await Task.sleep(for: .milliseconds(200))
         }
         return true
+    }
+
+    /// This bundle or a helper inside it. Another copy with the same identifier keeps running, except a translocated
+    /// one: Gatekeeper runs a quarantined app from a random read-only path, so that process may be this copy.
+    nonisolated static func isInstance(of app: InstalledApp, bundleURL: URL?, bundleIdentifier: String?) -> Bool {
+        let bundlePath = app.url.standardizedFileURL.path
+        let path = bundleURL?.standardizedFileURL.path ?? ""
+        return path == bundlePath || path.hasPrefix(bundlePath + "/")
+            || (path.contains("/AppTranslocation/") && app.bundleIdentifier != nil && bundleIdentifier == app.bundleIdentifier)
     }
 }

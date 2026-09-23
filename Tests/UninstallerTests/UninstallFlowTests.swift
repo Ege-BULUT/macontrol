@@ -20,6 +20,8 @@ import Testing
         return fx
     }
 
+    /// F-0023: jobs are stopped by exact label before anything is trashed, and the app is checked again after the
+    /// last bootout, because a KeepAlive job can relaunch it between the first quit and its own bootout.
     @Test func stopsJobsByExactLabelAfterQuittingAndBeforeTrashing() async throws {
         let fx = try demo()
         let plan = try await fx.plan("Demo")
@@ -30,7 +32,20 @@ import Testing
         let trashed = [TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]
             + chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
         #expect(fx.recorder.events == [
-            .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .trash(trashed),
+            .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"), .trash(trashed),
+        ])
+    }
+
+    @Test func appRelaunchedBeforeItsJobsStoppedStopsBeforeTrashing() async throws {
+        let fx = try demo()
+        fx.recorder.quitResults = [true, false]
+        let plan = try await fx.plan("Demo")
+
+        await #expect(throws: UninstallError.stillRunning("Demo")) {
+            try await fx.uninstaller().uninstall(plan, leftovers: Set(plan.leftovers.filter(\.isPreselected).map(\.url)))
+        }
+        #expect(fx.recorder.events == [
+            .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"),
         ])
     }
 
@@ -52,7 +67,7 @@ import Testing
     /// F-0030: a failed step ends the uninstall; nothing after it runs.
     @Test func appThatDoesNotQuitStopsEverything() async throws {
         let fx = try demo()
-        fx.recorder.quitSucceeds = false
+        fx.recorder.quitResults = [false]
         let plan = try await fx.plan("Demo")
 
         await #expect(throws: UninstallError.stillRunning("Demo")) {
@@ -108,6 +123,50 @@ import Testing
             try await fx.uninstaller().uninstall(plan, leftovers: [cache.url])
         }
         #expect(fx.recorder.events.isEmpty)
+    }
+
+    /// A last line behind the finder: a leftover must lie inside a folder of a Library, whatever its path spells.
+    @Test func leftoverOutsideALibraryFolderIsRefusedBeforeAnyStep() async throws {
+        let fx = try demo()
+        var plan = try await fx.plan("Demo")
+        try fx.file("home/Documents/thesis.docx")
+        let library = fx.home.appendingPathComponent("Library")
+        for stray in [library.appendingPathComponent("Group Containers/../../Documents"), library.appendingPathComponent("Group Containers"), library] {
+            plan.leftovers = [Leftover(url: stray, identity: FileIdentity(url: stray), evidence: .appGroup,
+                                       measurement: plan.appMeasurement, needsAdministrator: false, note: nil)]
+            await #expect(throws: UninstallError.refused(stray, .protectedLocation("Outside the Library folders"))) {
+                try await fx.uninstaller().uninstall(plan, leftovers: [stray])
+            }
+        }
+        #expect(fx.recorder.events.isEmpty)
+    }
+
+    /// Without a recorded identity there is nothing to prove the path still names what the plan showed.
+    @Test func itemWithoutARecordedIdentityCountsAsChanged() async throws {
+        let fx = try demo()
+        var plan = try await fx.plan("Demo")
+        let index = try #require(plan.leftovers.firstIndex { $0.isPreselected })
+        plan.leftovers[index].identity = nil
+        let url = plan.leftovers[index].url
+
+        await #expect(throws: UninstallError.changedSincePlan(url)) {
+            try await fx.uninstaller().uninstall(plan, leftovers: [url])
+        }
+        #expect(fx.recorder.events.isEmpty)
+    }
+
+    /// Removing an old copy must not quit the copy the user works in. A translocated process (Gatekeeper runs a
+    /// quarantined app from a random path) may be this copy, so it is matched by identifier.
+    @Test func onlyThisBundleAndItsHelpersCountAsRunning() {
+        let app = InstalledApp(url: URL(fileURLWithPath: "/Users/me/Applications/Demo.app"), name: "Demo",
+                               bundleIdentifier: "com.example.Demo", version: nil, kind: .thirdParty, identity: nil)
+        let translocated = URL(fileURLWithPath: "/private/var/folders/xy/T/AppTranslocation/0B1C2D3E/d/Demo.app")
+        #expect(RunningApps.isInstance(of: app, bundleURL: app.url, bundleIdentifier: "com.example.Demo"))
+        #expect(RunningApps.isInstance(of: app, bundleURL: app.url.appendingPathComponent("Contents/Library/LoginItems/Helper.app"),
+                                       bundleIdentifier: "com.example.Demo.Helper"))
+        #expect(!RunningApps.isInstance(of: app, bundleURL: URL(fileURLWithPath: "/Applications/Demo.app"), bundleIdentifier: "com.example.Demo"))
+        #expect(RunningApps.isInstance(of: app, bundleURL: translocated, bundleIdentifier: "com.example.Demo"))
+        #expect(!RunningApps.isInstance(of: app, bundleURL: translocated, bundleIdentifier: "com.example.Other"))
     }
 
     @Test func bootoutPassesTheExactLabelAsOneArgument() async throws {

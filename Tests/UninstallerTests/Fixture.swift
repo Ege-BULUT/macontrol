@@ -94,7 +94,8 @@ final class Recorder: @unchecked Sendable {
     // Written only from the actions below, which the uninstaller calls one at a time.
     private let lock = NSLock()
     private var recorded: [Event] = []
-    var quitSucceeds = true
+    /// Answers to the quit calls, in order; every call after these succeeds.
+    var quitResults: [Bool] = []
     var failingLabel: String?
 
     var events: [Event] { lock.withLock { recorded } }
@@ -107,7 +108,7 @@ final class Recorder: @unchecked Sendable {
         UninstallActions(
             quit: { app in
                 self.record(.quit(app.name))
-                return self.lock.withLock { self.quitSucceeds }
+                return self.lock.withLock { self.quitResults.isEmpty ? true : self.quitResults.removeFirst() }
             },
             bootout: { label in
                 self.record(.bootout(label))

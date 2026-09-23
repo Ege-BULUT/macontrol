@@ -178,6 +178,47 @@ import Uninstaller
         #expect(plan.leftovers.filter(\.isPreselected).count == 3)
     }
 
+    /// A shared updater (Microsoft AutoUpdate, Keystone) serves every app it lists. Removing Word must not boot out
+    /// and trash the agent Excel still uses.
+    @Test func agentAssociatedWithAnotherInstalledAppIsNotedAndUnselected() async throws {
+        let fx = try Fixture()
+        let word = try fx.app("Word", id: "com.microsoft.Word")
+        try fx.app("Excel", id: "com.microsoft.Excel")
+        let agents = "home/Library/LaunchAgents"
+        try fx.write([
+            "Label": "com.microsoft.update.agent",
+            "Program": "/Library/Application Support/Microsoft/MAU2.0/Microsoft AutoUpdate.app/Contents/MacOS/agent",
+            "AssociatedBundleIdentifiers": ["com.microsoft.Word", "com.microsoft.Excel"],
+        ], to: "\(agents)/com.microsoft.update.agent.plist")
+        try fx.write([
+            "Label": "com.microsoft.Word.helper", "Program": word.appendingPathComponent("Contents/MacOS/helper").path,
+            "AssociatedBundleIdentifiers": ["com.microsoft.Excel"],
+        ], to: "\(agents)/com.microsoft.Word.helper.plist")
+
+        let plan = try await fx.plan("Word")
+
+        let folder = fx.home.appendingPathComponent("Library/LaunchAgents")
+        #expect(plan.paths(relativeTo: folder) == ["com.microsoft.Word.helper.plist", "com.microsoft.update.agent.plist"])
+        #expect(plan.leftovers.allSatisfy { $0.note == "Also used by Excel" && !$0.isPreselected })
+    }
+
+    /// PyInstaller's default CFBundleIdentifier is the app's name. A one-word identifier is a name, so what it
+    /// matches is shown unselected, like any exact name (F-0011, F-0022).
+    @Test func singleWordIdentifierIsNotEvidence() async throws {
+        let fx = try Fixture()
+        try fx.app("Notes", id: "Notes")
+        try fx.file("home/Library/Application Support/Notes/notes.sqlite")
+        try fx.file("home/Library/Caches/notes/cache.db")
+        try fx.file("home/Library/Preferences/Notes.plist")
+        try fx.write(["MCMMetadataIdentifier": "Notes"], to: "home/Library/Containers/Notes/.com.apple.containermanagerd.metadata.plist")
+
+        let plan = try await fx.plan("Notes")
+
+        let library = fx.home.appendingPathComponent("Library")
+        #expect(plan.paths(relativeTo: library) == ["Application Support/Notes", "Caches/notes"])
+        #expect(plan.leftovers.allSatisfy { $0.evidence == .exactName && !$0.isPreselected })
+    }
+
     @Test func bundleAgentsDaemonsAndReceiptsAreReported() async throws {
         let fx = try Fixture()
         try fx.app("Demo", id: "com.example.Demo")

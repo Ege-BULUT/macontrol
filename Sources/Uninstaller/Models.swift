@@ -110,7 +110,7 @@ public enum UninstallError: Error, Hashable {
     case refused(URL, RefusalReason)
     /// The path names another object (or nothing) since the plan was made.
     case changedSincePlan(URL)
-    /// The app did not quit within the timeout. Nothing was stopped or trashed.
+    /// The app did not quit within the timeout, before or after its jobs were booted out. Nothing was trashed.
     case stillRunning(String)
     /// `launchctl bootout` failed; the job may still be running, so nothing was trashed.
     case bootoutFailed(label: String, status: Int32)
