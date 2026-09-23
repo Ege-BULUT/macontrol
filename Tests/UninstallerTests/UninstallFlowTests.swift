@@ -75,10 +75,12 @@ import Testing
     @Test func builtInAppIsBlockedAndNeverTouched() async throws {
         let fx = try Fixture()
         try fx.app("Chess", id: "com.apple.Chess", in: "root/System/Applications")
+        try fx.file("home/Library/Containers/com.apple.Chess/Data/Library/Preferences/com.apple.Chess.plist")
         let plan = try await fx.plan("Chess")
 
         #expect(plan.app.kind == .builtIn)
         #expect(plan.blocker?.contains("Part of macOS") == true)
+        #expect(plan.leftovers.isEmpty)
         await #expect(throws: UninstallError.self) { try await fx.uninstaller().uninstall(plan, leftovers: []) }
         #expect(fx.recorder.events.isEmpty)
     }

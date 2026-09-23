@@ -43,7 +43,11 @@ public final class Uninstaller: Sendable {
     public func plan(for app: InstalledApp) async throws -> UninstallPlan {
         let others = try await installedApps().filter { $0.url.path != app.url.path }
         let finder = LeftoverFinder(app: app, others: others, home: home, systemRoot: systemRoot)
-        let found = await offCooperativePool { finder.run() }
+        // A built-in app never goes, so its data is not a leftover: Safari's history is not junk, and the groups
+        // it shares with other Apple apps would otherwise look like its own.
+        let found = app.kind == .builtIn
+            ? LeftoverFinder.Result(candidates: [], bundleLaunchdLabels: [], notes: [])
+            : await offCooperativePool { finder.run() }
         var leftovers: [Leftover] = []
         for candidate in found.candidates {
             leftovers.append(Leftover(
