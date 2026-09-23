@@ -13,10 +13,13 @@ struct Selection {
     private(set) var filesByParent: [FileIdentity: (path: String, names: Set<String>)] = [:]
 
     init(_ urls: [URL]) {
+        // Ancestors are followed with stat, as the kernel follows every component but the last:
+        // `link/f.bin` lies inside the folder `link` points to.
         var identities: [String: FileIdentity?] = [:]
         func identity(_ path: String) -> FileIdentity? {
             if let known = identities[path] { return known }
-            let found = FileIdentity(url: URL(fileURLWithPath: path))
+            var info = stat()
+            let found = stat(path, &info) == 0 ? FileIdentity(device: info.st_dev, inode: info.st_ino) : nil
             identities[path] = found
             return found
         }
@@ -44,7 +47,7 @@ struct Selection {
 
     /// Lists each parent folder once and hands the selected files' entries to `sink`.
     func readFiles(into sink: ReclaimSink) {
-        let reader = BulkReader(extended: true)
+        let reader = BulkReader(ReclaimSink.extras)
         var listing = Listing()
         var nodes: [Int32] = []
         for (path, names) in filesByParent.values {

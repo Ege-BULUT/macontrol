@@ -9,6 +9,8 @@ protocol WalkSink: AnyObject, SendableMetatype {
     func add(_ listing: Listing, to folder: Int32, walkableNodes: inout [Int32])
     /// The folder could not be listed completely.
     func flag(_ folder: Int32, _ flags: NodeFlags)
+    /// Attributes the sink reads beyond the disk map's.
+    static var extras: BulkReader.Extras { get }
 }
 
 /// Never download evicted iCloud files or folders while reading metadata, on every engine thread that
@@ -37,7 +39,6 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
     // @unchecked: every mutable property is read and written only while `lock` is held.
     private let lock = NSCondition()
     private let sink: Sink
-    private let extended: Bool
     private let workerCount: Int
     private let budget: Int
 
@@ -58,9 +59,8 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
     /// Seconds a folder keeps retrying `openat` while the process is out of descriptors.
     private let descriptorWait: TimeInterval = 5
 
-    init(roots: [WalkRoot], sink: Sink, extended: Bool, workers: Int, descriptorBudget: Int) {
+    init(roots: [WalkRoot], sink: Sink, workers: Int, descriptorBudget: Int) {
         self.sink = sink
-        self.extended = extended
         budget = max(4, descriptorBudget)
         // Each worker holds at most one pinned parent and three reserved slots, so a budget of four per
         // worker guarantees that a waiting worker always finds an idle descriptor to close.
@@ -107,7 +107,7 @@ final class FolderWalk<Sink: WalkSink>: @unchecked Sendable {
 
     private func work() {
         stopDatalessMaterialization()
-        let reader = BulkReader(extended: extended)
+        let reader = BulkReader(Sink.extras)
         var listing = Listing()
         var walkable: [Int32] = []
         lock.lock()

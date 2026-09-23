@@ -13,6 +13,8 @@ import MacontrolCore
 ///   member is selected.
 /// - The rest of the selection's allocated bytes stay on disk: `sharedElsewhere`.
 final class ReclaimSink: WalkSink {
+    static let extras: BulkReader.Extras = .reclaim
+
     private struct Group {
         var seen: UInt32 = 0
         var members: UInt32

@@ -65,6 +65,17 @@ import TestSupport
         #expect(estimate == ReclaimEstimate(freesNow: UInt64(mebibyte), sharedElsewhere: 0))
     }
 
+    /// `link/f.bin` with `link` pointing at the selected `dir` is a file inside `dir`, not a second item.
+    @Test func fileReachedThroughASymlinkedSelectedFolderIsCountedOnce() async throws {
+        let tmp = try TemporaryDirectory()
+        try tmp.file("dir/f.bin", size: mebibyte)
+        try tmp.symlink("link", to: "dir")
+
+        let estimate = try await ScanEngine().reclaimable([tmp.url.appendingPathComponent("dir"), tmp.url.appendingPathComponent("link/f.bin")])
+
+        #expect(estimate == ReclaimEstimate(freesNow: UInt64(mebibyte), sharedElsewhere: 0))
+    }
+
     /// A decmpfs-compressed copy of a highly compressible text file, made by `ditto --hfsCompression`.
     private func compressedFile(in tmp: TemporaryDirectory, named name: String) throws -> URL {
         let plain = tmp.url.appendingPathComponent("plain-\(name)")

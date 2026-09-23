@@ -9,13 +9,16 @@ struct BulkEntry {
     var device: Int32 = 0
     var type: UInt32 = 0
     var modified: Int = 0
+    /// Only with `.changeTime`. The kernel sets it on every write, rename or delete, and no tool can
+    /// backdate it the way curl --remote-time, tar and unzip backdate `modified`.
+    var changed: Int = 0
     var fileFlags: UInt32 = 0
     var inode: UInt64 = 0
     var mountStatus: UInt32 = 0
     var linkCount: UInt32 = 1
     var logical: UInt64 = 0
     var allocated: UInt64 = 0
-    /// Only with `BulkReader(extended: true)`; nil when the volume does not report it.
+    /// Only with `.reclaim`; nil when the volume does not report it.
     var privateSize: UInt64?
     var cloneID: UInt64 = 0
     var cloneRefCount: UInt32 = 0
@@ -62,20 +65,29 @@ final class BulkReader {
     private let buffer = UnsafeMutableRawPointer.allocate(byteCount: BulkReader.bufferSize, alignment: 8)
     private var request = attrlist()
     private let options: UInt64
-    private let extended: Bool
+    private let extras: Extras
 
-    /// `extended` adds PRIVATESIZE, CLONEID, EXT_FLAGS and CLONE_REFCNT, which cost ~65% more kernel CPU
-    /// (bench-scan-engines "Baseline"), so only `reclaimable` asks for them.
-    init(extended: Bool) {
-        self.extended = extended
+    /// Attributes beyond the ones the disk map needs, so the map scan does not pay for them.
+    struct Extras: OptionSet {
+        let rawValue: Int
+        /// ATTR_CMN_CHGTIME, for `measure`'s recency answer.
+        static let changeTime = Extras(rawValue: 1)
+        /// PRIVATESIZE, CLONEID, EXT_FLAGS and CLONE_REFCNT, which cost ~65% more kernel CPU
+        /// (bench-scan-engines "Baseline"), so only `reclaimable` asks for them.
+        static let reclaim = Extras(rawValue: 2)
+    }
+
+    init(_ extras: Extras) {
+        self.extras = extras
         request.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
         request.commonattr = attrgroup_t(ATTR_CMN_RETURNED_ATTRS) | attrgroup_t(ATTR_CMN_ERROR)
             | attrgroup_t(ATTR_CMN_NAME) | attrgroup_t(ATTR_CMN_DEVID) | attrgroup_t(ATTR_CMN_OBJTYPE)
             | attrgroup_t(ATTR_CMN_MODTIME) | attrgroup_t(ATTR_CMN_FLAGS) | attrgroup_t(ATTR_CMN_FILEID)
+        if extras.contains(.changeTime) { request.commonattr |= attrgroup_t(ATTR_CMN_CHGTIME) }
         request.dirattr = attrgroup_t(ATTR_DIR_MOUNTSTATUS)
         request.fileattr = attrgroup_t(ATTR_FILE_LINKCOUNT) | attrgroup_t(ATTR_FILE_TOTALSIZE) | attrgroup_t(ATTR_FILE_ALLOCSIZE)
         var options = UInt64(FSOPT_NOFOLLOW) | UInt64(FSOPT_PACK_INVAL_ATTRS)
-        if extended {
+        if extras.contains(.reclaim) {
             request.forkattr = attrgroup_t(ATTR_CMNEXT_PRIVATESIZE) | attrgroup_t(ATTR_CMNEXT_CLONEID)
                 | attrgroup_t(ATTR_CMNEXT_EXT_FLAGS) | attrgroup_t(ATTR_CMNEXT_CLONE_REFCNT)
             options |= UInt64(FSOPT_ATTR_CMN_EXTENDED)
@@ -130,6 +142,10 @@ final class BulkReader {
         entry.type = cursor.take(UInt32.self)
         entry.modified = cursor.take(Int.self)
         cursor.offset += 8  // tv_nsec
+        if extras.contains(.changeTime) {
+            entry.changed = cursor.take(Int.self)
+            cursor.offset += 8
+        }
         entry.fileFlags = cursor.take(UInt32.self)
         entry.inode = cursor.take(UInt64.self)
         if entry.isDirectory {
@@ -139,7 +155,7 @@ final class BulkReader {
             entry.logical = cursor.take(UInt64.self)
             entry.allocated = cursor.take(UInt64.self)
         }
-        if extended {
+        if extras.contains(.reclaim) {
             let returnedExtended = record.loadUnaligned(fromByteOffset: 20, as: UInt32.self)
             let privateSize = cursor.take(UInt64.self)
             if returnedExtended & attrgroup_t(ATTR_CMNEXT_PRIVATESIZE) != 0 { entry.privateSize = privateSize }

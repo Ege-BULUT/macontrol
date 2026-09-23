@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 
 /// Builds the `ScanTree` for `ScanEngine.scan`.
 final class TreeSink: WalkSink {
+    static let extras: BulkReader.Extras = []
+
     var tree: ScanTree
     private(set) var filesVisited = 0
     private(set) var bytesVisited: UInt64 = 0

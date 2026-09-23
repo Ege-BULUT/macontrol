@@ -8,7 +8,9 @@ public struct ItemMeasurement: Hashable, Sendable {
     public var allocated: UInt64
     public var logical: UInt64
     public var fileCount: Int
-    /// Newest content modification inside the item. Cleanup uses it to skip caches still being written (F-0015).
+    /// Newest change to the item or anything inside it: the latest mtime or ctime of every entry, folders
+    /// included, so a backdated download or a delete inside still reads as recent. Cleanup uses it to skip
+    /// caches still being written (F-0015). The engine always sets it; nil means unknown.
     public var newestModification: Date?
     /// True when some folder inside could not be read, so the sizes are a lower bound (F-0057).
     public var isIncomplete: Bool

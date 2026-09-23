@@ -3,7 +3,7 @@ import Foundation
 import MacontrolCore
 
 public struct ScanOptions: Sendable {
-    /// Walker threads. `nil` lets the engine pick (active cores, fewer under Low Power Mode or thermal pressure).
+    /// Walker threads. `nil` lets the engine pick; see `resolvedWorkerCount`.
     public var workerCount: Int?
     /// Directory descriptors one walk may hold open. `nil` takes a quarter of the process's open-file limit,
     /// so the cleaner's parallel measures and a scan fit together. Any value gives the same result; a
@@ -109,12 +109,12 @@ public final class ScanEngine: Sendable {
                 let dataless = info.st_flags & UInt32(SF_DATALESS) != 0
                 return ItemMeasurement(
                     allocated: dataless ? 0 : UInt64(info.st_blocks) * 512, logical: UInt64(info.st_size), fileCount: 1,
-                    newestModification: Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec)), isIncomplete: false
+                    newestModification: Date(timeIntervalSince1970: TimeInterval(info.newestChange)), isIncomplete: false
                 )
             }
-            let sink = MeasureSink()
+            let sink = MeasureSink(root: info)
             let root = WalkRoot(path: url.path, identity: FileIdentity(device: info.st_dev, inode: info.st_ino), node: 0)
-            try Self.walk([root], sink: sink, extended: false, options: options, cancellation: cancellation)
+            try Self.walk([root], sink: sink, options: options, cancellation: cancellation)
             return sink.measurement
         }
     }
@@ -128,7 +128,7 @@ public final class ScanEngine: Sendable {
             let selection = Selection(urls)
             let sink = ReclaimSink()
             selection.readFiles(into: sink)
-            try Self.walk(selection.folders, sink: sink, extended: true, options: options, cancellation: cancellation)
+            try Self.walk(selection.folders, sink: sink, options: options, cancellation: cancellation)
             return sink.estimate
         }
     }
@@ -151,18 +151,18 @@ public final class ScanEngine: Sendable {
         let tree = layout.map { ScanTree(rootURL: URL(fileURLWithPath: "/"), rootIdentity: $0.rootIdentity) }
             ?? ScanTree(rootURL: root, rootIdentity: identity)
         let sink = TreeSink(tree: tree, dataVolume: layout)
-        try walk([walkRoot], sink: sink, extended: false, options: options, cancellation: cancellation) { progress($0.progress) }
+        try walk([walkRoot], sink: sink, options: options, cancellation: cancellation) { progress($0.progress) }
         sink.tree.finalizeTotals()
         return sink.tree
     }
 
     static func walk<Sink: WalkSink>(
-        _ roots: [WalkRoot], sink: Sink, extended: Bool, options: ScanOptions, cancellation: Cancellation,
+        _ roots: [WalkRoot], sink: Sink, options: ScanOptions, cancellation: Cancellation,
         progress: ((Sink) -> Void)? = nil
     ) throws {
         guard !roots.isEmpty else { return }
         let walk = FolderWalk(
-            roots: roots, sink: sink, extended: extended,
+            roots: roots, sink: sink,
             workers: options.resolvedWorkerCount, descriptorBudget: options.resolvedDescriptorBudget
         )
         cancellation.onCancel { walk.cancel() }

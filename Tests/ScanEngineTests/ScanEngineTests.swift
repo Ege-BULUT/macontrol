@@ -119,7 +119,7 @@ import TestSupport
 
         let root = try #require(FileIdentity(url: tmp.url))
         let sink = TreeSink(tree: ScanTree(rootURL: tmp.url, rootIdentity: root), dataVolume: nil)
-        let walk = FolderWalk(roots: [WalkRoot(path: tmp.url.path, identity: root, node: 0)], sink: sink, extended: false, workers: 4, descriptorBudget: 6)
+        let walk = FolderWalk(roots: [WalkRoot(path: tmp.url.path, identity: root, node: 0)], sink: sink, workers: 4, descriptorBudget: 6)
         walk.run()
         sink.tree.finalizeTotals()
 

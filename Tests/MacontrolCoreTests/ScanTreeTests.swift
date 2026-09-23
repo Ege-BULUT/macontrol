@@ -111,4 +111,13 @@ import Testing
         tree.removeSubtree(at: folder)
         #expect(tree.allocatedSize(of: ScanTree.root) == 4096, "a second removal changes nothing")
     }
+
+    @Test func removingANodeInsideARemovedFolderChangesNothing() {
+        var (tree, folder, shared) = sampleTree()
+        let big = tree.children(of: folder).first { $0 != shared }!
+        tree.removeSubtree(at: folder)
+        tree.removeSubtree(at: big)  // 40 KiB more than the root holds: would trap on underflow
+        #expect(tree.allocatedSize(of: ScanTree.root) == 4096)
+        #expect(tree.fileCount(of: ScanTree.root) == 1)
+    }
 }

@@ -130,12 +130,13 @@ public struct ScanTree: Sendable {
         nodeFlags[index].formUnion(flags)
     }
 
-    /// Splices a trashed node out and subtracts only the bytes it was charged (F-0063). A removed link
+    /// Splices a trashed node out and subtracts only the bytes it was charged (F-0063). A node inside a
+    /// folder that is already removed changes nothing: its bytes left with the folder. A removed link
     /// that carried a hard-linked file's bytes hands them to the surviving link with the smallest path,
     /// because the file is still on disk.
     public mutating func removeSubtree(at index: Int) {
         precondition(index != Self.root, "cannot remove the scan root")
-        guard !nodeFlags[index].contains(.removed), let parent = parent(of: index) else { return }
+        guard isInTree(index), let parent = parent(of: index) else { return }
         nodeFlags[index].insert(.removed)
         if firstChildren[parent] == Int32(index) {
             firstChildren[parent] = nextSiblings[index]
