@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct RootView: View {
@@ -13,9 +14,24 @@ public struct RootView: View {
                 Label(item.title, systemImage: item.systemImage).tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .safeAreaInset(edge: .bottom) {
+                if model.access.isLimited {
+                    SidebarAccessNote(access: model.access)
+                }
+            }
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar { ScanToolbar(model: model) }
+        }
+        .sheet(isPresented: Bindable(model.access).isOnboardingPresented) {
+            OnboardingSheet(access: model.access)
+        }
+        .fileImporter(isPresented: $model.isChoosingFolder, allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result { model.scan(.folder(url)) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.access.appDidBecomeActive()
         }
     }
 
@@ -28,5 +44,23 @@ public struct RootView: View {
         case .uninstall: UninstallScreen(model: model.uninstall)
         case .history: HistoryScreen(model: model.history)
         }
+    }
+}
+
+private struct SidebarAccessNote: View {
+    let access: AccessModel
+
+    var body: some View {
+        Button { access.showOnboarding() } label: {
+            Label("Full Disk Access is off", systemImage: "lock.trianglebadge.exclamationmark")
+                .font(.callout)
+                .foregroundStyle(Theme.caution)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .padding(8)
+        .accessibilityHint("Shows how to turn on Full Disk Access")
     }
 }

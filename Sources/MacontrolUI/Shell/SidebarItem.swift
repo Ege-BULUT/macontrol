@@ -1,3 +1,5 @@
+import SwiftUI
+
 public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     case overview
     case diskMap
@@ -25,5 +27,10 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         case .uninstall: "trash.square"
         case .history: "clock.arrow.circlepath"
         }
+    }
+
+    /// ⌘1-⌘5, in sidebar order.
+    var shortcut: KeyEquivalent {
+        KeyEquivalent(Character(String(Self.allCases.firstIndex(of: self)! + 1)))
     }
 }

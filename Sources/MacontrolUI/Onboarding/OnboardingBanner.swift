@@ -1,23 +1,26 @@
-import MacontrolCore
 import SwiftUI
 
-/// PLACEHOLDER (scaffold): M3 builds the full Full Disk Access flow (poll, drag the app icon, relaunch).
-struct OnboardingBanner: View {
-    @Environment(\.openURL) private var openURL
+/// Limited mode: names what the scans skip, so smaller totals are never a silent surprise.
+struct LimitedAccessBanner: View {
+    let access: AccessModel
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lock.shield").font(.title2)
+        HStack(spacing: 14) {
+            Image(systemName: "lock.trianglebadge.exclamationmark.fill")
+                .font(.title2)
+                .foregroundStyle(Theme.caution)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Full Disk Access is off").font(.headline)
-                Text("Mail, Safari, the Trash and other protected folders are not scanned until you turn it on.")
-                    .font(.callout)
+                Text("Limited mode: Full Disk Access is off").font(.headline)
+                Text("Not scanned: \(access.skippedFolders). Sizes there are missing, not zero.")
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Open Settings") { openURL(FullDiskAccess.settingsURL) }
+            Button("Turn On…") { access.showOnboarding() }
         }
         .padding(Theme.spacing)
-        .background(.yellow.opacity(0.12), in: .rect(cornerRadius: Theme.cornerRadius))
+        .background(Theme.caution.opacity(0.1), in: .rect(cornerRadius: Theme.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).strokeBorder(Theme.caution.opacity(0.3)))
+        .accessibilityElement(children: .combine)
     }
 }
