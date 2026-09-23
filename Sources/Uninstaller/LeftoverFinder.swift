@@ -29,7 +29,7 @@ struct LeftoverFinder {
 
     /// Library folders whose items are named after bundle identifiers, with the suffixes they add (longest first).
     private static let identifierFolders: [(path: String, suffixes: [String])] = [
-        ("Caches", [""]), ("Application Support", [""]), ("Preferences", [".plist"]),
+        ("Caches", [""]), ("Application Support", [""]), ("Preferences", [".plist", ""]),
         ("Saved Application State", [".savedState"]), ("HTTPStorages", [".binarycookies", ""]), ("WebKit", [""]),
         ("Logs", [""]), ("Application Scripts", [""]), ("Cookies", [".binarycookies"]),
     ]
