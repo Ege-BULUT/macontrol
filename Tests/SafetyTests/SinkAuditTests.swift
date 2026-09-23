@@ -34,3 +34,29 @@ import Testing
         return (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
     }
 }
+
+/// The one door itself: Safety moves items to the Trash in-process and back again, and nothing else.
+/// No permanent delete, no shell or AppleScript (F-0002, F-0012, F-0018), and no changing flags or
+/// ownership to force a move (F-0024, F-0070).
+@Suite struct SafetySinkTests {
+    static let forbidden = [
+        "removeItem(", "unlink", "rmdir(", "recycle(", "AppleScript", "osascript", "Process(", "/bin/",
+        "posix_spawn", "system(", "chmod(", "chown(", "chflags(", "setattrlist", "exchangedata", "moveItem(",
+    ]
+
+    @Test func safetyOnlyTrashesAndRestores() throws {
+        var offenders: [String] = []
+        var trashCalls = 0
+        for file in try SinkAuditTests.swiftFiles() where file.path.contains("/Sources/Safety/") {
+            let code = try String(contentsOf: file, encoding: .utf8)
+                .split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+            for token in Self.forbidden where code.contains(token) {
+                offenders.append("\(file.lastPathComponent): \(token)")
+            }
+            trashCalls += code.components(separatedBy: "FileManager.default.trashItem(at:").count - 1
+        }
+        #expect(offenders.isEmpty, "Safety must not do this: \(offenders)")
+        // F-0053: the only way into the Trash is Finder's own, via FileManager.
+        #expect(trashCalls == 1)
+    }
+}
