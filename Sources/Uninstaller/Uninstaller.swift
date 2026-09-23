@@ -11,6 +11,7 @@ public final class Uninstaller: Sendable {
     public let systemRoot: URL
     private let engine: ScanEngine
     private let actions: UninstallActions
+    private let administrator: PrivilegedLauncher?
 
     public init(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -18,7 +19,8 @@ public final class Uninstaller: Sendable {
         systemRoot: URL = URL(fileURLWithPath: "/"),
         engine: ScanEngine = ScanEngine(),
         trash: TrashService,
-        actions: UninstallActions? = nil
+        actions: UninstallActions? = nil,
+        administrator: PrivilegedLauncher? = nil
     ) {
         self.home = home
         self.systemRoot = systemRoot
@@ -28,8 +30,12 @@ public final class Uninstaller: Sendable {
             systemRoot.appendingPathComponent("System/Applications"),
         ]
         self.engine = engine
-        self.actions = actions ?? .live(trash: trash)
+        self.actions = actions ?? .live(trash: trash, administrator: administrator)
+        self.administrator = administrator
     }
+
+    /// True when root-owned items can go through the administrator helper.
+    public var canUseAdministrator: Bool { administrator != nil }
 
     /// Apps in each application folder and one level of subfolders (`Utilities`, vendor folders). Sizes come with the plan.
     public func installedApps() async throws -> [InstalledApp] {
@@ -75,7 +81,7 @@ public final class Uninstaller: Sendable {
     /// so one shared batch would take the data of an app that stays installed. Any failed step stops before the next
     /// one (F-0030), and exactly what the plan listed is trashed (F-0069): URLs not in the plan are ignored.
     /// The report carries the bundle's batch; the leftovers are a second batch in History.
-    public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>) async throws -> TrashReport {
+    public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>, mode: DeletionMode = .trash) async throws -> TrashReport {
         if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
         let chosen = plan.leftovers.filter { selected.contains($0.url) }
         if let stray = chosen.first(where: { !isInsideLibraryFolder($0.url) }) {
@@ -97,7 +103,7 @@ public final class Uninstaller: Sendable {
         if !stopped.isEmpty {
             guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         }
-        let appReport = await actions.moveToTrash([bundle])
+        let appReport = await actions.remove([bundle], mode)
         // An updater still finishing after the quit can put a new copy at the path the Trash step just emptied.
         guard case .trashed? = appReport.outcomes.first, !FileSystem.exists(plan.app.url) else {
             let reason = "Not moved, because \(plan.app.name) is still installed."
@@ -106,8 +112,30 @@ public final class Uninstaller: Sendable {
         }
         if chosen.isEmpty { return appReport }
         // Read again now: the app may have saved its settings while it quit.
-        let leftoverReport = await actions.moveToTrash(chosen.map(Self.itemToTrash(for:)))
+        let leftoverReport = await actions.remove(chosen.map(Self.itemToTrash(for:)), mode)
         return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + leftoverReport.outcomes)
+    }
+
+    /// Several apps in one user action (DESIGN-debloat section 3.6): an app that fails its checks, quit or bootout
+    /// is skipped with its error, and the others go on.
+    /// Stub (T-0072): each job runs through the single-app uninstall in turn; the report carries the first batch.
+    /// privileged-helper replaces it with one `remove` call ordered by `requiresGone`.
+    public func uninstall(_ jobs: [UninstallJob], mode: DeletionMode = .trash) async -> UninstallBatchReport {
+        var batch: UUID?
+        var outcomes: [TrashOutcome] = []
+        var skipped: [URL: UninstallError] = [:]
+        for job in jobs {
+            do {
+                let report = try await uninstall(job.plan, leftovers: job.leftovers, mode: mode)
+                batch = batch ?? report.batch
+                outcomes += report.outcomes
+            } catch let error as UninstallError {
+                skipped[job.plan.app.url] = error
+            } catch {
+                skipped[job.plan.app.url] = .blocked(error.localizedDescription)
+            }
+        }
+        return UninstallBatchReport(report: TrashReport(batch: batch ?? UUID(), outcomes: outcomes), skipped: skipped)
     }
 
     // MARK: Helpers

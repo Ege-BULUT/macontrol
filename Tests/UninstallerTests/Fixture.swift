@@ -132,7 +132,7 @@ final class Recorder: @unchecked Sendable {
                     throw UninstallError.bootoutFailed(label: label, status: 5)
                 }
             },
-            moveToTrash: { items in
+            remove: { items, _ in
                 self.record(.trash(items))
                 let refused = self.lock.withLock { self.refusedPath }
                 let outcomes = items.map { $0.url.path == refused ? .refused($0.url, .identityChanged) : self.moveIntoTrash($0.url) }

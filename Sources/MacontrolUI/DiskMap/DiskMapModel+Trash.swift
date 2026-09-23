@@ -109,6 +109,9 @@ extension DiskMapModel {
                 }
                 pile.remove(item.node)
                 outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: .inTrash))
+            case .deleted(let url):
+                // Disk Map only moves to the Trash for now; hardcore-ui splices permanent deletions out.
+                outcomes.append(notMoved(url, "Deleted permanently. Scan again to update the map."))
             case .refused(let url, let reason):
                 outcomes.append(notMoved(url, DiskMapText.refusal(reason)))
             case .failed(let url, let message):

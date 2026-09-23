@@ -5,6 +5,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     case diskMap
     case clean
     case uninstall
+    case debloat
     case history
 
     public var id: String { rawValue }
@@ -15,6 +16,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         case .diskMap: "Disk Map"
         case .clean: "Clean"
         case .uninstall: "Uninstall"
+        case .debloat: "Debloat"
         case .history: "History"
         }
     }
@@ -25,11 +27,12 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         case .diskMap: "chart.pie"
         case .clean: "sparkles"
         case .uninstall: "trash.square"
+        case .debloat: "scissors"
         case .history: "clock.arrow.circlepath"
         }
     }
 
-    /// ⌘1-⌘5, in sidebar order.
+    /// ⌘1-⌘6, in sidebar order.
     var shortcut: KeyEquivalent {
         KeyEquivalent(Character(String(Self.allCases.firstIndex(of: self)! + 1)))
     }

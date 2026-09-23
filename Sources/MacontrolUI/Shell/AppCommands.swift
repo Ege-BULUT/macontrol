@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Menu bar commands: ⌘1-⌘5 switch sections, ⌘R rescans, ⌘O scans a chosen folder.
+/// Menu bar commands: ⌘1-⌘6 switch sections, ⌘R rescans, ⌘O scans a chosen folder.
 public struct AppCommands: Commands {
     let model: AppModel
 

@@ -23,6 +23,11 @@ public final class AppModel {
     public let clean: CleanModel
     public let uninstall: UninstallModel
     public let history: HistoryModel
+    public let debloat: DebloatModel
+    /// Session-wide hardcore switch, off at every launch.
+    public let hardcore: HardcoreMode
+    /// Starts the administrator helper; nil without the app bundle. Never handed to Disk Map (DESIGN-debloat D8).
+    public let administrator: PrivilegedLauncher?
 
     private var scanTask: Task<Void, Never>?
 
@@ -37,7 +42,10 @@ public final class AppModel {
         uninstall: UninstallModel,
         history: HistoryModel,
         access: AccessModel? = nil,
-        volumeReadAt: Date? = nil
+        volumeReadAt: Date? = nil,
+        hardcore: HardcoreMode = HardcoreMode(),
+        debloat: DebloatModel = .demo(),
+        administrator: PrivilegedLauncher? = nil
     ) {
         self.selection = selection
         self.access = access ?? AccessModel(status: fullDiskAccess, probe: { fullDiskAccess }, openURL: { _ in false })
@@ -47,6 +55,9 @@ public final class AppModel {
         self.clean = clean
         self.uninstall = uninstall
         self.history = history
+        self.hardcore = hardcore
+        self.debloat = debloat
+        self.administrator = administrator
     }
 
     /// Starts a Disk Map scan of `scope`, replacing any scan in flight.
@@ -83,6 +94,10 @@ public final class AppModel {
         let engine = ScanEngine()
         let trash = TrashService()
         let catalog = (try? CleanupCatalog.bundled()) ?? CleanupCatalog(version: 0, rules: [])
+        let hardcore = HardcoreMode()
+        let administrator = PrivilegedLauncher.bundled()
+        let uninstaller = Uninstaller(engine: engine, trash: trash, administrator: administrator)
+        Task { await trash.recoverPrivilegedResults() }
         // Probing at launch also gets the app listed in the Full Disk Access pane (P8).
         let access = AccessModel(status: .probe())
         access.isOnboardingPresented = access.isLimited
@@ -91,9 +106,12 @@ public final class AppModel {
             volume: try? VolumeSummary.of(URL(fileURLWithPath: "/")),
             diskMap: DiskMapModel(engine: engine, trash: trash),
             clean: CleanModel(cleaner: Cleaner(catalog: catalog, engine: engine), trash: trash),
-            uninstall: UninstallModel(uninstaller: Uninstaller(engine: engine, trash: trash)),
+            uninstall: UninstallModel(uninstaller: uninstaller),
             history: HistoryModel(trash: trash),
-            access: access
+            access: access,
+            hardcore: hardcore,
+            debloat: DebloatModel(uninstaller: uninstaller, hardcore: hardcore),
+            administrator: administrator
         )
     }
 

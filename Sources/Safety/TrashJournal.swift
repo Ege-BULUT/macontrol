@@ -7,12 +7,22 @@ public struct JournalEntry: Codable, Sendable, Hashable {
     public var batch: UUID
     public var date: Date
     public var originalPath: String
-    public var trashedPath: String
+    /// Where it went in the Trash; nil when it was deleted permanently.
+    public var trashedPath: String?
     public var identity: FileIdentity
     public var allocated: UInt64
     public var restored: Bool
+    /// The local snapshot made before this batch, if any.
+    public var restorePoint: String?
+    /// Moved by the administrator helper: no in-app Undo (DESIGN-debloat D12). Absent in older lines = false.
+    public var asAdministrator: Bool
 
-    public init(batch: UUID, date: Date, originalPath: String, trashedPath: String, identity: FileIdentity, allocated: UInt64, restored: Bool) {
+    public var isPermanent: Bool { trashedPath == nil }
+
+    public init(
+        batch: UUID, date: Date, originalPath: String, trashedPath: String?, identity: FileIdentity,
+        allocated: UInt64, restored: Bool, restorePoint: String? = nil, asAdministrator: Bool = false
+    ) {
         self.batch = batch
         self.date = date
         self.originalPath = originalPath
@@ -20,6 +30,23 @@ public struct JournalEntry: Codable, Sendable, Hashable {
         self.identity = identity
         self.allocated = allocated
         self.restored = restored
+        self.restorePoint = restorePoint
+        self.asAdministrator = asAdministrator
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let line = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            batch: try line.decode(UUID.self, forKey: .batch),
+            date: try line.decode(Date.self, forKey: .date),
+            originalPath: try line.decode(String.self, forKey: .originalPath),
+            trashedPath: try line.decodeIfPresent(String.self, forKey: .trashedPath),
+            identity: try line.decode(FileIdentity.self, forKey: .identity),
+            allocated: try line.decode(UInt64.self, forKey: .allocated),
+            restored: try line.decode(Bool.self, forKey: .restored),
+            restorePoint: try line.decodeIfPresent(String.self, forKey: .restorePoint),
+            asAdministrator: try line.decodeIfPresent(Bool.self, forKey: .asAdministrator) ?? false
+        )
     }
 }
 
@@ -60,11 +87,12 @@ struct TrashJournal {
         var indexByMove: [String: Int] = [:]
         for line in data.split(separator: 0x0A) {
             guard let entry = try? Self.decoder.decode(JournalEntry.self, from: Data(line)) else { continue }
-            let move = "\(entry.batch.uuidString)\n\(entry.trashedPath)"
+            // A permanent line has no Trash path, so no restore line can name it.
+            let move = entry.trashedPath.map { "\(entry.batch.uuidString)\n\($0)" }
             if !entry.restored {
-                indexByMove[move] = entries.count
+                if let move { indexByMove[move] = entries.count }
                 entries.append(entry)
-            } else if let index = indexByMove[move] {
+            } else if let move, let index = indexByMove[move] {
                 entries[index].restored = true
             }
         }

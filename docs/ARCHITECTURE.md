@@ -13,7 +13,7 @@ needs a comment on that module's board task first.
 | **Liquid Glass for free, explicit only on floating surfaces** | Standard controls adopt it when built with the 26 SDK (topic-distribution-permissions M4). `floatingSurface()` in `Shell/Theme.swift` uses `glassEffect` behind `#available(macOS 26, *)`, `.regularMaterial` before. |
 | **Developer ID, notarized, hardened runtime, not sandboxed** | App Store 2.4.5 bans what the product does (sandbox, root, own updater); PureMac, Radix, Pearcleaner ship this way (topic-platform-constraints F1-F2, topic-distribution-permissions D1-D4). Sparkle 2 arrives in M8. |
 | **SwiftPM package, no Xcode project** | `swift build` / `swift test`; `scripts/bundle-app.sh` wraps the executable into `build/Macontrol.app` (Info.plist, resource bundle in `Contents/Resources`, codesign). Zero third-party dependencies in v1. |
-| **No privileged helper in v1** | A helper is an `SMAppService.daemon` with a typed XPC API and `setCodeSigningRequirement` (topic-platform-constraints E1-E4, F-0002). v1 marks root-owned items "Needs admin" and offers Reveal in Finder. Revisit after v1 (user decision). |
+| **Privileged helper: v0.2, see `docs/DESIGN-debloat.md` §3** | v1 had none and marks root-owned items "Needs admin" with Reveal in Finder. v0.2 bundles a one-shot helper (`Contents/Helpers/macontrol-priv`, target `PrivilegedHelper`) started through the administrator dialog; no daemon, no paid account (feasibility-privileged). |
 
 ## 2. Modules
 
@@ -28,8 +28,9 @@ compiler-checked. `Package.swift` declares every target; only the architect edit
 | `Cleaner` | `CleanupCatalog` (JSON resource), `Cleaner.scan()`, `CleanupItem` | Core, ScanEngine, Safety | T-0045 cleaner-catalog |
 | `Uninstaller` | `Uninstaller.installedApps/plan/uninstall`, `InstalledApp`, `Leftover` | Core, ScanEngine, Safety | T-0046 uninstaller |
 | `MacontrolUI` | SwiftUI: `Shell/ Overview/ Onboarding/ History/ Snapshot/` (app-shell), `DiskMap/` (disk-map), `Clean/ Uninstall/` (clean-uninstall-ui) | all above | T-0047, T-0048, T-0049 |
-| `Macontrol` | executable: `App`, `--snapshot <dir>` mode | UI | T-0047 app-shell |
+| `Macontrol` | executable: `App`, `--snapshot <dir>` mode; `PrivilegedLauncher.scrubEnvironment()` first | UI, Safety | T-0047 app-shell |
 | `mcscan` | CLI printing the scan total, for `research/bench/run.sh` | ScanEngine | T-0043 |
+| `PrivilegedHelper` | executable `macontrol-priv`: argv parsing and the detach; the logic is in `Safety` (`docs/DESIGN-debloat.md` §3.5) | Core, Safety | M9 privileged-helper |
 | `TestSupport` | `TemporaryDirectory` fixture builder (frozen; add helpers in your own test target) | - | architect |
 
 Feature models keep their scaffold initializers (`DiskMapModel(engine:trash:)`, `CleanModel(cleaner:trash:)`,
@@ -104,14 +105,16 @@ action (topic-size-accounting 6, 25-28). Trashed bytes are "In Trash", not "free
 
 ## 5. Deletion model (M7)
 
-- **One door.** Only `Sources/Safety` may move, delete or shell out. `SafetyTests/SinkAuditTests` fails the
-  build's tests when any other source file calls `removeItem`, `trashItem`, `unlink`, `rename`, AppleScript
-  or a shell; `Process` is allowed only in `Uninstaller/Launchd*.swift` for `launchctl bootout` with an
-  argument array (Mole's sink audit, tw93-mole reuse table).
+- **One door.** Only `Sources/Safety` may move or delete. `SafetyTests/SinkAuditTests` holds one forbidden
+  list for every file under `Sources/` plus a per-file allowlist (`docs/DESIGN-debloat.md` §3.10): for example
+  `unlinkat` only in `Safety/RemovalEngine.swift`, `Process` only at the fixed-path tool launchers, `fork` only
+  in the helper's `main.swift`, and no shell, `chmod`/`chown`/`chflags` or `removefile` anywhere (Mole's sink
+  audit, tw93-mole reuse table).
 - **Move to Trash only** via in-process `FileManager.trashItem(at:resultingItemURL:)`: it writes Finder's
   Put Back record, returns the real destination for undo, and uses per-volume trashes
   (topic-platform-constraints D1-D5). Never `NSWorkspace.recycle`, Finder AppleScript (F-0018) or `rm`
-  (F-0012, F-0025). **No permanent delete in v1**; emptying the Trash is the user's Finder action.
+  (F-0012, F-0025). v1 has no permanent delete; hardcore mode's permanent delete (Trash move, then an
+  fd-relative erase) is designed for v0.2 in `docs/DESIGN-debloat.md` §2.
 - **Per item, in order:** re-`lstat` and compare the scan's `FileIdentity` (refuse on mismatch); canonicalize
   with `F_GETPATH` so `/System/Volumes/Data/Users/me` is recognised as home (F-0039); apply the protected-path
   policy; expand `keep` so unchecked descendants survive (F-0026); drop items inside other selected items
@@ -162,7 +165,8 @@ action (topic-size-accounting 6, 25-28). Trashed bytes are "In Trash", not "free
   - Shown, not preselected: folders named exactly like the app (case-insensitive equality, never substring).
   - Never searched: Documents, Desktop, Downloads, Music, Pictures, Movies, iCloud, `/Users/Shared` (F-0066).
   - Vendor folders: only the app's own subfolder is a candidate (F-0022). An item another installed app also
-    uses carries a note and is not preselected. `/Library` items are `needsAdministrator` in v1.
+    uses carries a note and is not preselected. `/Library` items are `needsAdministrator` in v1; v0.2 routes
+    them to the privileged helper (`docs/DESIGN-debloat.md` §3.6).
     pkg receipts are reported ("installed by a package"), not removed.
   - Bundle id + exact name covers ~88% of what cask curators list (homebrew-homebrew-cask matcher oracle).
 - **Order** (Homebrew `ORDERED_DIRECTIVES`): quit with `NSRunningApplication.terminate` (no pattern kill);
@@ -174,7 +178,8 @@ action (topic-size-accounting 6, 25-28). Trashed bytes are "In Trash", not "free
   the next update); they are listed as "Part of macOS" with their size. Apple's App Store apps (GarageBand,
   iMovie, Pages, Numbers, Keynote) are removable and free to download again; their content libraries
   (`/Library/Application Support/GarageBand`, `/Library/Audio/Apple Loops`, Logic) are separate
-  admin-only items (topic-platform-constraints A1-A10, summary 1).
+  admin-only items (topic-platform-constraints A1-A10, summary 1). v0.2 removes them with their app from the
+  Debloat section, and shows sealed apps with an expert guide: `docs/DESIGN-debloat.md` §4 and §5.
 
 ## 8. UI (M3, M4)
 
@@ -234,6 +239,7 @@ Without FDA the app works, and protected folders show as "not scanned", never as
 
 ## 12. Out of v1
 
-Privileged helper and root deletes; permanent delete / in-app Empty Trash; FSEvents incremental rescans and
+Privileged helper, root deletes, permanent delete and Apple app debloat are designed for v0.2 in
+`docs/DESIGN-debloat.md` (no in-app Empty Trash there either). Still out: FSEvents incremental rescans and
 scan caches; duplicate finder; project-artifact discovery (node_modules etc.) unless M5 finishes early;
 cask zap dataset shipped in the app (used as a test oracle only); Sparkle updates (M8); App Store edition.
