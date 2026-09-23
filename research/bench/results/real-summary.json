@@ -1,0 +1,321 @@
+{
+  "target": "real",
+  "root": "/Users/egeb/projects",
+  "cache": "warm",
+  "machine": {
+    "macos": "26.6",
+    "cpu": "Apple M1",
+    "ncpu": 8,
+    "mem_bytes": 8589934592,
+    "kern_maxvnodes": 120350,
+    "load_avg_at_summary": [
+      14.59716796875,
+      12.50341796875,
+      11.08447265625
+    ]
+  },
+  "versions": {
+    "gdu": "Version:\t v5.37.0",
+    "dua": "dua 2.45.0",
+    "dust": "Dust 1.2.6",
+    "pdu": "pdu 0.24.0",
+    "ncdu": "ncdu 2.9.2",
+    "diskus": "diskus 0.9.0",
+    "hyperfine": "hyperfine 1.20.0"
+  },
+  "ground_truth": null,
+  "results": [
+    {
+      "tool": "dua",
+      "command": "dua -f bytes aggregate /Users/egeb/projects",
+      "apparent_command": "dua -A -f bytes aggregate /Users/egeb/projects",
+      "wall_mean_s": 1.8831894083999998,
+      "wall_stddev_s": 0.0875205828020817,
+      "wall_min_s": 1.7565080000000002,
+      "wall_median_s": 1.883229584,
+      "user_mean_s": 0.5073445999999999,
+      "sys_mean_s": 5.980945799999999,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 1.8,
+      "user_s": 0.52,
+      "sys_s": 6.73,
+      "max_rss_bytes": 18087936.0,
+      "peak_footprint_bytes": 12469248.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        30860832768,
+        30860832768,
+        30860832768
+      ],
+      "reported_disk_bytes": 30860832768,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 30171027212
+    },
+    {
+      "tool": "dua-apfs-clones",
+      "command": "dua -f bytes --deduplicate-apfs-clones aggregate /Users/egeb/projects",
+      "apparent_command": "-",
+      "wall_mean_s": 1.9241591086,
+      "wall_stddev_s": 0.1609856250854583,
+      "wall_min_s": 1.753775375,
+      "wall_median_s": 1.962204709,
+      "user_mean_s": 0.5520210000000001,
+      "sys_mean_s": 6.2680916,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 1.67,
+      "user_s": 0.56,
+      "sys_s": 6.08,
+      "max_rss_bytes": 22233088.0,
+      "peak_footprint_bytes": 16598016.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        27717599232,
+        27717599232,
+        27717599232
+      ],
+      "reported_disk_bytes": 27717599232,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": null
+    },
+    {
+      "tool": "diskus",
+      "command": "diskus /Users/egeb/projects",
+      "apparent_command": "diskus -b /Users/egeb/projects",
+      "wall_mean_s": 2.5217978334,
+      "wall_stddev_s": 0.08197405760036082,
+      "wall_min_s": 2.417001708,
+      "wall_median_s": 2.5162169590000003,
+      "user_mean_s": 0.6186828,
+      "sys_mean_s": 12.4413462,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 2.32,
+      "user_s": 0.68,
+      "sys_s": 13.15,
+      "max_rss_bytes": 19300352.0,
+      "peak_footprint_bytes": 18482176.0,
+      "stderr_lines": 1,
+      "reported_disk_bytes_runs": [
+        30860984320,
+        30860984320,
+        30860984320
+      ],
+      "reported_disk_bytes": 30860984320,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 30151819724
+    },
+    {
+      "tool": "pdu-H",
+      "command": "pdu -H -d 1 -b plain /Users/egeb/projects",
+      "apparent_command": "pdu -H -q apparent-size -d 1 -b plain /Users/egeb/projects",
+      "wall_mean_s": 2.8072158166000003,
+      "wall_stddev_s": 0.22238212271007116,
+      "wall_min_s": 2.599416667,
+      "wall_median_s": 2.729055583,
+      "user_mean_s": 0.5276598,
+      "sys_mean_s": 9.9982814,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 3.07,
+      "user_s": 0.52,
+      "sys_s": 9.59,
+      "max_rss_bytes": 13746176.0,
+      "peak_footprint_bytes": 5997632.0,
+      "stderr_lines": 5,
+      "reported_disk_bytes_runs": [
+        30860836864,
+        30860836864,
+        30860836864
+      ],
+      "reported_disk_bytes": 30860836864,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 30171158261
+    },
+    {
+      "tool": "gdu",
+      "command": "gdu-go -n -p -s --no-prefix /Users/egeb/projects",
+      "apparent_command": "gdu-go -n -p -s --no-prefix -a /Users/egeb/projects",
+      "wall_mean_s": 2.8212671664,
+      "wall_stddev_s": 0.09855158443820253,
+      "wall_min_s": 2.689622875,
+      "wall_median_s": 2.850086875,
+      "user_mean_s": 1.3293013999999999,
+      "sys_mean_s": 11.7627242,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 2.51,
+      "user_s": 1.31,
+      "sys_s": 12.2,
+      "max_rss_bytes": 37437440.0,
+      "peak_footprint_bytes": 25332032.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        30340513792,
+        30860832768,
+        30860832768
+      ],
+      "reported_disk_bytes": 30340513792,
+      "total_stable_across_runs": false,
+      "reported_apparent_bytes": 30152215465
+    },
+    {
+      "tool": "ncdu-t8",
+      "command": "ncdu --ignore-config -0 -t8 -o /dev/null /Users/egeb/projects",
+      "apparent_command": "-",
+      "wall_mean_s": 2.8483477832,
+      "wall_stddev_s": 0.10426295131266353,
+      "wall_min_s": 2.748287667,
+      "wall_median_s": 2.815482208,
+      "user_mean_s": 0.2839698,
+      "sys_mean_s": 9.569947599999999,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 2.66,
+      "user_s": 0.28,
+      "sys_s": 9.88,
+      "max_rss_bytes": 26214400.0,
+      "peak_footprint_bytes": 26215360.0,
+      "stderr_lines": 1,
+      "reported_apparent_bytes": 30171160620,
+      "reported_items": 411452,
+      "reported_disk_bytes_runs": [
+        30860984320,
+        30860984320,
+        30860984320
+      ],
+      "reported_disk_bytes": 30860984320,
+      "total_stable_across_runs": true
+    },
+    {
+      "tool": "dust",
+      "command": "dust -d 1 -c -P -b -o b /Users/egeb/projects",
+      "apparent_command": "dust -s -d 1 -c -P -b -o b /Users/egeb/projects",
+      "wall_mean_s": 3.0000426666,
+      "wall_stddev_s": 0.3031252090263694,
+      "wall_min_s": 2.7455805,
+      "wall_median_s": 2.817745333,
+      "user_mean_s": 0.8937184,
+      "sys_mean_s": 10.065559599999998,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 2.59,
+      "user_s": 0.93,
+      "sys_s": 10.27,
+      "max_rss_bytes": 220168192.0,
+      "peak_footprint_bytes": 215139840.0,
+      "stderr_lines": 1,
+      "reported_disk_bytes_runs": [
+        30860832768,
+        30860832768,
+        30860832768
+      ],
+      "reported_disk_bytes": 30860832768,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 30481825243
+    },
+    {
+      "tool": "pdu",
+      "command": "pdu -d 1 -b plain /Users/egeb/projects",
+      "apparent_command": "pdu -q apparent-size -d 1 -b plain /Users/egeb/projects",
+      "wall_mean_s": 3.1108906996,
+      "wall_stddev_s": 0.2416466591492935,
+      "wall_min_s": 2.771442375,
+      "wall_median_s": 3.132991083,
+      "user_mean_s": 0.5483834,
+      "sys_mean_s": 10.1549226,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 2.71,
+      "user_s": 0.53,
+      "sys_s": 10.1,
+      "max_rss_bytes": 13582336.0,
+      "peak_footprint_bytes": 5866560.0,
+      "stderr_lines": 5,
+      "reported_disk_bytes_runs": [
+        31171649536,
+        31171649536,
+        31171653632
+      ],
+      "reported_disk_bytes": 31171649536,
+      "total_stable_across_runs": false,
+      "reported_apparent_bytes": 30481827243
+    },
+    {
+      "tool": "du",
+      "command": "du -sk /Users/egeb/projects",
+      "apparent_command": "du -A -sk /Users/egeb/projects",
+      "wall_mean_s": 12.6151713916,
+      "wall_stddev_s": 0.9696297567109183,
+      "wall_min_s": 11.68882925,
+      "wall_median_s": 12.1031825,
+      "user_mean_s": 0.1382052,
+      "sys_mean_s": 4.202173,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 12.47,
+      "user_s": 0.11,
+      "sys_s": 3.9,
+      "max_rss_bytes": 3653632.0,
+      "peak_footprint_bytes": 3375680.0,
+      "stderr_lines": 1,
+      "reported_disk_bytes_runs": [
+        30796328960,
+        30861803520,
+        30861803520
+      ],
+      "reported_disk_bytes": 30796328960,
+      "total_stable_across_runs": false,
+      "reported_apparent_bytes": 30307751936
+    },
+    {
+      "tool": "ncdu",
+      "command": "ncdu --ignore-config -0 -o /dev/null /Users/egeb/projects",
+      "apparent_command": "-",
+      "wall_mean_s": 15.161514441600001,
+      "wall_stddev_s": 1.1313133470520378,
+      "wall_min_s": 14.412381583,
+      "wall_median_s": 14.681332625,
+      "user_mean_s": 0.196872,
+      "sys_mean_s": 5.9404012,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 15.14,
+      "user_s": 0.19,
+      "sys_s": 5.91,
+      "max_rss_bytes": 2244608.0,
+      "peak_footprint_bytes": 1606464.0,
+      "stderr_lines": 1,
+      "reported_apparent_bytes": 30171158261,
+      "reported_items": 411451,
+      "reported_disk_bytes_runs": [
+        30860980224,
+        30860984320,
+        30860984320
+      ],
+      "reported_disk_bytes": 30860980224,
+      "total_stable_across_runs": false
+    }
+  ]
+}

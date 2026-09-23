@@ -1,0 +1,714 @@
+{
+ "stats": {
+  "casks": 7755,
+  "casks_with_zap": 4716,
+  "casks_with_uninstall": 1817,
+  "zap_paths": 21661,
+  "zap_paths_glob": 2187
+ },
+ "zap_directives": {
+  "trash": 25362,
+  "rmdir": 427,
+  "script": 34,
+  "delete": 192,
+  "launchctl": 37,
+  "quit": 1,
+  "pkgutil": 47,
+  "login_item": 2,
+  "kext": 2
+ },
+ "uninstall_directives": {
+  "launchctl": 1344,
+  "quit": 1770,
+  "pkgutil": 2435,
+  "trash": 34,
+  "signal": 274,
+  "delete": 1533,
+  "rmdir": 87,
+  "script": 151,
+  "early_script": 14,
+  "kext": 29,
+  "login_item": 109
+ },
+ "zap_roots_top25": [
+  [
+   "~/Library/Preferences",
+   4537
+  ],
+  [
+   "~/Library/Application Support",
+   4361
+  ],
+  [
+   "~/Library/Caches",
+   3114
+  ],
+  [
+   "~/Library/Saved Application State",
+   2351
+  ],
+  [
+   "~/Library/HTTPStorages",
+   1392
+  ],
+  [
+   "~/<dot or other>",
+   1073
+  ],
+  [
+   "~/Library/Application Scripts",
+   995
+  ],
+  [
+   "~/Library/Logs",
+   969
+  ],
+  [
+   "~/Library/Containers",
+   920
+  ],
+  [
+   "~/Library/WebKit",
+   508
+  ],
+  [
+   "~/Library/Group Containers",
+   310
+  ],
+  [
+   "~/Library/Cookies",
+   193
+  ],
+  [
+   "/Library/Application Support",
+   123
+  ],
+  [
+   "~/Library/LaunchAgents",
+   114
+  ],
+  [
+   "/Users",
+   81
+  ],
+  [
+   "/Library/LaunchDaemons",
+   57
+  ],
+  [
+   "/Library/Logs",
+   46
+  ],
+  [
+   "/Library/Preferences",
+   34
+  ],
+  [
+   "/usr",
+   20
+  ],
+  [
+   "/Library/PrivilegedHelperTools",
+   19
+  ],
+  [
+   "/Library/Caches",
+   19
+  ],
+  [
+   "/etc",
+   16
+  ],
+  [
+   "~/Library/Google",
+   15
+  ],
+  [
+   "/Library/LaunchAgents",
+   14
+  ],
+  [
+   "~/Library/Parallels",
+   14
+  ]
+ ],
+ "placeholders_in_paths": {
+  "$APPDIR": 16,
+  "$HOMEBREW_PREFIX": 19
+ },
+ "zap_paths_shared_by_2plus_casks": 1198,
+ "shared_non_glob_top20": [
+  [
+   "~/Library/Caches/Mozilla",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly",
+    "floorp",
+    "glide-browser",
+    "thunderbird",
+    "thunderbird@beta",
+    "thunderbird@daily",
+    "thunderbird@esr",
+    "zen",
+    "zen@twilight"
+   ]
+  ],
+  [
+   "~/Library/Application Support/Ableton",
+   [
+    "ableton-live-intro",
+    "ableton-live-intro@11",
+    "ableton-live-lite",
+    "ableton-live-lite@11",
+    "ableton-live-standard",
+    "ableton-live-standard@11",
+    "ableton-live-suite",
+    "ableton-live-suite@10",
+    "ableton-live-suite@11"
+   ]
+  ],
+  [
+   "~/Library/Caches/Ableton",
+   [
+    "ableton-live-intro",
+    "ableton-live-intro@11",
+    "ableton-live-lite",
+    "ableton-live-lite@11",
+    "ableton-live-standard",
+    "ableton-live-standard@11",
+    "ableton-live-suite",
+    "ableton-live-suite@10",
+    "ableton-live-suite@11"
+   ]
+  ],
+  [
+   "~/Library/Preferences/Ableton",
+   [
+    "ableton-live-intro",
+    "ableton-live-intro@11",
+    "ableton-live-lite",
+    "ableton-live-lite@11",
+    "ableton-live-standard",
+    "ableton-live-standard@11",
+    "ableton-live-suite",
+    "ableton-live-suite@10",
+    "ableton-live-suite@11"
+   ]
+  ],
+  [
+   "~/Music/Ableton",
+   [
+    "ableton-live-intro",
+    "ableton-live-intro@11",
+    "ableton-live-lite",
+    "ableton-live-lite@11",
+    "ableton-live-standard",
+    "ableton-live-standard@11",
+    "ableton-live-suite",
+    "ableton-live-suite@10",
+    "ableton-live-suite@11"
+   ]
+  ],
+  [
+   "~/Library/Application Support/BraveSoftware",
+   [
+    "brave-browser",
+    "brave-browser@beta",
+    "brave-browser@nightly",
+    "brave-origin",
+    "brave-origin@beta",
+    "brave-origin@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/BraveSoftware",
+   [
+    "brave-browser",
+    "brave-browser@beta",
+    "brave-browser@nightly",
+    "brave-origin",
+    "brave-origin@beta",
+    "brave-origin@nightly"
+   ]
+  ],
+  [
+   "~/Library/DBeaverData",
+   [
+    "dbeaver-community",
+    "dbeaver-enterprise",
+    "dbeaverlite",
+    "dbeaverteam",
+    "dbeaverultimate",
+    "dbvr"
+   ]
+  ],
+  [
+   "~/.eclipse",
+   [
+    "eclipse-cpp",
+    "eclipse-dsl",
+    "eclipse-java",
+    "eclipse-modeling",
+    "eclipse-platform",
+    "eclipse-rcp"
+   ]
+  ],
+  [
+   "~/eclipse-workspace",
+   [
+    "eclipse-cpp",
+    "eclipse-dsl",
+    "eclipse-java",
+    "eclipse-modeling",
+    "eclipse-platform",
+    "eclipse-rcp"
+   ]
+  ],
+  [
+   "~/Library/Application Support/Firefox",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/Firefox",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/Mozilla/updates/Applications/Firefox",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/org.mozilla.firefox",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Preferences/org.mozilla.firefox.plist",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Saved Application State/org.mozilla.firefox.savedState",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/WebKit/org.mozilla.firefox",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Application Support/Mozilla",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/Mozilla/updates",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ],
+  [
+   "~/Library/Caches/Mozilla/updates/Applications",
+   [
+    "firefox",
+    "firefox@beta",
+    "firefox@cn",
+    "firefox@developer-edition",
+    "firefox@esr",
+    "firefox@nightly"
+   ]
+  ]
+ ],
+ "zap_paths_containing_current_major_minor": 111,
+ "casks_with_version_pinned_zap_path": 40,
+ "version_pinned_examples": [
+  [
+   "android-studio",
+   "2026.1.4.8",
+   "~/Library/Application Support/Google/AndroidStudio2026.1"
+  ],
+  [
+   "android-studio",
+   "2026.1.4.8",
+   "~/Library/Caches/Google/AndroidStudio2026.1"
+  ],
+  [
+   "android-studio",
+   "2026.1.4.8",
+   "~/Library/Logs/Google/AndroidStudio2026.1"
+  ],
+  [
+   "android-studio-preview@beta",
+   "2026.2.1.6",
+   "~/Library/Application Support/Google/AndroidStudioPreview2026.2"
+  ],
+  [
+   "android-studio-preview@beta",
+   "2026.2.1.6",
+   "~/Library/Caches/Google/AndroidStudioPreview2026.2"
+  ],
+  [
+   "android-studio-preview@beta",
+   "2026.2.1.6",
+   "~/Library/Logs/Google/AndroidStudioPreview2026.2"
+  ],
+  [
+   "android-studio-preview@canary",
+   "2026.2.2.1",
+   "~/Library/Application Support/Google/AndroidStudioPreview2026.2"
+  ],
+  [
+   "android-studio-preview@canary",
+   "2026.2.2.1",
+   "~/Library/Caches/Google/AndroidStudioPreview2026.2"
+  ]
+ ],
+ "rb_casks_with_version_interpolated_zap": 179,
+ "rb_version_zap_path_lines": 630,
+ "rb_version_accessors": [
+  [
+   "#{version.major}",
+   478
+  ],
+  [
+   "#{version.major_minor}",
+   89
+  ],
+  [
+   "#{version.csv.first.major}",
+   20
+  ],
+  [
+   "#{version}",
+   10
+  ],
+  [
+   "#{version[0]}",
+   9
+  ],
+  [
+   "#{version.minor}",
+   8
+  ],
+  [
+   "#{version.csv.second}",
+   8
+  ],
+  [
+   "#{version.csv.first}",
+   5
+  ],
+  [
+   "#{version.csv.first.major_minor}",
+   5
+  ]
+ ],
+ "rb_examples": [
+  "a-better-finder-attributes",
+  "a-better-finder-rename",
+  "acorn",
+  "activedock",
+  "affinity-designer",
+  "affinity-photo",
+  "affinity-publisher",
+  "airtool",
+  "alpha",
+  "android-studio",
+  "android-studio-preview@beta",
+  "android-studio-preview@canary",
+  "apipost",
+  "aqua-app",
+  "arduino-ide"
+ ],
+ "user_content_trash_paths": {
+  "~/Pictures": 7,
+  "~/Music": 19,
+  "~/Documents": 69,
+  "/Users/Shared": 73,
+  "~/<non-dot home folder>": 88,
+  "~/Movies": 5,
+  "~/Library/Mobile Documents": 5,
+  "~/Desktop": 6
+ },
+ "user_content_trash_paths_total": 272,
+ "user_content_casks": 217,
+ "trash_paths_of_2plus_products": 323,
+ "trash_paths_of_2plus_products_literal": 290,
+ "trashed_by_one_rmdired_by_another": [
+  "~/.kiro",
+  "~/Documents/NoMachine",
+  "~/Library/Android",
+  "~/Library/Application Support/Microsoft",
+  "~/Library/Application Support/Steam",
+  "~/Library/texlive"
+ ],
+ "uninstall_ids_of_2plus_products": 78,
+ "wildcard_launchctl": [
+  [
+   "adobe-creative-cloud",
+   "uninstall",
+   "com.adobe.CCXProcess.*"
+  ],
+  [
+   "cmux",
+   "uninstall",
+   "application.com.cmuxterm.cua.*"
+  ],
+  [
+   "creality-print",
+   "uninstall",
+   "application.com.creality.crealityprint.*"
+  ],
+  [
+   "ddnet",
+   "uninstall",
+   "application.DDNetServer.app.*"
+  ],
+  [
+   "elecom-mouse-util",
+   "uninstall",
+   "application.jp.co.elecom.MouseAssistantUi.*"
+  ],
+  [
+   "elgato-stream-deck",
+   "uninstall",
+   "com.elgato.StreamDeck*"
+  ],
+  [
+   "fantastical",
+   "uninstall",
+   "com.flexibits.fantastical*.mac.launcher"
+  ],
+  [
+   "intune-company-portal",
+   "uninstall",
+   "*.com.microsoft.entrabroker.EntraIdentityBrokerXPC.Mach"
+  ],
+  [
+   "jump-desktop-connect",
+   "uninstall",
+   "application.com.p5sys.jump.connect.*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "krisp",
+   "uninstall",
+   "ai.krisp.krispMac*"
+  ],
+  [
+   "morisawa-desktop-manager",
+   "uninstall",
+   "application.MDMAgentManager.*"
+  ],
+  [
+   "morisawa-desktop-manager",
+   "uninstall",
+   "application.MDMService.*"
+  ],
+  [
+   "paragon-extfs",
+   "uninstall",
+   "com.paragon-software.extfs*"
+  ],
+  [
+   "paragon-extfs@11",
+   "uninstall",
+   "com.paragon-software.extfs*"
+  ],
+  [
+   "paragon-ntfs",
+   "uninstall",
+   "com.paragon-software.ntfs*"
+  ],
+  [
+   "pearcleaner",
+   "uninstall",
+   "com.alienator88.PearcleanerSentinel*"
+  ],
+  [
+   "rockxy",
+   "uninstall",
+   "com.amunx.rockxy.community.direct-proxy-watchdog.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "shutter-encoder",
+   "uninstall",
+   "application.com.paulpacifico.shutterencoder.*"
+  ],
+  [
+   "spotify",
+   "uninstall",
+   "*.spotify.client.*"
+  ],
+  [
+   "steinberg-download-assistant",
+   "uninstall",
+   "application.net.steinberg.elicenser.SteinbergDownloadAssistant*"
+  ],
+  [
+   "synology-drive",
+   "uninstall",
+   "application.com.synology.CloudStationUI*"
+  ],
+  [
+   "utc-menu-clock",
+   "uninstall",
+   "application.UTCMenuClock.app.*"
+  ],
+  [
+   "wacom-tablet",
+   "uninstall",
+   "com.wacom.TabletDriver*"
+  ],
+  [
+   "wacom-tablet",
+   "uninstall",
+   "com.wacom.UpgradeHelper*"
+  ],
+  [
+   "wacom-tablet",
+   "uninstall",
+   "com.wacom.WacomCenter*"
+  ],
+  [
+   "wacom-tablet",
+   "uninstall",
+   "com.wacom.WacomExperienceProgram*"
+  ]
+ ],
+ "distinct_launchctl_labels": 787
+}

@@ -1,0 +1,40 @@
+## kondo -n home
+home/py Python project (0 seconds ago)
+  └─ .venv (976.6KiB)
+home/multi/tauri Cargo project (0 seconds ago)
+  └─ target (976.6KiB)
+home/pn1 Node project (0 seconds ago)
+  └─ node_modules (4.0MiB)
+home/Library/Application Support/Zed/languages/vtsls Node project (0 seconds ago)
+  └─ node_modules (293.0KiB)
+home/game Unreal project (0 seconds ago)
+  └─ Saved (976.6KiB)
+  └─ Intermediate (488.3KiB)
+home/cm CMake project (0 seconds ago)
+  └─ build (195.3KiB)
+home/pn2 Node project (0 seconds ago)
+  └─ node_modules (4.0MiB)
+Projects cleaned: 0/7, Bytes deleted: 0.0B / 11.8MiB
+## kondo -n home/code (notes.py)
+Projects cleaned: 0/0, Bytes deleted: 0.0B / 0.0B
+## kondo -n home/code (no notes.py)
+home/code/app Cargo project (0 seconds ago)
+  └─ target (1.9MiB)
+home/code/web Node project (0 seconds ago)
+  └─ node_modules (976.6KiB)
+Projects cleaned: 0/2, Bytes deleted: 0.0B / 2.9MiB
+## readdir order
+. .. Cargo.toml target node_modules package.json 
+. .. node_modules setup.py package.json 
+## store link count
+3 links 4194304 B
+
+## real ~/Library on the research Mac (macOS 26.6), kondo v0.9 -n "$HOME/Library", 5.1 s wall, nothing deleted
+Projects cleaned: 0/47, Bytes deleted: 0.0B / 1.3MiB
+Projects by owner (count of offered artifact dirs):
+  39 pnpm/store/v11/links (global virtual store) [Node]
+   3 Application Support/pipx [Python]
+   2 pnpm/global/v11 (pnpm add -g installs) [Node]
+   1 Python/3.14 [Python]
+   1 Application Support/Huawei [Node]
+   1 Application Support/Code [Node]

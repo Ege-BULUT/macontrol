@@ -1,0 +1,39 @@
+{
+  "fixture_version": 1,
+  "root": "/Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+  "generated_at": "2026-09-23T10:13:30",
+  "generate_seconds": 33.1,
+  "counts": {
+    "files": 299497,
+    "file_entries": 300000,
+    "dirs": 10505,
+    "symlinks": 1032
+  },
+  "bytes": {
+    "apparent_files": 7303709961,
+    "apparent_files_counting_hardlinks_each_time": 7681843701,
+    "allocated_files": 2368405504,
+    "allocated_files_counting_hardlinks_each_time": 2747244544,
+    "allocated_dirs": 0,
+    "allocated_symlinks": 0,
+    "allocated_all": 2368405504,
+    "apfs_clone_shared": 628416512,
+    "physical_estimate_clones_once": 1739988992
+  },
+  "hidden_from_non_root": {
+    "files": 100,
+    "apparent_files": 246883,
+    "alloc_files": 364544
+  },
+  "visible_to_non_root": {
+    "files": 299397,
+    "apparent_files": 7303463078,
+    "allocated_all": 2368040960
+  },
+  "notes": [
+    "Hard links counted once by (st_dev, st_ino) unless the key says otherwise.",
+    "allocated_* = st_blocks*512, which reports every APFS clone at full size; physical_estimate_clones_once subtracts the extents the generator knows are shared.",
+    "unreadable/locked is chmod 000 after the walk: a non-root scanner should match visible_to_non_root.",
+    "pathmax/ holds a path longer than PATH_MAX (1024) with an 8 MiB file at the bottom."
+  ]
+}

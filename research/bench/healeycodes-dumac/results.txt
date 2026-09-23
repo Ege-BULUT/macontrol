@@ -1,0 +1,25 @@
+# run_probes.sh output, 2026-09-23 10:43, macOS 26.6, Apple M1, load { 4.94 7.73 11.88 }
+== 1. fixture total, 3 runs (ground truth visible allocated_all 2368040960; du/dua 2359623680)
+run1 exit=0 total=2360152064 stderr_lines=       2
+run2 exit=0 total=2360152064 stderr_lines=       2
+run3 exit=0 total=2360152064 stderr_lines=       2
+== 2. nested chain depth: last depth that works, first that aborts
+depth=100 exit=0 stdout='0\tchain100' stderr=[]
+depth=126 exit=0 stdout='0\tchain126' stderr=[]
+depth=127 exit=-6 stdout='' stderr=["thread '<unknown>' (255578) has overflowed its stack"]
+depth=200 exit=-6 stdout='' stderr=["thread '<unknown>' (255595) has overflowed its stack"]
+== 3. fd pressure: fixture under ulimit -n 8 and 12
+ulimit=8 run1 exit=0 total=659345408 cannot_access=12
+ulimit=8 run2 exit=0 total=80183296 cannot_access=1319
+ulimit=8 run3 exit=0 total=304017408 cannot_access=1510
+ulimit=12 run1 exit=0 total=2360152064 cannot_access=1
+ulimit=12 run2 exit=0 total=2360152064 cannot_access=1
+ulimit=12 run3 exit=0 total=2360152064 cannot_access=1
+== 4. fd leak: 300 readable-but-unsearchable (r--) folders + 300 normal folders, 5000 B file each
+expected total: 2457600
+ulimit=64 exit=0 total=516096 permission_denied=61 cannot_access=476
+ulimit=1024 exit=0 total=2457600 permission_denied=300 cannot_access=0
+== 5. two APFS volumes mounted side by side (inode numbers restart at 16 on each)
+inodes v1: 16 f00.bin 17 f01.bin  v2: 16 f00.bin 17 f01.bin 
+du -sk: 6553600 B   dumac: 3276800 B   dumac v1 only: 3276800 B
+exit=0

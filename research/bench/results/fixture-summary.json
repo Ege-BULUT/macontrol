@@ -1,0 +1,344 @@
+{
+  "target": "fixture",
+  "root": "/Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+  "cache": "warm",
+  "machine": {
+    "macos": "26.6",
+    "cpu": "Apple M1",
+    "ncpu": 8,
+    "mem_bytes": 8589934592,
+    "kern_maxvnodes": 120350,
+    "load_avg_at_summary": [
+      18.55859375,
+      15.1943359375,
+      11.09375
+    ]
+  },
+  "versions": {
+    "gdu": "Version:\t v5.37.0",
+    "dua": "dua 2.45.0",
+    "dust": "Dust 1.2.6",
+    "pdu": "pdu 0.24.0",
+    "ncdu": "ncdu 2.9.2",
+    "diskus": "diskus 0.9.0",
+    "hyperfine": "hyperfine 1.20.0"
+  },
+  "ground_truth": {
+    "allocated_visible": 2368040960,
+    "apparent_visible": 7303463078
+  },
+  "results": [
+    {
+      "tool": "dua-apfs-clones",
+      "command": "dua -f bytes --deduplicate-apfs-clones aggregate /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "-",
+      "wall_mean_s": 0.6913474916,
+      "wall_stddev_s": 0.05753035006140996,
+      "wall_min_s": 0.626334083,
+      "wall_median_s": 0.685662333,
+      "user_mean_s": 0.15875319999999998,
+      "sys_mean_s": 2.0255783999999997,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 0.54,
+      "user_s": 0.16,
+      "sys_s": 1.94,
+      "max_rss_bytes": 11141120.0,
+      "peak_footprint_bytes": 5505984.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        1855987712,
+        1855987712,
+        1855987712
+      ],
+      "reported_disk_bytes": 1855987712,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": null,
+      "disk_delta_bytes": -512053248,
+      "apparent_delta_bytes": null
+    },
+    {
+      "tool": "dua",
+      "command": "dua -f bytes aggregate /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "dua -A -f bytes aggregate /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 0.7018798830000001,
+      "wall_stddev_s": 0.08392523113135776,
+      "wall_min_s": 0.614159875,
+      "wall_median_s": 0.7200447910000001,
+      "user_mean_s": 0.1584446,
+      "sys_mean_s": 2.0762853999999997,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 0.67,
+      "user_s": 0.15,
+      "sys_s": 2.11,
+      "max_rss_bytes": 11190272.0,
+      "peak_footprint_bytes": 5571520.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        2359623680,
+        2359623680,
+        2359623680
+      ],
+      "reported_disk_bytes": 2359623680,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7305728828,
+      "disk_delta_bytes": -8417280,
+      "apparent_delta_bytes": 2265750
+    },
+    {
+      "tool": "diskus",
+      "command": "diskus /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "diskus -b /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 1.205557975,
+      "wall_stddev_s": 0.029047617158862084,
+      "wall_min_s": 1.170867,
+      "wall_median_s": 1.199376333,
+      "user_mean_s": 0.280809,
+      "sys_mean_s": 5.3775198,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.06,
+      "user_s": 0.27,
+      "sys_s": 5.0,
+      "max_rss_bytes": 17661952.0,
+      "peak_footprint_bytes": 16843776.0,
+      "stderr_lines": 1,
+      "reported_disk_bytes_runs": [
+        2359623680,
+        2359623680,
+        2359623680
+      ],
+      "reported_disk_bytes": 2359623680,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7295093916,
+      "disk_delta_bytes": -8417280,
+      "apparent_delta_bytes": -8369162
+    },
+    {
+      "tool": "pdu",
+      "command": "pdu -d 1 -b plain /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "pdu -q apparent-size -d 1 -b plain /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 1.3291205832000001,
+      "wall_stddev_s": 0.12469139017867388,
+      "wall_min_s": 1.198044,
+      "wall_median_s": 1.2951701660000001,
+      "user_mean_s": 0.24184860000000002,
+      "sys_mean_s": 4.620007800000001,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.4,
+      "user_s": 0.21,
+      "sys_s": 4.17,
+      "max_rss_bytes": 14204928.0,
+      "peak_footprint_bytes": 6489152.0,
+      "stderr_lines": 8,
+      "reported_disk_bytes_runs": [
+        2738462720,
+        2738462720,
+        2738462720
+      ],
+      "reported_disk_bytes": 2738462720,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7683862760,
+      "disk_delta_bytes": 370421760,
+      "apparent_delta_bytes": 380399682
+    },
+    {
+      "tool": "dust",
+      "command": "dust -d 1 -c -P -b -o b /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "dust -s -d 1 -c -P -b -o b /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 1.3830696836,
+      "wall_stddev_s": 0.05638182286616938,
+      "wall_min_s": 1.297549292,
+      "wall_median_s": 1.387465834,
+      "user_mean_s": 0.38098859999999996,
+      "sys_mean_s": 4.3889458,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.09,
+      "user_s": 0.36,
+      "sys_s": 3.88,
+      "max_rss_bytes": 155009024.0,
+      "peak_footprint_bytes": 149947776.0,
+      "stderr_lines": 2,
+      "reported_disk_bytes_runs": [
+        2359623680,
+        2359623680,
+        2359623680
+      ],
+      "reported_disk_bytes": 2359623680,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7683862760,
+      "disk_delta_bytes": -8417280,
+      "apparent_delta_bytes": 380399682
+    },
+    {
+      "tool": "ncdu-t8",
+      "command": "ncdu --ignore-config -0 -t8 -o /dev/null /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "-",
+      "wall_mean_s": 1.4742269082000001,
+      "wall_stddev_s": 0.11447611188779938,
+      "wall_min_s": 1.337760125,
+      "wall_median_s": 1.436280542,
+      "user_mean_s": 0.1063496,
+      "sys_mean_s": 4.0508938,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.35,
+      "user_s": 0.11,
+      "sys_s": 4.41,
+      "max_rss_bytes": 13959168.0,
+      "peak_footprint_bytes": 13321152.0,
+      "stderr_lines": 1,
+      "reported_apparent_bytes": 7314130996,
+      "reported_items": 300429,
+      "reported_disk_bytes_runs": [
+        2368040960,
+        2368040960,
+        2368040960
+      ],
+      "reported_disk_bytes": 2368040960,
+      "total_stable_across_runs": true,
+      "disk_delta_bytes": 0,
+      "apparent_delta_bytes": 10667918
+    },
+    {
+      "tool": "pdu-H",
+      "command": "pdu -H -d 1 -b plain /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "pdu -H -q apparent-size -d 1 -b plain /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 1.70116635,
+      "wall_stddev_s": 0.3368415916996294,
+      "wall_min_s": 1.462204458,
+      "wall_median_s": 1.526717209,
+      "user_mean_s": 0.254708,
+      "sys_mean_s": 4.6880426,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.26,
+      "user_s": 0.21,
+      "sys_s": 3.99,
+      "max_rss_bytes": 14598144.0,
+      "peak_footprint_bytes": 6849600.0,
+      "stderr_lines": 8,
+      "reported_disk_bytes_runs": [
+        2359623680,
+        2359623680,
+        2359623680
+      ],
+      "reported_disk_bytes": 2359623680,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7305729020,
+      "disk_delta_bytes": -8417280,
+      "apparent_delta_bytes": 2265942
+    },
+    {
+      "tool": "gdu",
+      "command": "gdu-go -n -p -s --no-prefix /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "gdu-go -n -p -s --no-prefix -a /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 1.7280104084,
+      "wall_stddev_s": 0.5652225294625356,
+      "wall_min_s": 1.084686917,
+      "wall_median_s": 1.51762075,
+      "user_mean_s": 0.5627789999999999,
+      "sys_mean_s": 5.0072328,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 1.34,
+      "user_s": 0.54,
+      "sys_s": 5.01,
+      "max_rss_bytes": 36470784.0,
+      "peak_footprint_bytes": 23512832.0,
+      "stderr_lines": 0,
+      "reported_disk_bytes_runs": [
+        2333569024,
+        2359623680,
+        2335444992
+      ],
+      "reported_disk_bytes": 2333569024,
+      "total_stable_across_runs": false,
+      "reported_apparent_bytes": 7295103132,
+      "disk_delta_bytes": -34471936,
+      "apparent_delta_bytes": -8359946
+    },
+    {
+      "tool": "du",
+      "command": "du -sk /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "du -A -sk /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "wall_mean_s": 5.878224625,
+      "wall_stddev_s": 0.05219170113593138,
+      "wall_min_s": 5.807735,
+      "wall_median_s": 5.887899,
+      "user_mean_s": 0.0363918,
+      "sys_mean_s": 1.1900469999999999,
+      "exit_codes": [
+        1
+      ],
+      "exit_code": 1,
+      "real_s": 3.74,
+      "user_s": 0.03,
+      "sys_s": 1.05,
+      "max_rss_bytes": 7962624.0,
+      "peak_footprint_bytes": 7668288.0,
+      "stderr_lines": 2,
+      "reported_disk_bytes_runs": [
+        2359623680,
+        2359623680,
+        2359623680
+      ],
+      "reported_disk_bytes": 2359623680,
+      "total_stable_across_runs": true,
+      "reported_apparent_bytes": 7361400832,
+      "disk_delta_bytes": -8417280,
+      "apparent_delta_bytes": 57937754
+    },
+    {
+      "tool": "ncdu",
+      "command": "ncdu --ignore-config -0 -o /dev/null /Users/egeb/projects/macontrol/research/bench/fixtures/tree",
+      "apparent_command": "-",
+      "wall_mean_s": 8.2743432084,
+      "wall_stddev_s": 0.20647265862834674,
+      "wall_min_s": 8.04011525,
+      "wall_median_s": 8.275827875,
+      "user_mean_s": 0.0845912,
+      "sys_mean_s": 2.5956934,
+      "exit_codes": [
+        0
+      ],
+      "exit_code": 0,
+      "real_s": 6.83,
+      "user_s": 0.07,
+      "sys_s": 2.34,
+      "max_rss_bytes": 2392064.0,
+      "peak_footprint_bytes": 1770368.0,
+      "stderr_lines": 1,
+      "reported_apparent_bytes": 7314130996,
+      "reported_items": 300429,
+      "reported_disk_bytes_runs": [
+        2368040960,
+        2368040960,
+        2368040960
+      ],
+      "reported_disk_bytes": 2368040960,
+      "total_stable_across_runs": true,
+      "disk_delta_bytes": 0,
+      "apparent_delta_bytes": 10667918
+    }
+  ]
+}

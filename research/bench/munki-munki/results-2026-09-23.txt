@@ -1,0 +1,125 @@
+# run.sh fixture, 2026-09-23 10:59, macOS 26.6
+28d92fe
+=== A. pkg-key lookup (rmpkgs.swift:354-370, quoteAndJoin + string-built IN list)
+  ["com.fixture.foo"] -> keys ["1"]
+  ["pkgid"] -> keys ["1", "2"]
+  ["pkgname"] -> keys ["1", "2"]
+  ["vers"] -> keys []
+  ["no.such.pkg", "com.fixture.foo"] -> keys ["1"]
+  ["a\"b"] -> threw: Could not prepare statement: near "b": syntax error
+  dry run of removePackages(["pkgname"], listFiles: true):
+  [minor] Determining which filesystem items to remove
+The following filesystem items would be removed:
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/Info.plist
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS/Foo
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Bar
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Bar/bar.conf
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo/foo.conf
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Shared
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Shared/common.dylib
+  rc=0
+
+=== B. managedsoftwareupdate path: removePackages(pkgids) with default flags (installer.swift:489)
+  [minor] Determining which filesystem items to remove
+The following filesystem items would be removed:
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/Info.plist
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS/Foo
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo
+    /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo/foo.conf
+  preview rc=0
+  [minor] Determining which filesystem items to remove
+  [major] Removing 7 filesystem items
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo/foo.conf
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo because it is not empty.
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS/Foo
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS because it is not empty.
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/Info.plist
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents because it is not empty.
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app because it is not empty.
+  [info] ---------------------------------------------------
+  [info] There were problems removing some filesystem items.
+  [info] ---------------------------------------------------
+  [info] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app because it is not empty.
+  [minor] Removing receipt info
+  [detail] Removing package data from internal database...
+  [minor] Package removal finished.
+  remove rc=0  (0 = success reported)
+--- after B: files left under fixture
+    Applications
+    Applications/Foo.app
+    Applications/Foo.app/Contents
+    Applications/Foo.app/Contents/MacOS
+    Applications/Foo.app/Contents/MacOS/FooUpdateHelper
+    Applications/Foo.app/Contents/PlugIns
+    Applications/Foo.app/Contents/PlugIns/UserAdded.plugin
+    Applications/Foo.app/Contents/PlugIns/UserAdded.plugin/x
+    Library
+    Library/Bar
+    Library/Bar/bar.conf
+    Library/Foo
+    Library/Foo/user-settings.plist
+    Library/Shared
+    Library/Shared/common.dylib
+  receipt still in munki DB? keys=[]
+  [error] Error retrieving pkg keys: No matching pkgs found in database
+  retry rc=-4  (-4 = no matching pkgs: leftovers can no longer be found by receipt)
+
+=== C. removepackages -f (forceDeleteBundles: true), fresh fixture
+  [minor] Determining which filesystem items to remove
+  [major] Removing 7 filesystem items
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo/foo.conf
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo because it is not empty.
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS/Foo
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS because it is not empty.
+  [detail] Removing: /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/Info.plist
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents because it is not empty.
+  [error] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app because it is not empty.
+  [info] ---------------------------------------------------
+  [info] There were problems removing some filesystem items.
+  [info] ---------------------------------------------------
+  [info] Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Library/Foo because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents/MacOS because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app/Contents because it is not empty.
+Did not remove /private/var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R/fixture/Applications/Foo.app because it is not empty.
+  [minor] Removing receipt info
+  [detail] Removing package data from internal database...
+  [minor] Package removal finished.
+  remove rc=0
+--- after C: files left under fixture
+    Applications
+    Applications/Foo.app
+    Applications/Foo.app/Contents
+    Applications/Foo.app/Contents/MacOS
+    Applications/Foo.app/Contents/MacOS/FooUpdateHelper
+    Applications/Foo.app/Contents/PlugIns
+    Applications/Foo.app/Contents/PlugIns/UserAdded.plugin
+    Applications/Foo.app/Contents/PlugIns/UserAdded.plugin/x
+    Library
+    Library/Bar
+    Library/Bar/bar.conf
+    Library/Foo
+    Library/Foo/user-settings.plist
+    Library/Shared
+    Library/Shared/common.dylib
+exit=0  (workdir /var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.LaiJglAl6R)
+
+# run.sh rebuild (real receipts, read-only)
+28d92fe
+  [minor] Gathering information on installed packages
+  SELECT count(*) FROM pkgs = 32
+  SELECT count(*) FROM paths = 276122
+  SELECT count(*) FROM pkgs_paths = 276522
+  initReceiptDB(forcerebuild: true) wall time: 4.42 s
+exit=0  (workdir /var/folders/65/dmkdjx3901s408vc2g8pb5wh0000gn/T/tmp.jZTHiVmRlH)

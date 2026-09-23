@@ -1,0 +1,44 @@
+casks with zap and a derivable bundle id: 2791; zap trash/delete paths: 14858
+  bundle_id        9626   64.8%
+  app_name         3367   22.7%
+  none              967    6.5%
+  vendor_prefix     898    6.0%
+by root (top 12):
+  ~/Library/Preferences                     3143  bundle_id=81%  vendor_prefix=9%  app_name=8%  none=3%
+  ~/Library/Application Support             2912  bundle_id=32%  vendor_prefix=2%  app_name=54%  none=11%
+  ~/Library/Saved Application State         2274  bundle_id=99%  vendor_prefix=0%  app_name=0%  none=0%
+  ~/Library/Caches                          2099  bundle_id=72%  vendor_prefix=6%  app_name=18%  none=4%
+  ~/Library/HTTPStorages                     933  bundle_id=93%  vendor_prefix=5%  app_name=1%  none=1%
+  ~/Library/Logs                             702  bundle_id=9%  vendor_prefix=1%  app_name=78%  none=13%
+  ~/Library/Application Scripts              558  bundle_id=72%  vendor_prefix=21%  app_name=4%  none=3%
+  ~/Library/Containers                       500  bundle_id=75%  vendor_prefix=18%  app_name=6%  none=2%
+  ~/.<dot>                                   349  bundle_id=2%  vendor_prefix=0%  app_name=70%  none=28%
+  ~/Library/WebKit                           349  bundle_id=92%  vendor_prefix=3%  app_name=4%  none=1%
+  /<other>                                   306  bundle_id=15%  vendor_prefix=13%  app_name=38%  none=34%
+  ~/Library/Group Containers                 199  bundle_id=49%  vendor_prefix=27%  app_name=13%  none=12%
+examples of 'none':
+   010-editor ~/.config/SweetScape
+   010-editor ~/Library/Application Support/SweetScape
+   1password ~/Library/Application Scripts/2BUA8C4S2C.com.agilebits
+   1password ~/Library/Group Containers/2BUA8C4S2C.com.agilebits
+   1password@beta ~/Library/Application Scripts/2BUA8C4S2C.com.agilebits
+   1password@beta ~/Library/Group Containers/2BUA8C4S2C.com.agilebits
+   1password@nightly ~/Library/Group Containers/*.com.agilebits
+   4k-slideshow-maker ~/Library/Application Support/4kdownload.com
+   4k-video-downloader ~/Library/Preferences/com.4kdownload.ApplicationDirectories.plist
+   4k-video-downloader+ ~/Library/Preferences/com.4kdownload.ApplicationDirectories.plist
+   4k-youtube-to-mp3 ~/Library/Application Support/4kdownload.com
+   4k-youtube-to-mp3 ~/Library/Preferences/com.4kdownload.*
+   abbyy-finereader-pdf ~/Library/Application Support/ABBYY
+   ableton-live-intro ~/Library/Application Support/Ableton
+   ableton-live-intro ~/Library/Application Support/CrashReporter/Ableton *_*.plist
+   ableton-live-intro ~/Library/Application Support/CrashReporter/Live_*.plist
+   ableton-live-intro ~/Library/Caches/Ableton
+   ableton-live-intro ~/Library/Preferences/Ableton
+   ableton-live-intro ~/Music/Ableton
+   ableton-live-intro@11 ~/Library/Application Support/Ableton
+   ableton-live-intro@11 ~/Library/Application Support/CrashReporter/Ableton *_*.plist
+   ableton-live-intro@11 ~/Library/Application Support/CrashReporter/Live_*.plist
+   ableton-live-intro@11 ~/Library/Caches/Ableton
+   ableton-live-intro@11 ~/Library/Preferences/Ableton
+   ableton-live-intro@11 ~/Music/Ableton

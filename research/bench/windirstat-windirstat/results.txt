@@ -1,0 +1,84 @@
+# palette_probe.py
+rank  name          swatch RGB (after 0.6 brightness)
+   1  blue          (101, 101, 255)
+   2  red           (255, 101, 101)
+   3  green         (101, 255, 101)
+   4  yellow        (229, 229, 0)
+   5  cyan          (0, 229, 229)
+   6  magenta       (229, 0, 229)
+   7  orange        (255, 193, 10)
+   8  dodger blue   (44, 158, 255)
+   9  hot pink      (255, 44, 158)
+  10  lime green    (158, 255, 44)
+  11  violet        (193, 10, 255)
+  12  spring green  (44, 255, 158)
+  13  deep pink     (255, 10, 193)
+  14  sky blue      (10, 193, 255)
+  15  orange red    (255, 158, 44)
+  16  aquamarine    (10, 255, 193)
+  17  indigo        (158, 44, 255)
+  18  white         (153, 153, 153)
+
+ranks 18 and below all get colors[17] = (153, 153, 153) (one shared gray)
+
+Pairs among the 17 distinct ranks with CIEDE2000 < 10 (hard to tell apart as small tiles):
+  normal    7 pairs: 11-17 (5.3), 12-16 (6.6), 9-13 (6.8), 6-11 (7.7), 3-10 (8.3), 6-13 (8.3), 3-12 (8.8) 
+  deutan   22 pairs: 1-17 (1.4), 4-10 (1.8), 1-11 (2.9), 4-7 (3.5), 6-8 (3.7), 7-10 (4.3), 11-17 (4.4), 7-15 (5.5), 3-10 (5.6), 6-11 (6.5), 3-7 (7.0), 3-4 (7.0) ...
+  protan   21 pairs: 11-17 (0.4), 6-11 (3.0), 6-17 (3.2), 6-13 (3.8), 4-10 (4.0), 3-10 (4.1), 3-4 (4.7), 1-6 (5.4), 1-11 (5.8), 11-13 (5.9), 13-17 (6.0), 1-17 (6.1) ...
+
+Top ranks, pairwise CIEDE2000 (normal / deutan / protan):
+  rank 1 blue    vs rank 2 red    :  41.5 /  58.6 /  45.2
+  rank 1 blue    vs rank 3 green  :  67.9 /  68.9 /  70.9
+  rank 1 blue    vs rank 4 yellow :  83.6 /  74.8 /  71.4
+  rank 1 blue    vs rank 5 cyan   :  46.8 /  28.6 /  33.2
+  rank 2 red     vs rank 3 green  :  78.6 /  15.3 /  32.5
+  rank 2 red     vs rank 4 yellow :  58.4 /  19.5 /  32.0
+  rank 2 red     vs rank 5 cyan   :  63.8 /  36.8 /  31.3
+  rank 3 green   vs rank 4 yellow :  22.5 /   7.0 /   4.7
+  rank 3 green   vs rank 5 cyan   :  31.0 /  40.5 /  34.9
+  rank 4 yellow  vs rank 5 cyan   :  40.7 /  45.1 /  36.5
+
+# hardlink_attribution_probe.py
+folder    WinDirStat  LCA rule  freed if deleted
+.              4.0 M    12.0 M            12.0 M
+A              0.0 M     4.0 M             4.0 M
+A/sub          0.0 M     0.0 M             0.0 M
+B              0.0 M     0.0 M             0.0 M
+C              0.0 M     0.0 M             0.0 M
+D              4.0 M     4.0 M             4.0 M
+<Hardlinks> synthetic node under the drive (WinDirStat): 8.0 M
+
+# dedupe_probe.sh
+== hardlink: before
+keep.bin inode=98025552 links=1 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025553 links=1 mode=-rw------- mtime=Jan  1 00:00:00 2020 size=1048576
+   (scan-time hash taken here; now another process edits dup.bin, same size)
+   dup.bin now DIFFERS from keep.bin
+== hardlink: after replace
+keep.bin inode=98025552 links=2 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025552 links=2 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+   dup.bin edit LOST
+== hardlink: after appending 1 byte to keep.bin
+dup.bin inode=98025552 links=2 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048577
+== clone: before
+keep.bin inode=98025557 links=1 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025558 links=1 mode=-rw------- mtime=Jan  1 00:00:00 2020 size=1048576
+   (scan-time hash taken here; now another process edits dup.bin, same size)
+   dup.bin now DIFFERS from keep.bin
+   re-check failed: dup.bin left untouched
+== clone: after replace
+keep.bin inode=98025557 links=1 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025558 links=1 mode=-rw------- mtime=Sep 23 10:28:51 2026 size=1048576
+   dup.bin edit survived
+== clone: after appending 1 byte to keep.bin
+dup.bin inode=98025558 links=1 mode=-rw------- mtime=Sep 23 10:28:51 2026 size=1048576
+== clone-noedit: before
+keep.bin inode=98025560 links=1 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025561 links=1 mode=-rw------- mtime=Jan  1 00:00:00 2020 size=1048576
+   (scan-time hash taken here; now another process edits dup.bin, same size)
+   dup.bin still identical
+== clone-noedit: after replace
+keep.bin inode=98025560 links=1 mode=-rw-r--r-- mtime=Sep 23 10:28:51 2026 size=1048576
+dup.bin inode=98025562 links=1 mode=-rw------- mtime=Jan  1 00:00:00 2020 size=1048576
+== clone-noedit: after appending 1 byte to keep.bin
+dup.bin inode=98025562 links=1 mode=-rw------- mtime=Jan  1 00:00:00 2020 size=1048576

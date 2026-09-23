@@ -1,0 +1,52 @@
+== control: no placeholder in name
+  template: rm -rf %p
+  target:   My Files/report.txt
+  expanded: rm -rf '$TMP/My Files/report.txt'
+  [/bin/zsh] exit=0
+  argv: <-rf>
+  argv: <$TMP/My Files/report.txt>
+  [/bin/bash] exit=0
+  argv: <-rf>
+  argv: <$TMP/My Files/report.txt>
+  marker files: []
+
+== '%d' in file name, space in dir
+  template: rm -rf %p
+  target:   My Files/Sales 100%done.xlsx
+  expanded: rm -rf '$TMP/My Files/Sales 100'$TMP/My Files'one.xlsx'
+  [/bin/zsh] exit=0
+  argv: <-rf>
+  argv: <$TMP/My Files/Sales 100$TMP/My>
+  argv: <Filesone.xlsx>
+  [/bin/bash] exit=0
+  argv: <-rf>
+  argv: <$TMP/My Files/Sales 100$TMP/My>
+  argv: <Filesone.xlsx>
+  marker files: []
+
+== '%d' in name, '&' in dir name
+  template: rm -rf %p
+  target:   Tom & Jerry/frame%d.png
+  expanded: rm -rf '$TMP/Tom & Jerry/frame'$TMP/Tom & Jerry'.png'
+  [/bin/zsh] exit=127
+  argv: <-rf>
+  argv: <$TMP/Tom & Jerry/frame$TMP/Tom>
+zsh:1: command not found: Jerry.png
+  [/bin/bash] exit=127
+  argv: <-rf>
+  argv: <$TMP/Tom & Jerry/frame$TMP/Tom>
+/bin/bash: Jerry.png: command not found
+  marker files: []
+
+== '%d' in name, $(...) in dir name
+  template: rm -rf %p
+  target:   x$(touch PWNED)/frame%d.png
+  expanded: rm -rf '$TMP/x$(touch PWNED)/frame'$TMP/x$(touch PWNED)'.png'
+  [/bin/zsh] exit=0
+  argv: <-rf>
+  argv: <$TMP/x$(touch PWNED)/frame$TMP/x.png>
+  [/bin/bash] exit=0
+  argv: <-rf>
+  argv: <$TMP/x$(touch PWNED)/frame$TMP/x.png>
+  marker files: ['x$(touch PWNED)/PWNED']
+
