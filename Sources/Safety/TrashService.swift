@@ -26,6 +26,9 @@ public enum RefusalReason: Error, Sendable, Hashable {
     case systemProtected
     /// The user set the Locked flag. It is never cleared for them (F-0024, F-0070).
     case locked
+    /// A folder holding an item the user locked; the string is that item's path inside the folder. Moving the
+    /// folder would carry the locked item into the Trash, one Empty Trash away from deletion.
+    case holdsLocked(String)
     /// The path now names a different object than the scan saw.
     case identityChanged
     case missing

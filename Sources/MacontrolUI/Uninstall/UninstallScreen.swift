@@ -8,11 +8,14 @@ struct UninstallScreen: View {
     @Bindable var model: UninstallModel
 
     var body: some View {
-        HSplitView {
+        // An HStack, not HSplitView: the split view asked for more width than its panes' minimums, and at the
+        // minimum window it pushed the Uninstall button off screen (T-0056).
+        HStack(spacing: 0) {
             AppListPane(model: model)
-                .frame(minWidth: 250, idealWidth: 290, maxWidth: 380)
+                .frame(width: 280)
+            Divider()
             AppDetailView(model: model)
-                .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Uninstall")
         .task { await model.loadApps() }

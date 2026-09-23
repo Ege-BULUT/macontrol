@@ -18,7 +18,10 @@ public enum SnapshotRenderer {
     }
 
     static var shots: [Shot] {
-        SidebarItem.allCases.map { Shot(name: $0.rawValue, view: AnyView(RootView(model: .demo(selection: $0))), size: windowSize) } + [
+        SidebarItem.allCases.map { Shot(name: $0.rawValue, view: AnyView(RootView(model: .demo(selection: $0))), size: windowSize) }
+        // The minimum window hides what the default size has room for (T-0056).
+        + SidebarItem.allCases.map { Shot(name: "\($0.rawValue)-small", view: AnyView(RootView(model: .demo(selection: $0))), size: RootView.minimumSize) }
+        + [
             Shot(name: "overview-limited", view: AnyView(RootView(model: .demo(fullDiskAccess: .denied))), size: windowSize),
             Shot(name: "onboarding", view: AnyView(OnboardingSheet(access: .demo())), size: nil),
             Shot(name: "onboarding-relaunch", view: AnyView(OnboardingSheet(access: .demo(returnedFromSettings: true))), size: nil),

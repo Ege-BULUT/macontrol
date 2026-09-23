@@ -30,6 +30,7 @@ extension RefusalReason {
         case .protectedLocation(let name): "Not moved: macontrol never deletes \(name)"
         case .systemProtected: "Not moved: macOS protects this item"
         case .locked: "Not moved: it is locked (Finder, Get Info)"
+        case .holdsLocked(let item): "Not moved: it holds \(item), which is locked (Finder, Get Info)"
         case .identityChanged: "Not moved: it changed since the scan. Scan again."
         case .missing: "Not moved: it is already gone"
         case .needsCloudConfirmation: "Not moved: it is in iCloud, so deleting it would delete it on every device"

@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 public struct RootView: View {
+    /// The window's minimum. Every screen must fit it whole: SnapshotTests lays each one out at this size.
+    public static let minimumSize = CGSize(width: 900, height: 600)
+
     @Bindable var model: AppModel
 
     public init(model: AppModel) {
@@ -30,6 +33,7 @@ public struct RootView: View {
         .fileImporter(isPresented: $model.isChoosingFolder, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { model.scan(.folder(url)) }
         }
+        .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.access.appDidBecomeActive()
         }

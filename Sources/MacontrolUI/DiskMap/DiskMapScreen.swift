@@ -46,14 +46,15 @@ private struct DiskMapWorkspace: View {
                 .focused($mapFocused)
                 .onKeyPress(action: handleKey)
             }
-            .frame(minWidth: 460)
+            // With the sidebar and the inspector, this keeps the map whole in the minimum window (T-0056).
+            .frame(minWidth: 380)
             Divider()
             VStack(spacing: 0) {
                 InspectorPanel(model: model, tree: tree)
                 Divider()
                 ItemList(model: model, tree: tree)
             }
-            .frame(width: 330)
+            .frame(width: 300)
             .background(.background.secondary)
         }
         .onAppear { mapFocused = true }

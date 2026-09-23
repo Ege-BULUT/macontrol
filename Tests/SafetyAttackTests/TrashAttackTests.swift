@@ -174,7 +174,7 @@ import Testing
 
     /// The swap lands after the last check, inside the move itself. A path-based move (the sandbox's rename, like
     /// `FileManager.trashItem`) follows the new link, so the object that leaves is not the one that was checked.
-    /// Safety must notice that what reached the Trash is not what it checked, and put it back.
+    /// Safety notices that what reached the Trash is not what it checked, puts it back and journals nothing (T-0053).
     @Test func aSwapInsideTheMoveMustNotTrashTheLinkedFile() async throws {
         try box.file("\(caches)/com.example.window/data.bin")
         try box.file("home/Documents/proj/data.bin")
@@ -187,27 +187,65 @@ import Testing
 
         let report = await box.service().moveToTrash([item("\(caches)/com.example.window/data.bin")])
 
-        withKnownIssue("T-0053: the moved object is not checked against the identity after the move") {
-            #expect(box.tree().filter { $0.key.hasPrefix("home/Documents") } == documents, "Documents/proj/data.bin went to the Trash")
-            #expect(report.outcomes.first?.isTrashed != true)
+        #expect(box.tree().filter { $0.key.hasPrefix("home/Documents") } == documents, "Documents/proj/data.bin went to the Trash")
+        #expect(report.outcomes.map(\.refusal) == [.identityChanged])
+        #expect(await box.service().history().isEmpty, "a move that was put back must not be journaled")
+    }
+
+    /// As above, but something takes the linked file's place before it can go back. It stays in the Trash, the
+    /// outcome says it failed, and the journal holds it under the place it came from, so Undo restores it.
+    @Test func aSwappedMoveThatCannotGoBackIsJournaledForUndo() async throws {
+        try box.file("\(caches)/com.example.window/data.bin")
+        let linked = try box.file("home/Documents/proj/data.bin", size: 777)
+        let linkedIdentity = try #require(FileIdentity(url: linked))
+        box.beforeEachMove { box, _ in
+            try? box.swapForSymlink("home/Library/Caches/com.example.window", to: box.url("home/Documents/proj"))
         }
+        box.afterEachMove { box, _ in _ = try? box.file("home/Documents/proj/data.bin", size: 1) }
+
+        let service = box.service()
+        let report = await service.moveToTrash([item("\(caches)/com.example.window/data.bin")])
+
+        guard case .failed? = report.outcomes.first else { Issue.record("\(report.outcomes)"); return }
+        let history = await service.history()
+        #expect(history.map(\.identity) == [linkedIdentity])
+        #expect(history.map(\.originalPath) == [linked.path])
+        try FileManager.default.removeItem(at: linked)
+        #expect(await service.undo(batch: report.batch).allSatisfy { $0.isRestored })
+        #expect(FileIdentity(url: linked) == linkedIdentity)
     }
 
     /// A hard link keeps the identity through a folder swap: `com.example.shared/blob` and `Documents/proj/blob`
-    /// are one inode, and after the swap the selected path reaches the Documents name. Identity alone passes it.
+    /// are one inode, and after the swap the selected path reaches the Documents name. Identity alone passes it,
+    /// so the path must also still lead where it was named to, with no link on the way (T-0054).
     @Test func aSwapOntoAHardLinkMustNotTrashTheDocumentsName() async throws {
         try box.file("home/Documents/proj/blob")
         try box.tmp.hardLink("\(caches)/com.example.shared/blob", to: "home/Documents/proj/blob")
         let selected = item("\(caches)/com.example.shared/blob")
         try box.swapForSymlink("\(caches)/com.example.shared", to: box.url("home/Documents/proj"))
-        let before = box.tree()
 
-        let report = await box.service().moveToTrash([selected])
+        let report = await expectOnly([], leaveWhenTrashing: [selected])
 
-        withKnownIssue("T-0054: a folder in the path that became a link is not noticed when the leaf keeps its identity") {
-            #expect(Sandbox.difference(box.tree(), before) == [], "Documents/proj/blob went to the Trash")
-            #expect(report.outcomes.first?.refusal != nil)
-        }
+        #expect(report.outcomes.map(\.refusal) == [.identityChanged])
+        #expect(box.backendCalls.isEmpty)
+    }
+
+    /// macOS's own spellings of a path still reach it: other case, the Data volume's prefix, a composed name for a
+    /// decomposed one on disk. The link check must not refuse them.
+    @Test func systemSpellingsOfAPathStillMove() async throws {
+        try box.file("\(caches)/com.example.case/blob")
+        try box.file("\(caches)/com.example.data/blob")
+        try box.file("\(caches)/cafe\u{0301}/blob")
+        let other = TrashItem(url: box.url("home/library/CACHES/COM.EXAMPLE.CASE"), expectedIdentity: nil)
+        let data = TrashItem(url: URL(fileURLWithPath: "/System/Volumes/Data" + box.url("\(caches)/com.example.data").path), expectedIdentity: nil)
+        let composed = TrashItem(url: box.url("\(caches)/caf\u{00E9}"), expectedIdentity: nil)
+
+        let report = await expectOnly(
+            ["\(caches)/com.example.case", "\(caches)/com.example.data", "\(caches)/cafe\u{0301}"],
+            leaveWhenTrashing: [other, data, composed]
+        )
+
+        #expect(report.outcomes.allSatisfy { $0.isTrashed }, "\(report.outcomes)")
     }
 
     // MARK: Locked items
@@ -227,19 +265,23 @@ import Testing
         #expect(report.outcomes.map(\.refusal) == [.locked, .locked, .locked])
     }
 
-    /// The user locked one file inside a folder that is selected as a whole. The lock says "keep this"; it must
-    /// not ride into the Trash with its folder, where Empty Trash is one click from it.
+    /// The user locked a file inside a folder that is selected as a whole, one deep and one two levels down. The
+    /// lock says "keep this"; it must not ride into the Trash with its folder, where Empty Trash is one click from it.
+    /// The folder stays whole and the refusal names the locked file; an unlocked folder next to it still goes.
     @Test func aLockedFileInsideASelectedFolderStays() async throws {
         try box.file("\(caches)/com.example.holder/junk.bin")
         try box.file("\(caches)/com.example.holder/keepsake.txt")
-        #expect(chflags(box.url("\(caches)/com.example.holder/keepsake.txt").path, UInt32(UF_IMMUTABLE)) == 0)
-        let before = box.tree()
-
-        _ = await box.service().moveToTrash([item("\(caches)/com.example.holder")])
-
-        withKnownIssue("T-0055: only the item and its folder are checked for the Locked flag, not what the item holds") {
-            #expect(before["\(caches)/com.example.holder/keepsake.txt"] == box.tree()["\(caches)/com.example.holder/keepsake.txt"])
+        try box.file("\(caches)/com.example.deeper/a/b/keepsake.txt")
+        try box.file("\(caches)/com.example.deeper/a/junk.bin")
+        try box.file("\(caches)/com.example.plain/junk.bin")
+        for path in ["com.example.holder/keepsake.txt", "com.example.deeper/a/b/keepsake.txt"] {
+            #expect(chflags(box.url("\(caches)/\(path)").path, UInt32(UF_IMMUTABLE)) == 0)
         }
+        let items = ["com.example.holder", "com.example.deeper", "com.example.plain"].map { item("\(caches)/\($0)") }
+
+        let report = await expectOnly(["\(caches)/com.example.plain"], leaveWhenTrashing: items)
+
+        #expect(report.outcomes.map(\.refusal) == [.holdsLocked("keepsake.txt"), .holdsLocked("a/b/keepsake.txt"), nil])
     }
 
     // MARK: Unchecked children (keep)

@@ -152,12 +152,61 @@ struct ProtectionPolicy: Sendable {
     private static let restricted: UInt32 = 0x0008_0000
     private static let noUnlink: UInt32 = 0x0010_0000
 
+    /// Finder's Locked checkbox, and the append-only flag a user can set the same way.
+    private static let userLock = UInt32(UF_IMMUTABLE) | UInt32(UF_APPEND)
+
     /// `sunlnk` protects only the item itself: /Applications has it, and its apps can still go.
     private static func flagRefusal(item: UInt32, parent: UInt32) -> RefusalReason? {
         let system = restricted | UInt32(SF_IMMUTABLE) | UInt32(SF_APPEND)
-        let user = UInt32(UF_IMMUTABLE) | UInt32(UF_APPEND)
         if item & (system | noUnlink) != 0 || parent & system != 0 { return .systemProtected }
-        if item & user != 0 || parent & user != 0 { return .locked }
+        if item & userLock != 0 || parent & userLock != 0 { return .locked }
+        return nil
+    }
+
+    /// The first item inside the folder at `path` that the user locked, as a path relative to the folder; nil when
+    /// there is none or `path` is not a folder. Only checked right before a move, never while staging: it walks the
+    /// whole folder.
+    static func lockedItem(inside path: String) -> String? {
+        let folder = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard folder >= 0 else { return nil }
+        var info = stat()
+        guard fstat(folder, &info) == 0, info.st_flags & UInt32(SF_DATALESS) == 0 else {
+            close(folder)
+            return nil
+        }
+        return lockedItem(inside: folder, device: info.st_dev)
+    }
+
+    /// Walks fd-relative without following links, so a tree deeper than PATH_MAX is covered too. It stays on the
+    /// folder's volume, skips folders it cannot open (the user cannot have locked anything in them), and never
+    /// lists an evicted iCloud folder, since listing one downloads it (F-0019). Takes ownership of `fd`.
+    // ponytail: one fstatat per entry; getattrlistbulk (as ScanEngine's BulkReader) if big folders make it slow.
+    private static func lockedItem(inside fd: Int32, device: dev_t) -> String? {
+        guard let listing = fdopendir(fd) else {
+            close(fd)
+            return nil
+        }
+        defer { closedir(listing) }
+        let folder = dirfd(listing)
+        while let entry = readdir(listing) {
+            var name = entry.pointee.d_name
+            let capacity = MemoryLayout.size(ofValue: name)
+            let found = withUnsafePointer(to: &name) {
+                $0.withMemoryRebound(to: CChar.self, capacity: capacity) { name -> String? in
+                    if strcmp(name, ".") == 0 || strcmp(name, "..") == 0 { return nil }
+                    var info = stat()
+                    guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return nil }
+                    if info.st_flags & userLock != 0 { return String(cString: name) }
+                    let isWalkable = info.st_mode & S_IFMT == S_IFDIR && info.st_dev == device
+                        && info.st_flags & UInt32(SF_DATALESS) == 0
+                    guard isWalkable else { return nil }
+                    let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                    guard child >= 0, let inside = lockedItem(inside: child, device: device) else { return nil }
+                    return String(cString: name) + "/" + inside
+                }
+            }
+            if let found { return found }
+        }
         return nil
     }
 

@@ -33,6 +33,7 @@ enum DiskMapText {
         case .protectedLocation(let path): "Protected location: macontrol never removes \(path)"
         case .systemProtected: "Protected by macOS (System Integrity Protection or a read-only volume)"
         case .locked: "Locked in Finder. Unlock it there first"
+        case .holdsLocked(let item): "Holds \(item), locked in Finder. Unlock it there first"
         case .identityChanged: "Changed on disk since the scan. Rescan, then try again"
         case .missing: "No longer there"
         case .needsCloudConfirmation: "In iCloud Drive: removing it removes it on every device"

@@ -17,6 +17,7 @@ final class Sandbox: @unchecked Sendable {
     private let lock = NSLock()
     private var moved: [URL] = []
     private var hook: (@Sendable (Sandbox, URL) -> Void)?
+    private var afterHook: (@Sendable (Sandbox, URL) -> Void)?
     private var deepChains: [(fd: Int32, name: String)] = []
 
     init() throws {
@@ -47,6 +48,11 @@ final class Sandbox: @unchecked Sendable {
         lock.withLock { self.hook = hook }
     }
 
+    /// Runs just after the backend moved each item, with the item's original URL.
+    func afterEachMove(_ hook: @escaping @Sendable (Sandbox, URL) -> Void) {
+        lock.withLock { afterHook = hook }
+    }
+
     var backendCalls: [URL] { lock.withLock { moved } }
 
     func service() -> TrashService {
@@ -64,6 +70,7 @@ final class Sandbox: @unchecked Sendable {
             let destination = trashFolder.appendingPathComponent(UUID().uuidString).appendingPathComponent(url.lastPathComponent)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: false)
             try FileManager.default.moveItem(at: url, to: destination)
+            lock.withLock { afterHook }?(self, url)
             return destination
         }
     }
