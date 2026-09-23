@@ -149,7 +149,7 @@ private struct ItemRow: View {
     }
 
     private var noteColor: Color {
-        if case .node = row.kind { .orange } else { .secondary }
+        if case .node = row.kind { Theme.cautionText } else { .secondary }
     }
 
     private var symbol: String {

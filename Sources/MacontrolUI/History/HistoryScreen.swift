@@ -89,7 +89,7 @@ private struct BatchCard: View {
             .foregroundStyle(.secondary)
             ForEach(problems, id: \.self) { problem in
                 Label("Not put back: \(problem)", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Theme.caution)
+                    .foregroundStyle(Theme.cautionText)
             }
         }
         .card()

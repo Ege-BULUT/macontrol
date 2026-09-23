@@ -55,6 +55,15 @@ extension SafetyLevel {
         }
     }
 
+    /// The badge's text; `tint` stays for its fill.
+    var textTint: Color {
+        switch self {
+        case .safe: Theme.successText
+        case .review: Theme.cautionText
+        case .manual: .secondary
+        }
+    }
+
     /// What the level means, under the rule's own note in the badge popover.
     var explanation: String {
         switch self {

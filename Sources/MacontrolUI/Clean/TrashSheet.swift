@@ -76,7 +76,7 @@ struct TrashSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let warning, report == nil {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.cautionText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let errorMessage {
@@ -142,11 +142,11 @@ private struct TrashSheetRowView: View {
                 if let notMoved {
                     Label("Not moved: \(notMoved)", systemImage: "pause.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.cautionText)
                 } else if let outcome {
                     Label(outcome.words, systemImage: outcome.isTrashed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(outcome.isTrashed ? .green : .orange)
+                        .foregroundStyle(outcome.isTrashed ? Theme.successText : Theme.cautionText)
                 } else if isDone {
                     Label("No result was reported for this item", systemImage: "questionmark.circle")
                         .font(.caption)

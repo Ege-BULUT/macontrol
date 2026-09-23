@@ -14,7 +14,7 @@ public struct SettingsView: View {
                 LabeledContent("Full Disk Access") {
                     HStack {
                         Text(access.isLimited ? "Off" : "On")
-                            .foregroundStyle(access.isLimited ? Theme.caution : .secondary)
+                            .foregroundStyle(access.isLimited ? Theme.cautionText : .secondary)
                         Button("Open System Settings") { access.openSettings() }
                     }
                 }

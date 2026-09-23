@@ -31,9 +31,9 @@ struct ReviewSheet: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.name).lineLimit(1)
                         Text(item.url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                        if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(.orange) }
-                        if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-                        if let note = item.note { Text(note).font(.caption).foregroundStyle(.orange) }
+                        if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(Theme.cautionText) }
+                        if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.cautionText) }
+                        if let note = item.note { Text(note).font(.caption).foregroundStyle(Theme.cautionText) }
                     }
                     Spacer()
                     Text(DiskMapText.size(item.bytes, isLowerBound: item.isIncomplete)).monospacedDigit().foregroundStyle(.secondary)
@@ -123,7 +123,7 @@ struct ReviewSheet: View {
                         Text(outcome.name).lineLimit(1)
                         switch outcome.status {
                         case .inTrash: Text("In Trash").font(.caption).foregroundStyle(.secondary)
-                        case .notMoved(let reason): Text(reason).font(.caption).foregroundStyle(.orange)
+                        case .notMoved(let reason): Text(reason).font(.caption).foregroundStyle(Theme.cautionText)
                         }
                     }
                     Spacer()

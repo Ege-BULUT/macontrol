@@ -19,7 +19,7 @@ struct InspectorPanel: View {
             if let message = model.stagingMessage {
                 Label(message, systemImage: "hand.raised.fill")
                     .font(.callout)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.cautionText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -62,7 +62,7 @@ struct InspectorPanel: View {
             ForEach(DiskMapText.notes(for: flags), id: \.self) { note in
                 Label(note.text, systemImage: note.symbol)
                     .font(.callout)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.cautionText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             actions(node)

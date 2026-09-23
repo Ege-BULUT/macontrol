@@ -85,7 +85,7 @@ private struct WaitingStatus: View {
     var body: some View {
         if suggestsRelaunch {
             Label("Still off. If you just turned it on, macOS may apply it only after a relaunch.", systemImage: "exclamationmark.circle.fill")
-                .foregroundStyle(Theme.caution)
+                .foregroundStyle(Theme.cautionText)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             HStack(spacing: 8) {

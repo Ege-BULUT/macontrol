@@ -25,7 +25,7 @@ struct CleanRow: View {
                 if let reason = item.skipReason {
                     Label("Skipped: \(reason)", systemImage: "pause.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.cautionText)
                 } else if let caution = item.caution {
                     Label(caution, systemImage: "info.circle")
                         .font(.caption)
@@ -81,7 +81,7 @@ struct SafetyBadge: View {
         Button { isExplaining.toggle() } label: {
             Text(rule.safety.title)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(rule.safety.tint)
+                .foregroundStyle(rule.safety.textTint)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(rule.safety.tint.opacity(0.14), in: .capsule)
