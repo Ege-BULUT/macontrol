@@ -2,17 +2,21 @@ import AppKit
 import Foundation
 import MacontrolUI
 
-// Hidden mode: `Macontrol --snapshot <dir>` renders every screen with demo data and exits.
+// Hidden modes, both exit when done:
+//   Macontrol --snapshot <dir>       renders every screen with demo data, light and dark
+//   Macontrol --render-icon <dir>    writes the app icon as an .iconset for iconutil
 let arguments = CommandLine.arguments
-if let flag = arguments.firstIndex(of: "--snapshot"), arguments.indices.contains(flag + 1) {
+for (flag, render) in [
+    ("--snapshot", { (url: URL) in try SnapshotRenderer.renderAll(to: url).forEach { print($0.path) } }),
+    ("--render-icon", { (url: URL) in try SnapshotRenderer.renderIconSet(to: url) }),
+] {
+    guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { continue }
     NSApplication.shared.setActivationPolicy(.prohibited)
     do {
-        for url in try SnapshotRenderer.renderAll(to: URL(fileURLWithPath: arguments[flag + 1])) {
-            print(url.path)
-        }
+        try render(URL(fileURLWithPath: arguments[index + 1]))
         exit(0)
     } catch {
-        FileHandle.standardError.write(Data("snapshot failed: \(error)\n".utf8))
+        FileHandle.standardError.write(Data("\(flag) failed: \(error)\n".utf8))
         exit(1)
     }
 }

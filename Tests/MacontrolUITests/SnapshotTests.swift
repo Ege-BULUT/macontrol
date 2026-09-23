@@ -1,16 +1,18 @@
 import AppKit
 import Foundation
-import MacontrolUI
+@testable import MacontrolUI
 import Testing
 
 @Suite struct SnapshotTests {
-    @Test func everyScreenRendersToAPNG() throws {
+    @Test func everyShotRendersToAPNG() throws {
         _ = NSApplication.shared
         let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47]
-        for item in SidebarItem.allCases {
-            let data = try SnapshotRenderer.png(of: RootView(model: .demo(selection: item)))
-            #expect(Array(data.prefix(4)) == pngSignature, "\(item)")
-            #expect(data.count > 20_000, "\(item) rendered almost nothing")
+        let names = SnapshotRenderer.shots.map(\.name)
+        #expect(Set(names).isSuperset(of: SidebarItem.allCases.map(\.rawValue) + ["onboarding", "overview-limited"]))
+        for shot in SnapshotRenderer.shots {
+            let data = try SnapshotRenderer.png(of: shot.view, size: shot.size)
+            #expect(Array(data.prefix(4)) == pngSignature, "\(shot.name)")
+            #expect(data.count > 20_000, "\(shot.name) rendered almost nothing")
         }
     }
 }

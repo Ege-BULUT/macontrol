@@ -10,30 +10,51 @@ import SwiftUI
 public enum SnapshotRenderer {
     public static let windowSize = CGSize(width: 1180, height: 760)
 
-    /// Writes `<screen>-light.png` and `<screen>-dark.png` for every sidebar item. Returns the files written.
+    /// A named screen state. `size` nil means the view's own fitting size (sheets).
+    struct Shot {
+        var name: String
+        var view: AnyView
+        var size: CGSize?
+    }
+
+    static var shots: [Shot] {
+        SidebarItem.allCases.map { Shot(name: $0.rawValue, view: AnyView(RootView(model: .demo(selection: $0))), size: windowSize) } + [
+            Shot(name: "overview-limited", view: AnyView(RootView(model: .demo(fullDiskAccess: .denied))), size: windowSize),
+            Shot(name: "onboarding", view: AnyView(OnboardingSheet(access: .demo())), size: nil),
+            Shot(name: "onboarding-relaunch", view: AnyView(OnboardingSheet(access: .demo(returnedFromSettings: true))), size: nil),
+        ]
+    }
+
+    /// Writes `<shot>-light.png` and `<shot>-dark.png` for every shot. Returns the files written.
     @discardableResult
     public static func renderAll(to directory: URL) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var written: [URL] = []
-        for item in SidebarItem.allCases {
+        for shot in shots {
             for dark in [false, true] {
-                let url = directory.appendingPathComponent("\(item.rawValue)-\(dark ? "dark" : "light").png")
-                try png(of: RootView(model: .demo(selection: item)), dark: dark).write(to: url)
+                let url = directory.appendingPathComponent("\(shot.name)-\(dark ? "dark" : "light").png")
+                try png(of: shot.view, dark: dark, size: shot.size).write(to: url)
                 written.append(url)
             }
         }
         return written
     }
 
-    public static func png(of view: some View, dark: Bool = false, size: CGSize = windowSize) throws -> Data {
+    public static func png(of view: some View, dark: Bool = false, size: CGSize? = windowSize) throws -> Data {
+        let hosting = NSHostingView(rootView: AnyView(view))
+        // Lets `.toolbar` and `.navigationTitle` reach the window, as they do in the real app.
+        hosting.sceneBridgingOptions = [.toolbars, .title]
+        let contentSize = size ?? hosting.fittingSize
+        hosting.rootView = AnyView(view.frame(width: contentSize.width, height: contentSize.height).environment(\.controlActiveState, .key))
+
         let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: size),
-            styleMask: [.titled, .fullSizeContentView],
+            contentRect: CGRect(origin: .zero, size: contentSize),
+            styleMask: size == nil ? [.borderless] : [.titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        window.contentView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
+        window.contentView = hosting
         window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
         window.orderFrontRegardless()
         defer { window.orderOut(nil) }
@@ -41,6 +62,28 @@ public enum SnapshotRenderer {
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 
         let image = try windowImage(window) ?? cachedDisplay(window)
+        return try pngData(image)
+    }
+
+    /// The app icon as an `.iconset` folder for `iconutil` (scripts/bundle-app.sh).
+    public static func renderIconSet(to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for points in [16, 32, 128, 256, 512] {
+            for scale in [1, 2] {
+                let pixels = CGFloat(points * scale)
+                // macOS icon grid: the tile is 824 of 1024, centered, so it lines up with other apps in the Dock.
+                let icon = AppIconView()
+                    .padding(pixels * 100 / 1024)
+                    .shadow(color: .black.opacity(0.25), radius: pixels * 10 / 1024, y: pixels * 6 / 1024)
+                    .frame(width: pixels, height: pixels)
+                guard let image = ImageRenderer(content: icon).cgImage else { throw CocoaError(.fileWriteUnknown) }
+                let name = scale == 1 ? "icon_\(points)x\(points).png" : "icon_\(points)x\(points)@2x.png"
+                try pngData(image).write(to: directory.appendingPathComponent(name))
+            }
+        }
+    }
+
+    private static func pngData(_ image: CGImage) throws -> Data {
         guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
             throw CocoaError(.fileWriteUnknown)
         }
@@ -67,5 +110,17 @@ public enum SnapshotRenderer {
         view.cacheDisplay(in: view.bounds, to: bitmap)
         guard let image = bitmap.cgImage else { throw CocoaError(.fileWriteUnknown) }
         return image
+    }
+}
+
+extension AccessModel {
+    /// Onboarding with Full Disk Access off. Opens nothing: the URL opener is a no-op.
+    static func demo(returnedFromSettings: Bool = false) -> AccessModel {
+        let access = AccessModel(status: .denied, probe: { .denied }, openURL: { _ in false })
+        if returnedFromSettings {
+            access.openSettings()
+            access.appDidBecomeActive()
+        }
+        return access
     }
 }
