@@ -48,5 +48,10 @@ let package = Package(
             dependencies: ["MacontrolUI", "TestSupport"],
             swiftSettings: mainActorByDefault
         ),
+        // Hostile fixture trees driven through every destructive path (T-0052).
+        .testTarget(
+            name: "SafetyAttackTests",
+            dependencies: ["MacontrolCore", "ScanEngine", "Safety", "Cleaner", "Uninstaller", "MacontrolUI", "TestSupport"]
+        ),
     ]
 )
