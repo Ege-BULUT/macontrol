@@ -3,7 +3,7 @@ import Foundation
 import MacontrolCore
 
 extension CleanModel {
-    /// Sample results covering every row state: safe, review, manual, skipped, unreadable inside.
+    /// Sample results covering every row state: safe, review, manual, skipped, caution, unreadable inside.
     /// Paths are fictional and nothing is read or moved.
     static func demo() -> CleanModel {
         CleanModel(cleaner: nil, trash: nil, engine: nil, items: DemoCleanup.items)
@@ -24,6 +24,7 @@ enum DemoCleanup {
         item(caches, "Library/Caches/com.example.Editor", 1.31),
         item(caches, "Library/Caches/com.spotify.client", 0.84),
         item(caches, "Library/Caches/Homebrew", 2.26),
+        item(caches, "Library/Caches/Helper", 0.26, caution: "Cache of an unidentified app"),
         item(chrome, "Library/Caches/Google/Chrome", 0.92),
         item(safari, "Library/Caches/com.apple.Safari", 0.41, skip: "Safari is running"),
         item(derived, "Library/Developer/Xcode/DerivedData/Macontrol-abc", 6.8),
@@ -39,12 +40,14 @@ enum DemoCleanup {
         CleanupRule(id: id, title: title, category: category, safety: safety, paths: [], minimumAgeDays: nil, note: note)
     }
 
-    private static func item(_ rule: CleanupRule, _ path: String, _ gigabytes: Double, skip: String? = nil, incomplete: Bool = false) -> CleanupItem {
+    private static func item(
+        _ rule: CleanupRule, _ path: String, _ gigabytes: Double, skip: String? = nil, caution: String? = nil, incomplete: Bool = false
+    ) -> CleanupItem {
         let bytes = UInt64(gigabytes * 1_000_000_000)
         return CleanupItem(
             rule: rule, url: URL(fileURLWithPath: "/Users/demo/\(path)"), identity: nil,
             measurement: ItemMeasurement(allocated: bytes, logical: bytes, fileCount: 1200, newestModification: nil, isIncomplete: incomplete),
-            skipReason: skip
+            skipReason: skip, caution: caution
         )
     }
 }

@@ -17,13 +17,16 @@ enum SpaceEstimate: Equatable {
 /// The open review sheet: exactly the items that will move, fixed when the sheet opens.
 struct CleanReview: Identifiable {
     let id = UUID()
-    let items: [CleanupItem]
+    /// Rechecked just before the move, so sizes and skip reasons are as fresh as the outcome.
+    var items: [CleanupItem]
     /// Checked items inside another checked item; they move with it and are not listed twice.
     let nestedCount: Int
     /// Checked items the search currently hides. The sheet lists them anyway and says so.
     let hiddenBySearch: Int
     var isWorking = false
     var report: TrashReport?
+    /// Items the recheck held back, with the reason. They stay listed and are not sent to the Trash.
+    var notMoved: [URL: String] = [:]
 }
 
 /// A category section: its items, largest first, filtered by the search.
@@ -32,7 +35,7 @@ struct CleanGroup: Identifiable {
     let items: [CleanupItem]
     var id: CleanupCategory { category }
     var allocated: UInt64 { items.reduce(0) { $0 + $1.measurement.allocated } }
-    var cleanable: [CleanupItem] { items.filter(\.isCleanable) }
+    var cleanable: [CleanupItem] { items.filter(\.canClean) }
 }
 
 @Observable
@@ -69,22 +72,25 @@ public final class CleanModel {
     }
 
     /// Streams items in as the cleaner measures them; checkboxes start from `isPreselected` only.
+    /// The scan runs in its own task: leaving the screen cancels the view's `.task`, and a cut-short
+    /// scan must not pass for a finished one ("Your Mac is tidy") here or on the Overview.
     func scan() async {
         guard let cleaner, !isScanning else { return }
         isScanning = true
         scanError = nil
         items = []
         selection = []
-        defer {
-            isScanning = false
-            hasScanned = true
-        }
+        await Task { await consume(cleaner.scan()) }.value
+        isScanning = false
+        hasScanned = true
+    }
+
+    private func consume(_ stream: AsyncThrowingStream<CleanupItem, any Error>) async {
         do {
-            for try await item in cleaner.scan() {
+            for try await item in stream {
                 items.append(item)
                 if item.isPreselected { selection.insert(item.url) }
             }
-        } catch is CancellationError {
         } catch {
             scanError = error.localizedDescription
         }
@@ -106,22 +112,23 @@ public final class CleanModel {
     }
 
     var selectedItems: [CleanupItem] {
-        items.filter { $0.isCleanable && selection.contains($0.url) }
+        items.filter { $0.canClean && selection.contains($0.url) }
     }
 
-    var foundBytes: UInt64 { items.reduce(0) { $0 + $1.measurement.allocated } }
+    /// What a clean could take. Manual and skipped items are listed but are not junk found.
+    var cleanableBytes: UInt64 { items.filter(\.canClean).reduce(0) { $0 + $1.measurement.allocated } }
     var inTrashBytes: UInt64 { inTrash.reduce(0) { $0 + $1.measurement.allocated } }
 
     func isChecked(_ item: CleanupItem) -> Bool { selection.contains(item.url) }
 
     func setChecked(_ checked: Bool, _ item: CleanupItem) {
-        guard item.isCleanable else { return }
+        guard item.canClean else { return }
         if checked { selection.insert(item.url) } else { selection.remove(item.url) }
     }
 
     /// Space on highlighted rows: all on if any is off, otherwise all off. Uncleanable rows are ignored.
     func toggle(_ urls: Set<URL>) {
-        let targets = items.filter { urls.contains($0.url) && $0.isCleanable }
+        let targets = items.filter { urls.contains($0.url) && $0.canClean }
         let turnOn = targets.contains { !isChecked($0) }
         for item in targets { setChecked(turnOn, item) }
     }
@@ -130,8 +137,13 @@ public final class CleanModel {
         for item in group.cleanable { setChecked(checked, item) }
     }
 
-    /// Recomputes what the checked items free. Called from `.task(id: selection)`, which cancels stale runs.
+    /// Drives `.task(id:)` for the estimate. Constant while scanning: each streamed-in preselected item
+    /// would otherwise start another walk of the whole selection, competing with the scan for the disk.
+    var estimateKey: Set<URL>? { isScanning ? nil : selection }
+
+    /// Recomputes what the checked items free. Called from `.task(id: estimateKey)`, which cancels stale runs.
     func refreshEstimate() async {
+        guard !isScanning else { return }
         let selected = selectedItems
         let allocated = selected.reduce(0) { $0 + $1.measurement.allocated }
         guard let engine, cleaner != nil else {
@@ -151,23 +163,36 @@ public final class CleanModel {
 
     func beginReview() {
         let selected = selectedItems
-        guard !selected.isEmpty, review == nil else { return }
+        guard !selected.isEmpty, review == nil, !isScanning else { return }
         let kept = Set(selected.map(\.url).removingNested())
+        let listed = selected.filter { kept.contains($0.url) }
         let visible = Set(groups.flatMap(\.items).map(\.url))
         review = CleanReview(
-            items: selected.filter { kept.contains($0.url) },
+            items: listed,
             nestedCount: selected.count - kept.count,
-            hiddenBySearch: selected.filter { !visible.contains($0.url) }.count
+            hiddenBySearch: listed.filter { !visible.contains($0.url) }.count
         )
     }
 
-    /// Moves exactly the reviewed items, then applies each outcome.
+    /// Checks the reviewed items again, moves the ones that still pass, then applies each outcome.
+    /// The scan can be hours old: an app launched since keeps its cache (F-0015).
     func confirmReview() async {
         guard let pending = review, pending.report == nil, !pending.isWorking else { return }
         review?.isWorking = true
-        let batch = pending.items.map(\.trashItem)
+        var toMove = pending.items
+        if let cleaner {
+            let checked = await cleaner.recheck(pending.items)
+            update(with: checked)
+            toMove = checked.filter(\.canClean)
+            review?.items = checked
+            review?.notMoved = Dictionary(
+                checked.filter { !$0.canClean }.map { ($0.url, $0.skipReason ?? "It can't be cleaned now") },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        let batch = toMove.map(\.trashItem)
         let report = if let trash {
-            await trash.moveToTrash(batch)
+            batch.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await trash.moveToTrash(batch)
         } else {
             // Demo data: nothing real to move.
             TrashReport(batch: UUID(), outcomes: batch.map { .refused($0.url, .notImplemented) })
@@ -175,6 +200,13 @@ public final class CleanModel {
         apply(report)
         review?.isWorking = false
         review?.report = report
+    }
+
+    /// Puts rechecked items back in the list: fresh sizes and skip reasons, and a held item is unchecked.
+    private func update(with checked: [CleanupItem]) {
+        let fresh = Dictionary(checked.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+        items = items.map { fresh[$0.url] ?? $0 }
+        selection.subtract(checked.filter { !$0.canClean }.map(\.url))
     }
 
     /// Trashed rows, and rows inside a trashed folder, leave the list and show under "In Trash".

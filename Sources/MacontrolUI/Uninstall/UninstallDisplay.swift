@@ -15,7 +15,7 @@ extension AppKind {
 
 extension LeftoverEvidence {
     /// Display order: strongest evidence first, the unselected exact-name matches last.
-    static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName]
+    static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName, .contentLibrary]
 
     /// The evidence kinds present in `leftovers`, in display order. A kind missing from `displayOrder`
     /// still gets its section at the end, so no leftover is ever hidden.
@@ -32,17 +32,19 @@ extension LeftoverEvidence {
         case .appGroup: "Shared app group"
         case .launchdJob: "Background items"
         case .exactName: "Same name as the app"
+        case .contentLibrary: "Sound library"
         }
     }
 
     /// One line on why these items belong to the app.
     var explanation: String {
         switch self {
-        case .bundleIdentifier: "Named with the app's bundle ID, in folders where apps keep their data."
+        case .bundleIdentifier: "In the folders where apps keep their data."
         case .containerMetadata: "The container's own record names this app."
         case .appGroup: "The app lists this group container in its entitlements."
         case .launchdJob: "They start a program inside the app and are stopped first."
         case .exactName: "Likely the app's, but not certain. Not selected: check them first."
+        case .contentLibrary: "Loops and instruments for Apple's music apps. Removing them needs an administrator."
         }
     }
 
@@ -53,6 +55,7 @@ extension LeftoverEvidence {
         case .appGroup: "person.2.fill"
         case .launchdJob: "gearshape.2.fill"
         case .exactName: "questionmark.folder.fill"
+        case .contentLibrary: "music.note.list"
         }
     }
 }

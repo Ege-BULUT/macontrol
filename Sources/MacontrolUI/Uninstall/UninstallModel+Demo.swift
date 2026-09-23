@@ -47,12 +47,13 @@ enum DemoApps {
             leftover("~/Library/Containers/com.example.Editor.QuickLook", .containerMetadata, 12_300_000),
             leftover("~/Library/Group Containers/A1B2C3D4E5.com.example.shared", .appGroup, 85_000_000,
                      note: "Also used by Editor Pro, which stays installed."),
-            leftover("~/Library/LaunchAgents/com.example.Editor.updater.plist", .launchdJob, 2_048),
+            leftover("~/Library/LaunchAgents/com.example.Editor.updater.plist", .launchdJob, 2_048, label: "com.example.Editor.updater"),
             leftover("~/Library/Application Support/Editor", .exactName, 20_100_000),
-        ], blocker: nil),
+        ], blocker: nil, bundleLaunchdLabels: ["com.example.Editor.helper"],
+        notes: ["Its installer's receipt (com.example.Editor.pkg) stays in the system's install history."]),
         UninstallPlan(app: garageBand, appMeasurement: size(1_120_000_000), leftovers: [
             leftover("~/Library/Containers/com.apple.garageband10", .containerMetadata, 351_000_000),
-            leftover("/Library/Application Support/GarageBand", .exactName, 2_310_000_000, admin: true,
+            leftover("/Library/Application Support/GarageBand", .contentLibrary, 2_310_000_000, admin: true,
                      note: "Instruments and sounds, shared with Logic Pro if you install it."),
         ], blocker: nil),
         UninstallPlan(app: chess, appMeasurement: size(8_100_000), leftovers: [], blocker:
@@ -67,10 +68,12 @@ enum DemoApps {
         ItemMeasurement(allocated: bytes, logical: bytes, fileCount: 10, newestModification: nil, isIncomplete: false)
     }
 
-    private static func leftover(_ path: String, _ evidence: LeftoverEvidence, _ bytes: UInt64, admin: Bool = false, note: String? = nil) -> Leftover {
+    private static func leftover(
+        _ path: String, _ evidence: LeftoverEvidence, _ bytes: UInt64, admin: Bool = false, note: String? = nil, label: String? = nil
+    ) -> Leftover {
         Leftover(
             url: URL(fileURLWithPath: path.replacingOccurrences(of: "~/", with: "/Users/demo/")), identity: nil,
-            evidence: evidence, measurement: size(bytes), needsAdministrator: admin, note: note
+            evidence: evidence, measurement: size(bytes), needsAdministrator: admin, note: note, launchdLabel: label
         )
     }
 }

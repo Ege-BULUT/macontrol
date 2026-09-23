@@ -15,6 +15,7 @@ struct CleanReviewSheet: View {
             rows: current.items.map { TrashSheetRow(url: $0.url, bytes: $0.measurement.allocated) },
             confirmTitle: "Move to Trash",
             report: current.report,
+            notMoved: current.notMoved,
             isWorking: current.isWorking,
             onConfirm: { Task { await model.confirmReview() } },
             onClose: { model.review = nil }

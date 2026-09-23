@@ -28,6 +28,15 @@ struct UninstallConfirmation: Identifiable {
         [TrashSheetRow(url: plan.app.url, bytes: plan.appMeasurement.allocated)]
             + leftovers.map { TrashSheetRow(url: $0.url, bytes: $0.measurement.allocated) }
     }
+
+    /// Every step besides the moves, then what macontrol leaves alone: the preview lists all of it (F-0069).
+    var notes: [String] {
+        var labels: [String] = []
+        for label in plan.bundleLaunchdLabels + leftovers.compactMap(\.launchdLabel) where !labels.contains(label) {
+            labels.append(label)
+        }
+        return labels.map { "Stops background item \($0)" } + plan.notes
+    }
 }
 
 @Observable
@@ -37,19 +46,26 @@ public final class UninstallModel {
     /// The plan of the selected app, once found.
     public private(set) var plan: UninstallPlan?
     var query = ""
-    /// Chosen leftovers of the shown plan, seeded from `Leftover.isPreselected` only (F-0011, F-0022).
-    var leftoverSelection: Set<URL> = []
     /// Bundle sizes, measured lazily as rows appear.
     var sizes: [URL: UInt64] = [:]
+    /// Last plan per app, shown at once on reselect while the app is read again.
     var plans: [URL: UninstallPlan] = [:]
     var runningBundleIDs: Set<String> = []
     private(set) var hasLoadedApps: Bool
+    private(set) var appsError: String?
     private(set) var planError: String?
     var confirmation: UninstallConfirmation?
+
+    /// Per app, per leftover: chosen or not. A leftover is seeded from `isPreselected` the first time it is
+    /// offered; after that the user's choice stands, across app switches and re-scans (F-0011, F-0022).
+    private var choices: [URL: [URL: Bool]] = [:]
 
     private let uninstaller: Uninstaller?
     private let engine: ScanEngine?
     private var measuring: Set<URL> = []
+    /// Bundle walks allowed at once. Every visible row asks for its size, and each is a full walk.
+    private var freeMeasureSlots = 3
+    private var measureQueue: [CheckedContinuation<Void, Never>] = []
 
     public init(uninstaller: Uninstaller?, apps: [InstalledApp] = [], plan: UninstallPlan? = nil, engine: ScanEngine? = ScanEngine()) {
         self.uninstaller = uninstaller
@@ -65,10 +81,24 @@ public final class UninstallModel {
 
     // MARK: App list
 
+    /// Reads the installed apps again, on every visit: apps get installed, updated and removed meanwhile.
+    /// A plan or size from another copy of an app (an update replaced the bundle) is dropped.
     func loadApps() async {
-        guard let uninstaller, !hasLoadedApps else { return }
-        apps = ((try? await uninstaller.installedApps()) ?? []).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        hasLoadedApps = true
+        guard let uninstaller else { return }
+        defer { hasLoadedApps = true }
+        let found: [InstalledApp]
+        do {
+            found = try await uninstaller.installedApps()
+        } catch {
+            appsError = error.localizedDescription
+            return
+        }
+        appsError = nil
+        let before = Dictionary(apps.map { ($0.url, $0.identity) }, uniquingKeysWith: { first, _ in first })
+        for app in found where before[app.url] != app.identity { sizes[app.url] = nil }
+        let current = Dictionary(found.map { ($0.url, $0.identity) }, uniquingKeysWith: { first, _ in first })
+        plans = plans.filter { current[$0.key] == $0.value.app.identity }
+        apps = found.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     var sections: [AppSection] {
@@ -85,7 +115,23 @@ public final class UninstallModel {
     func measureIfNeeded(_ app: InstalledApp) async {
         guard uninstaller != nil, let engine, sizes[app.url] == nil, measuring.insert(app.url).inserted else { return }
         defer { measuring.remove(app.url) }
+        await takeMeasureSlot()
+        defer { returnMeasureSlot() }
+        // A row scrolled away while waiting, or its plan measured the bundle meanwhile.
+        guard !Task.isCancelled, sizes[app.url] == nil else { return }
         if let measurement = try? await engine.measure(app.url) { sizes[app.url] = measurement.allocated }
+    }
+
+    private func takeMeasureSlot() async {
+        if freeMeasureSlots > 0 {
+            freeMeasureSlots -= 1
+        } else {
+            await withCheckedContinuation { measureQueue.append($0) }
+        }
+    }
+
+    private func returnMeasureSlot() {
+        if measureQueue.isEmpty { freeMeasureSlots += 1 } else { measureQueue.removeFirst().resume() }
     }
 
     func isRunning(_ app: InstalledApp) -> Bool {
@@ -96,15 +142,17 @@ public final class UninstallModel {
 
     var selected: InstalledApp? { apps.first { $0.id == selectedApp } }
 
-    /// Finds leftovers for the selected app. Called from `.task(id: selectedApp)`, which cancels stale runs.
+    /// Finds leftovers for the selected app, every time it is selected: a plan goes stale as the app updates or
+    /// writes new data. The last plan shows meanwhile. Called from `.task(id: selectedApp)`, which cancels stale runs.
     func loadPlan() async {
         planError = nil
         guard let app = selected else { plan = nil; return }
         refreshRunning(app)
-        if plan?.app.id == app.id { return }
-        if let cached = plans[app.url] { show(cached); return }
-        plan = nil
+        if let cached = plans[app.url] { show(cached) } else { plan = nil }
         guard let uninstaller else { return }
+        // Arrow keys move through the list faster than a plan is found.
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }
         do {
             let found = try await uninstaller.plan(for: app)
             plans[app.url] = found
@@ -114,10 +162,20 @@ public final class UninstallModel {
         }
     }
 
+    /// Scan Again: the app list and the selected app's leftovers, read from disk with fresh identities.
+    func rescan() async {
+        if let selectedApp { plans[selectedApp] = nil }
+        plan = nil
+        await loadApps()
+        await loadPlan()
+    }
+
     private func show(_ plan: UninstallPlan) {
         self.plan = plan
         sizes[plan.app.url] = plan.appMeasurement.allocated
-        leftoverSelection = Set(plan.leftovers.filter(\.isPreselected).map(\.url))
+        var chosen = choices[plan.app.url] ?? [:]
+        for leftover in plan.leftovers where chosen[leftover.url] == nil { chosen[leftover.url] = leftover.isPreselected }
+        choices[plan.app.url] = chosen
     }
 
     private func refreshRunning(_ app: InstalledApp) {
@@ -130,6 +188,20 @@ public final class UninstallModel {
     }
 
     // MARK: Leftover choice
+
+    /// Chosen leftovers of the shown plan.
+    var leftoverSelection: Set<URL> {
+        get {
+            guard let plan, let chosen = choices[plan.app.url] else { return [] }
+            return Set(plan.leftovers.map(\.url).filter { chosen[$0] == true })
+        }
+        set {
+            guard let plan else { return }
+            var chosen = (choices[plan.app.url] ?? [:]).mapValues { _ in false }
+            for url in newValue { chosen[url] = true }
+            choices[plan.app.url] = chosen
+        }
+    }
 
     func isChosen(_ leftover: Leftover) -> Bool { leftoverSelection.contains(leftover.url) }
 
@@ -158,6 +230,8 @@ public final class UninstallModel {
 
     func beginUninstall() {
         guard let plan, canUninstall, confirmation == nil else { return }
+        // The app may have been opened since it was selected; the sheet must say it will be asked to quit.
+        refreshRunning(plan.app)
         confirmation = UninstallConfirmation(plan: plan, leftovers: chosenLeftovers, appIsRunning: isRunning(plan.app))
     }
 
@@ -178,6 +252,9 @@ public final class UninstallModel {
             confirmation?.report = report
         } catch {
             confirmation?.errorMessage = "The uninstall stopped before moving anything: \(error.localizedDescription)"
+            // The plan may be stale (an update replaced the bundle, the app recreated a folder), and retrying it
+            // would fail the same way. Read the app and its leftovers again for the next try.
+            if uninstaller != nil { await rescan() }
         }
     }
 
@@ -189,6 +266,7 @@ public final class UninstallModel {
             apps.removeAll { $0.id == appID }
             plans[appID] = nil
             sizes[appID] = nil
+            choices[appID] = nil
             if selectedApp == appID {
                 selectedApp = nil
                 self.plan = nil
@@ -200,7 +278,6 @@ public final class UninstallModel {
         plans[appID] = remaining
         if self.plan?.app.id == appID {
             self.plan = remaining
-            leftoverSelection.subtract(trashed)
         }
     }
 }

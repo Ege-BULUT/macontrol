@@ -19,7 +19,7 @@ struct CleanScreen: View {
         }
         .navigationTitle("Clean")
         .task { await model.scanIfNeeded() }
-        .task(id: model.selection) { await model.refreshEstimate() }
+        .task(id: model.estimateKey) { await model.refreshEstimate() }
         .sheet(item: $model.review) { review in
             CleanReviewSheet(model: model, review: review)
         }
@@ -48,9 +48,9 @@ struct CleanScreen: View {
     }
 
     private var headline: String {
-        if model.isScanning { return "Scanning… \(model.foundBytes.formattedBytes) so far" }
+        if model.isScanning { return "Scanning… \(model.cleanableBytes.formattedBytes) so far" }
         if model.items.isEmpty { return model.hasScanned ? "Nothing to clean" : "Find junk you can remove" }
-        return "\(model.foundBytes.formattedBytes) found"
+        return "\(model.cleanableBytes.formattedBytes) can be cleaned"
     }
 
     private var subheadline: String {
@@ -103,6 +103,8 @@ struct CleanScreen: View {
             model.toggle(highlighted)
             return .handled
         }
+        // Space must not reach rows the search now hides.
+        .onChange(of: model.query) { highlighted = [] }
     }
 
     private var inTrashSection: some View {

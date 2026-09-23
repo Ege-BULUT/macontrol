@@ -17,9 +17,13 @@ struct TrashSheet: View {
     let title: String
     let message: String
     var warning: String?
+    /// Steps and facts besides the moves (a background item stopped, a receipt left in place), listed verbatim.
+    var notes: [String] = []
     let rows: [TrashSheetRow]
     let confirmTitle: String
     let report: TrashReport?
+    /// Rows held back when the move ran, with the reason; they were never sent to the Trash.
+    var notMoved: [URL: String] = [:]
     let isWorking: Bool
     var errorMessage: String?
     let onConfirm: () -> Void
@@ -36,7 +40,7 @@ struct TrashSheet: View {
             header.padding(20)
             Divider()
             List(rows) { row in
-                TrashSheetRowView(row: row, outcome: outcomes[row.url], isDone: report != nil)
+                TrashSheetRowView(row: row, outcome: outcomes[row.url], notMoved: notMoved[row.url], isDone: report != nil)
             }
             .listStyle(.inset)
             Divider()
@@ -54,6 +58,13 @@ struct TrashSheet: View {
                 Text(report == nil ? message : "Items stay in the Trash, still using their space, until you empty it. You can put them back from History.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if report == nil {
+                    ForEach(notes, id: \.self) { note in
+                        Label(note, systemImage: "info.circle")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 if let warning, report == nil {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
@@ -106,6 +117,7 @@ struct TrashSheet: View {
 private struct TrashSheetRowView: View {
     let row: TrashSheetRow
     let outcome: TrashOutcome?
+    let notMoved: String?
     let isDone: Bool
 
     var body: some View {
@@ -118,7 +130,11 @@ private struct TrashSheetRowView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if let outcome {
+                if let notMoved {
+                    Label("Not moved: \(notMoved)", systemImage: "pause.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else if let outcome {
                     Label(outcome.words, systemImage: outcome.isTrashed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(outcome.isTrashed ? .green : .orange)
@@ -138,21 +154,37 @@ private struct TrashSheetRowView: View {
     }
 }
 
-/// The item's Finder icon; a generic app or folder icon when it is not on this Mac (demo data).
+/// The item's Finder icon; a generic icon for its type when it is not on this Mac (demo data).
 struct FileIcon: View {
     let url: URL
     let size: CGFloat
 
+    /// Read once per path: `icon(forFile:)` touches the disk, and list rows redraw often.
+    private static let cache = NSCache<NSString, NSImage>()
+
     var body: some View {
-        let icon = if FileManager.default.fileExists(atPath: url.path) {
-            NSWorkspace.shared.icon(forFile: url.path)
-        } else {
-            NSWorkspace.shared.icon(for: url.pathExtension == "app" ? .applicationBundle : .folder)
-        }
-        Image(nsImage: icon)
+        Image(nsImage: Self.icon(for: url))
             .resizable()
             .interpolation(.high)
             .frame(width: size, height: size)
+    }
+
+    private static func icon(for url: URL) -> NSImage {
+        if let cached = cache.object(forKey: url.path as NSString) { return cached }
+        let icon = if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.icon(forFile: url.path)
+        } else {
+            NSWorkspace.shared.icon(for: placeholderType(of: url))
+        }
+        cache.setObject(icon, forKey: url.path as NSString)
+        return icon
+    }
+
+    /// A declared extension (`.plist`) is a file; anything else (`com.example.Editor`) is taken as a folder.
+    private static func placeholderType(of url: URL) -> UTType {
+        if url.pathExtension == "app" { return .applicationBundle }
+        guard let type = UTType(filenameExtension: url.pathExtension), !type.isDynamic else { return .folder }
+        return type
     }
 }
 

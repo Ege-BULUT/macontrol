@@ -3,9 +3,6 @@ import Foundation
 import SwiftUI
 
 extension CleanupItem {
-    /// Can go into a bulk clean. Manual items (backups, archives) and skipped items never do.
-    var isCleanable: Bool { rule.safety != .manual && skipReason == nil }
-
     var name: String { url.lastPathComponent }
 }
 

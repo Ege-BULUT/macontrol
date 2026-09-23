@@ -1,6 +1,7 @@
 import Foundation
 import MacontrolCore
 @testable import MacontrolUI
+import os
 import Safety
 import Testing
 import TestSupport
@@ -87,36 +88,126 @@ import Uninstaller
         #expect(model.confirmation?.appIsRunning == true)
     }
 
-    /// What the sheet lists is what reaches the Trash (F-0050, F-0069). The paths do not exist and
-    /// the identities are wrong, so nothing can move with either the scaffold or the real services.
+    /// What the sheet lists is what reaches the Trash (F-0050, F-0069). A recorder stands in for quitting, launchctl
+    /// and the Trash, so nothing is quit or moved. It refuses the bundle, which stops the uninstall before the leftovers.
     @Test func uninstallSendsExactlyTheListedItems() async throws {
         let temp = try TemporaryDirectory()
-        let bogus = FileIdentity(device: 0, inode: 1)
-        let app = InstalledApp(url: temp.url.appendingPathComponent("Applications/Gone.app"), name: "Gone",
-                               bundleIdentifier: "com.example.macontrol-test-gone", version: "1", kind: .thirdParty, identity: bogus)
-        let leftovers = ["Caches", "Preferences", "Application Support"].map {
-            Leftover(url: temp.url.appendingPathComponent("home/Library/\($0)/com.example.macontrol-test-gone"), identity: bogus,
-                     evidence: $0 == "Application Support" ? .exactName : .bundleIdentifier, measurement: .zero,
-                     needsAdministrator: false, note: nil)
-        }
-        let trash = TrashService(journalURL: temp.url.appendingPathComponent("journal.jsonl"))
-        let uninstaller = Uninstaller(home: temp.url.appendingPathComponent("home"), applicationFolders: [], trash: trash)
-        let model = UninstallModel(uninstaller: uninstaller, apps: [app],
-                                   plan: UninstallPlan(app: app, appMeasurement: .zero, leftovers: leftovers, blocker: nil), engine: nil)
+        let recorder = RecordedActions()
+        let model = UninstallModel(uninstaller: try Self.sampleUninstaller(temp, actions: recorder.actions), engine: nil)
+        try temp.file("home/Library/Logs/com.example.macontrol-probe/log.txt", size: 1_000)
+        let plan = try await Self.selectSample(model)
+        let kept = try #require(plan.leftovers.first { $0.url.path.contains("/Logs/") })
+        model.setChosen(false, kept)
 
         model.beginUninstall()
         let rows = try #require(model.confirmation?.rows)
-        #expect(rows.count == 3)
+        #expect(rows.count == 2 && !rows.contains { $0.url == kept.url })
         await model.confirmUninstall()
 
-        let confirmation = try #require(model.confirmation)
-        if let report = confirmation.report {
-            #expect(report.outcomes.map(\.url) == rows.map(\.url))
-            #expect(report.trashedURLs.isEmpty)
-        } else {
-            #expect(confirmation.errorMessage != nil)
-        }
-        #expect(model.apps == [app])
+        let report = try #require(model.confirmation?.report)
+        #expect(report.outcomes.map(\.url) == rows.map(\.url))
+        #expect(recorder.batches.withLock { $0 }.map { $0.map(\.url) } == [[plan.app.url]])
+        #expect(model.apps.map(\.url) == [plan.app.url])
+    }
+
+    /// An update replaced the bundle after the plan was made, so the uninstall stops (changedSincePlan). The model
+    /// then reads the app and its leftovers again, and the retry carries the new bundle's identity.
+    @Test func aFailedUninstallPlansAgainSoTheRetryUsesFreshIdentities() async throws {
+        let temp = try TemporaryDirectory()
+        let recorder = RecordedActions()
+        let model = UninstallModel(uninstaller: try Self.sampleUninstaller(temp, actions: recorder.actions), engine: nil)
+        let stale = try await Self.selectSample(model)
+
+        try FileManager.default.removeItem(at: stale.app.url)  // inside the temp folder
+        try Self.bundle(temp, "Probe", "com.example.macontrol-probe")
+        try temp.file("home/Library/Logs/com.example.macontrol-probe/log.txt", size: 1_000)
+        model.beginUninstall()
+        await model.confirmUninstall()
+
+        #expect(model.confirmation?.errorMessage?.contains("changed") == true)
+        #expect(recorder.batches.withLock { $0 }.isEmpty)
+        let fresh = try #require(model.plan)
+        #expect(fresh.app.identity == FileIdentity(url: stale.app.url) && fresh.app.identity != stale.app.identity)
+        #expect(fresh.leftovers.count == 2)
+
+        model.confirmation = nil
+        model.beginUninstall()
+        await model.confirmUninstall()
+        #expect(recorder.batches.withLock { $0 }.first?.map(\.expectedIdentity) == [fresh.app.identity])
+    }
+
+    /// Scan Again, and every new selection, reads the app's leftovers from disk instead of reusing a plan.
+    @Test func reselectingAnAppFindsLeftoversCreatedSince() async throws {
+        let temp = try TemporaryDirectory()
+        let model = UninstallModel(uninstaller: try Self.sampleUninstaller(temp), engine: nil)
+        let app = try await Self.selectSample(model).app
+        #expect(model.plan?.leftovers.count == 1)
+
+        try temp.file("home/Library/Logs/com.example.macontrol-probe/log.txt", size: 1_000)
+        model.selectedApp = nil
+        await model.loadPlan()
+        model.selectedApp = app.id
+        await model.loadPlan()
+        #expect(model.plan?.leftovers.count == 2)
+
+        try temp.file("home/Library/HTTPStorages/com.example.macontrol-probe/cookies", size: 1_000)
+        await model.rescan()
+        #expect(model.plan?.leftovers.count == 3)
+    }
+
+    @Test func eachVisitListsAppsInstalledSince() async throws {
+        let temp = try TemporaryDirectory()
+        let model = UninstallModel(uninstaller: try Self.sampleUninstaller(temp), engine: nil)
+        await model.loadApps()
+        #expect(model.apps.count == 1)
+        try Self.bundle(temp, "Second", "com.example.macontrol-probe2")
+        await model.loadApps()
+        #expect(model.apps.map(\.name) == ["Probe", "Second"])
+    }
+
+    /// F-0011: a leftover the user unchecked to keep stays unchecked after a visit to another app.
+    @Test func switchingAppsKeepsTheUsersLeftoverChoices() async throws {
+        let model = UninstallModel.demo()
+        let editor = try #require(model.plan)
+        let kept = try #require(editor.leftovers.first { $0.isPreselected })
+        model.setChosen(false, kept)
+        model.selectedApp = DemoApps.garageBand.id
+        await model.loadPlan()
+        model.selectedApp = editor.app.id
+        await model.loadPlan()
+        #expect(model.plan?.app.id == editor.app.id)
+        #expect(!model.isChosen(kept))
+        #expect(model.leftoverSelection == Set(editor.leftovers.filter(\.isPreselected).map(\.url)).subtracting([kept.url]))
+    }
+
+    /// The running warning is read when the sheet opens. Finder stands in for an app opened after it was selected;
+    /// only its bundle id is borrowed, and nothing is quit.
+    @Test func theConfirmationChecksAgainWhetherTheAppIsOpen() async throws {
+        let temp = try TemporaryDirectory()
+        try Self.bundle(temp, "FinderTwin", "com.apple.finder")
+        let model = UninstallModel(uninstaller: try Self.uninstaller(temp, actions: RecordedActions().actions), engine: nil)
+        await model.loadApps()
+        model.selectedApp = try #require(model.apps.first).id
+        await model.loadPlan()
+        model.runningBundleIDs = []  // as it was before the user opened the app
+        model.beginUninstall()
+        #expect(model.confirmation?.appIsRunning == true)
+    }
+
+    /// F-0069: the sheet names every background item it stops and every note the plan carries.
+    @Test func confirmationListsEveryStepBesidesTheMoves() throws {
+        let model = UninstallModel.demo()
+        let plan = try #require(model.plan)
+        model.beginUninstall()
+        #expect(model.confirmation?.notes == [
+            "Stops background item com.example.Editor.helper", "Stops background item com.example.Editor.updater",
+        ] + plan.notes)
+
+        let agent = try #require(plan.leftovers.first { $0.launchdLabel != nil })
+        model.confirmation = nil
+        model.setChosen(false, agent)
+        model.beginUninstall()
+        #expect(model.confirmation?.notes == ["Stops background item com.example.Editor.helper"] + plan.notes)
     }
 
     @Test func anUninstalledAppLeavesTheList() throws {
@@ -151,11 +242,7 @@ import Uninstaller
             .write(to: bundle.appendingPathComponent("Info.plist"))
         try temp.file("Applications/Sample.app/Contents/MacOS/Sample", size: 30_000)
         try temp.file("home/Library/Caches/com.example.macontrol-sample/data", size: 20_000)
-        let uninstaller = Uninstaller(
-            home: temp.url.appendingPathComponent("home"), applicationFolders: [temp.url.appendingPathComponent("Applications")],
-            trash: TrashService(journalURL: temp.url.appendingPathComponent("journal.jsonl"))
-        )
-        let model = UninstallModel(uninstaller: uninstaller)
+        let model = UninstallModel(uninstaller: try Self.uninstaller(temp))
 
         await model.loadApps()
         let app = try #require(model.apps.first)
@@ -168,5 +255,54 @@ import Uninstaller
         let cache = temp.url.appendingPathComponent("home/Library/Caches/com.example.macontrol-sample")
         #expect(model.plan?.leftovers.map(\.url.lastPathComponent) == [cache.lastPathComponent])
         #expect(model.leftoverSelection.map(\.lastPathComponent) == [cache.lastPathComponent])
+    }
+
+    /// Probe.app with one cache, read through the real Uninstaller. Home, application folder and system root all
+    /// live in the temp folder.
+    static func sampleUninstaller(_ temp: TemporaryDirectory, actions: UninstallActions? = nil) throws -> Uninstaller {
+        try bundle(temp, "Probe", "com.example.macontrol-probe")
+        try temp.file("home/Library/Caches/com.example.macontrol-probe/data", size: 2_000)
+        return try uninstaller(temp, actions: actions)
+    }
+
+    static func uninstaller(_ temp: TemporaryDirectory, actions: UninstallActions? = nil) throws -> Uninstaller {
+        Uninstaller(
+            home: temp.url.appendingPathComponent("home"), applicationFolders: [temp.url.appendingPathComponent("Applications")],
+            systemRoot: try temp.directory("root"), trash: TrashService(journalURL: temp.url.appendingPathComponent("journal.jsonl")),
+            actions: actions
+        )
+    }
+
+    static func selectSample(_ model: UninstallModel) async throws -> UninstallPlan {
+        await model.loadApps()
+        model.selectedApp = try #require(model.apps.first).id
+        await model.loadPlan()
+        return try #require(model.plan)
+    }
+
+    @discardableResult
+    static func bundle(_ temp: TemporaryDirectory, _ name: String, _ id: String) throws -> URL {
+        let contents = try temp.directory("Applications/\(name).app/Contents")
+        let info: [String: Any] = ["CFBundleIdentifier": id, "CFBundleName": name]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        try temp.file("Applications/\(name).app/Contents/MacOS/\(name)", size: 1_000)
+        return contents.deletingLastPathComponent()
+    }
+}
+
+/// Stands in for quitting, launchctl and the Trash: records each batch, refuses it, and changes nothing.
+struct RecordedActions {
+    let batches = OSAllocatedUnfairLock<[[TrashItem]]>(initialState: [])
+
+    var actions: UninstallActions {
+        UninstallActions(
+            quit: { _ in true },
+            bootout: { _ in },
+            moveToTrash: { [batches] items in
+                batches.withLock { $0.append(items) }
+                return TrashReport(batch: UUID(), outcomes: items.map { .refused($0.url, .notImplemented) })
+            }
+        )
     }
 }

@@ -31,13 +31,22 @@ private struct AppListPane: View {
             Divider()
             if !model.hasLoadedApps {
                 ProgressView("Finding apps…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = model.appsError, model.apps.isEmpty {
+                ContentUnavailableView {
+                    Label("Couldn't list your apps", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Try Again") { Task { await model.loadApps() } }
+                }
             } else if model.sections.isEmpty {
                 ContentUnavailableView.search(text: model.query)
             } else {
                 List(selection: $model.selectedApp) {
                     ForEach(model.sections) { section in
                         Section {
-                            ForEach(section.apps) { AppRow(app: $0, model: model) }
+                            // The size goes in as a value, so a new size redraws its own row only.
+                            ForEach(section.apps) { AppRow(app: $0, size: model.sizes[$0.url], model: model) }
                         } header: {
                             HStack {
                                 Text(section.kind.sectionTitle)
@@ -55,6 +64,7 @@ private struct AppListPane: View {
 
 private struct AppRow: View {
     let app: InstalledApp
+    let size: UInt64?
     let model: UninstallModel
 
     var body: some View {
@@ -68,7 +78,7 @@ private struct AppRow: View {
                     .help("Part of macOS")
             }
             Spacer(minLength: 8)
-            Text(model.sizes[app.url]?.formattedBytes ?? "–")
+            Text(size?.formattedBytes ?? "–")
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -89,6 +99,7 @@ struct UninstallSheet: View {
                 message: (count == 0 ? "\(name) moves to the Trash." : "\(name) and \(count == 1 ? "1 item" : "\(count) items") it left behind move to the Trash.")
                     + " Space is freed once you empty the Trash, and you can put everything back from History.",
                 warning: confirmation.appIsRunning ? "\(name) is open. It will be asked to quit first, so save your work." : nil,
+                notes: confirmation.notes,
                 rows: confirmation.rows,
                 confirmTitle: "Uninstall",
                 report: confirmation.report,

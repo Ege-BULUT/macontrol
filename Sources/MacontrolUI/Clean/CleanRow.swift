@@ -4,6 +4,7 @@ import SwiftUI
 
 /// One cleanup match: checkbox, name and path, safety badge, size.
 /// Skipped items show their reason with the checkbox off; manual items offer Reveal in Finder only.
+/// A caution explains why a cleanable item starts unchecked.
 struct CleanRow: View {
     let item: CleanupItem
     @Binding var isChecked: Bool
@@ -25,6 +26,10 @@ struct CleanRow: View {
                     Label("Skipped: \(reason)", systemImage: "pause.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
+                } else if let caution = item.caution {
+                    Label(caution, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 12)
@@ -41,7 +46,7 @@ struct CleanRow: View {
             Button("Reveal in Finder") { item.url.revealInFinder() }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(item.isCleanable ? (isChecked ? "selected" : "not selected") : "cannot be selected")
+        .accessibilityValue(item.canClean ? (isChecked ? "selected" : "not selected") : "cannot be selected")
     }
 
     @ViewBuilder
@@ -54,7 +59,7 @@ struct CleanRow: View {
             Toggle("Select \(item.name)", isOn: $isChecked)
                 .toggleStyle(.checkbox)
                 .labelsHidden()
-                .disabled(!item.isCleanable)
+                .disabled(!item.canClean)
         }
     }
 
@@ -62,7 +67,7 @@ struct CleanRow: View {
         // A folder that could not be read completely is at least this big (F-0057).
         Text((item.measurement.isIncomplete ? "≥ " : "") + item.measurement.allocated.formattedBytes)
             .monospacedDigit()
-            .foregroundStyle(item.isCleanable && isChecked ? .primary : .secondary)
+            .foregroundStyle(item.canClean && isChecked ? .primary : .secondary)
             .help(item.measurement.isIncomplete ? "Some folders inside could not be read, so it may be larger." : "")
     }
 }

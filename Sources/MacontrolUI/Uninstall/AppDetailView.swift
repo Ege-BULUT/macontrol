@@ -45,6 +45,13 @@ struct AppDetailView: View {
                     .monospacedDigit()
                 Text("app size").font(.caption).foregroundStyle(.secondary)
             }
+            if app.kind != .builtIn {
+                Button { Task { await model.rescan() } } label: {
+                    Label("Scan Again", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.iconOnly)
+                .help("Look for \(app.name) and what it left behind again")
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -63,6 +70,9 @@ struct AppDetailView: View {
             if app.kind == .appleAppStore {
                 Notice(text: "Made by Apple. You can remove it and download it again for free from the App Store.",
                        systemImage: "apple.logo", tint: .blue)
+            }
+            ForEach(model.plan?.app.id == app.id ? model.plan?.notes ?? [] : [], id: \.self) { note in
+                Notice(text: note, systemImage: "info.circle.fill", tint: .secondary)
             }
             if app.kind != .builtIn && model.isRunning(app) {
                 Notice(text: "\(app.name) is open. Uninstalling asks it to quit first, so save your work.",
@@ -84,7 +94,13 @@ struct AppDetailView: View {
         } else if let plan = model.plan, plan.app.id == app.id {
             leftovers(plan)
         } else if let error = model.planError {
-            ContentUnavailableView("Couldn't look for leftovers", systemImage: "exclamationmark.triangle", description: Text(error))
+            ContentUnavailableView {
+                Label("Couldn't look for leftovers", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Scan Again") { Task { await model.rescan() } }
+            }
         } else {
             ProgressView("Looking for what \(app.name) left behind…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
