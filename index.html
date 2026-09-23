@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenLead Workspace</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1b1b18; --sub: #6b6b63;
+    --line: #e5e3dc; --mono-bg: #f1efe8;
+    --good: #1c7a4d; --good-bg: #e8f5ee;
+    --bad: #b3261e; --bad-bg: #fdecea;
+    --warn: #9a6700; --warn-bg: #fff4de;
+    --dup: #5b4fc4; --dup-bg: #ecebfb;
+    --accent: #2f6fed; --accent-bg: rgba(47,111,237,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #1f2023; --ink: #eceae5; --sub: #9a9890;
+      --line: #33342f; --mono-bg: #26272a;
+      --good: #5fd39a; --good-bg: #123326;
+      --bad: #ff8a80; --bad-bg: #3a1a17;
+      --warn: #f0c674; --warn-bg: #3a2f10;
+      --dup: #b8b0ff; --dup-bg: #262151;
+      --accent: #7aa2f7; --accent-bg: rgba(122,162,247,0.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 4rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.92em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  body.has-ol-sidebar { margin-left: 232px; }
+  .ol-sidebar {
+    position: fixed; top: 0; left: 0; width: 232px; height: 100vh; overflow-y: auto;
+    background: #fbfbfa; border-right: 1px solid #e5e3dc; padding: 1.6rem 1rem 1.6rem 1.3rem;
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    z-index: 100; box-sizing: border-box;
+  }
+  .ol-sidebar .kicker { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8a8778; font-weight: 700; margin-bottom: 0.25rem; }
+  .ol-sidebar .title { font-size: 0.95rem; font-weight: 700; color: #1b1b18; margin-bottom: 1.3rem; line-height: 1.3; }
+  .ol-sidebar a { display: block; padding: 0.45rem 0.6rem; margin-bottom: 0.1rem; border-radius: 7px; color: #3a3a34; text-decoration: none; font-size: 0.86rem; }
+  .ol-sidebar a:hover { background: #eeece4; }
+  .ol-sidebar a.active { background: #2f6fed; color: #fff; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .ol-sidebar { background: #1a1b1e; border-right-color: #33342f; }
+    .ol-sidebar .kicker { color: #9a9890; }
+    .ol-sidebar .title { color: #eceae5; }
+    .ol-sidebar a { color: #cfcdc6; }
+    .ol-sidebar a:hover { background: #26272a; }
+    .ol-sidebar a.active { background: #7aa2f7; color: #14151a; }
+  }
+  @media (max-width: 860px) {
+    .ol-sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid #e5e3dc; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+    .ol-sidebar .title, .ol-sidebar .kicker { width: 100%; }
+    body.has-ol-sidebar { margin-left: 0; }
+  }
+
+  .hero { padding: 3.2rem 1.5rem 2rem; max-width: 1120px; margin: 0 auto; }
+  .hero .kicker { color: var(--sub); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .hero h1 { margin: 0.4rem 0 0.7rem; font-size: 2.4rem; }
+  .hero p.lead { color: var(--sub); margin: 0; font-size: 1.08rem; max-width: 76ch; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 0 1.5rem; }
+
+  .cardgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 2rem 0 2.4rem; }
+  .navcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.5rem; display: block; color: var(--ink); }
+  .navcard:hover { border-color: var(--accent); text-decoration: none; }
+  .navcard .nc-icon { font-size: 1.5rem; margin-bottom: 0.6rem; display: block; }
+  .navcard h2 { font-size: 1.1rem; margin: 0 0 0.4rem; }
+  .navcard p { color: var(--sub); font-size: 0.9rem; margin: 0 0 0.7rem; }
+  .navcard .nc-meta { font-size: 0.76rem; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  section.about { margin-top: 1rem; }
+  section.about h2 { font-size: 1.3rem; margin: 0 0 0.6rem; }
+  section.about p { color: var(--ink); max-width: 80ch; }
+  section.about .flow { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1.2rem 0; align-items: center; }
+  section.about .flow .step { background: var(--mono-bg); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600; }
+  section.about .flow .arrow { color: var(--sub); }
+
+  footer { max-width: 1120px; margin: 3rem auto 0; padding: 1.5rem 1.5rem 0; border-top: 1px solid var(--line); color: var(--sub); font-size: 0.92rem; }
+  footer strong { color: var(--ink); }
+  footer ul { padding-left: 1.2rem; }
+</style>
+</head>
+<body class="has-ol-sidebar">
+<nav class="ol-sidebar">
+  <div class="kicker">OpenLead</div>
+  <div class="title" id="ol-sidebar-title">Workspace</div>
+  <a href="index.html" class="active">Home</a>
+  <a href="roadmap.html">Roadmap</a>
+  <a href="tasks.html">Task Board</a>
+  <a href="memory.html">Agent Memory</a>
+  <a href="analysis.html">Review Findings</a>
+</nav>
+
+<div class="hero">
+  <div class="kicker">OpenLead Workspace</div>
+  <h1 id="ol-project-name">Untitled Project</h1>
+  <p class="lead" id="ol-project-tagline">A fully local roadmap, task board, and agent memory for this project.</p>
+</div>
+
+<main>
+
+  <p id="ol-project-pitch"></p>
+
+  <div class="cardgrid">
+    <a class="navcard" href="roadmap.html">
+      <span class="nc-icon">🗺️</span>
+      <h2>Roadmap</h2>
+      <p>The milestone plan: where the project is now, what's next, and why it's sequenced that way.</p>
+      <span class="nc-meta">See the plan →</span>
+    </a>
+    <a class="navcard" href="tasks.html">
+      <span class="nc-icon">🗂️</span>
+      <h2>Task Board</h2>
+      <p>Backlog → Analyze → Planning → Development → Ready for Review → Testing → Accepted / Rejected.</p>
+      <span class="nc-meta">Live tracker →</span>
+    </a>
+    <a class="navcard" href="memory.html">
+      <span class="nc-icon">📓</span>
+      <h2>Agent Memory</h2>
+      <p>Per-agent journals: working notes, decisions, dead ends, handoffs. Read before redoing analysis.</p>
+      <span class="nc-meta">Working notes →</span>
+    </a>
+    <a class="navcard" href="analysis.html">
+      <span class="nc-icon">🔬</span>
+      <h2>Review Findings</h2>
+      <p>What a review turned up, grouped by category on a Venn diagram, sized by effort and coloured by priority.</p>
+      <span class="nc-meta">See the findings →</span>
+    </a>
+  </div>
+
+  <section class="about">
+    <h2>How this workspace fits together</h2>
+    <div class="flow">
+      <span class="step">Roadmap</span><span class="arrow">→</span>
+      <span class="step">Task Board</span><span class="arrow">→</span>
+      <span class="step">Agent Memory</span>
+    </div>
+    <p>The roadmap sets the sequence. Each milestone's work becomes real, tracked tasks on the board.
+      Whoever (or whichever agent) does that work keeps notes in Agent Memory. Read the relevant journal
+      before redoing analysis someone already did.</p>
+  </section>
+
+</main>
+
+<footer>
+  <strong>About this workspace</strong>
+  <ul>
+    <li>Fully local by default. Nothing here pushes anywhere on its own, that's a decision for you to make explicitly.</li>
+    <li>Roadmap and Task Board are edited through <code>scripts/roadmap_cli.py</code> / <code>scripts/tasks_cli.py</code>
+      / <code>scripts/memory_cli.py</code>, not by hand. See each page's footer for the exact commands.</li>
+    <li>Generated by <a href="https://github.com/Ege-BULUT/openlead" target="_blank" rel="noopener">OpenLead</a>, a portable
+      roadmap/kanban/memory scaffold for AI coding agents.</li>
+  </ul>
+</footer>
+
+<script id="project-data" type="application/json">
+{
+  "name": "macontrol",
+  "tagline": "PureMac-grade cleanup and Radix-grade disk visualization in one fast, native macOS app.",
+  "pitch": "macontrol merges system cleanup (app uninstall with leftovers, caches, logs, bloat) and disk space visualization (drill-down sunburst/treemap, reveal in Finder, delete) into one app. We study proven open-source projects first, take what works, improve it, and rewrite what does not. Every area runs the same loop: research, analysis, spikes, benchmarks, report, integration, improvement, tests, fixes, verification."
+}
+</script>
+
+<script>
+(function () {
+  var P = JSON.parse(document.getElementById('project-data').textContent);
+  document.getElementById('ol-project-name').textContent = P.name || 'Untitled Project';
+  document.getElementById('ol-sidebar-title').textContent = P.name || 'Workspace';
+  document.title = (P.name || 'OpenLead Workspace');
+  if (P.tagline) document.getElementById('ol-project-tagline').textContent = P.tagline;
+  var pitchEl = document.getElementById('ol-project-pitch');
+  if (P.pitch) { pitchEl.textContent = P.pitch; } else { pitchEl.remove(); }
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review Findings · OpenLead Workspace</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1b1b18; --sub: #6b6b63;
+    --line: #e5e3dc; --mono-bg: #f1efe8;
+    --good: #1c7a4d; --good-bg: #e8f5ee;
+    --accent: #2f6fed; --accent-bg: rgba(47,111,237,0.10);
+    --c1: #b4451f; --c2: #8a6d1f; --c3: #2f6fed;
+    --p-blocker: #7c3aed; --p-critical: #dc2626; --p-high: #ea580c;
+    --p-medium: #d97706; --p-low: #eab308;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #1f2023; --ink: #eceae5; --sub: #9a9890;
+      --line: #33342f; --mono-bg: #26272a;
+      --good: #5fd39a; --good-bg: #123326;
+      --accent: #7aa2f7; --accent-bg: rgba(122,162,247,0.12);
+      --c1: #f0906a; --c2: #e0c268; --c3: #7aa2f7;
+      --p-blocker: #a855f7; --p-critical: #f87171; --p-high: #fb923c;
+      --p-medium: #fbbf24; --p-low: #fde047;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.92em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  body.has-ol-sidebar { margin-left: 232px; }
+  .ol-sidebar {
+    position: fixed; top: 0; left: 0; width: 232px; height: 100vh; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--line); padding: 22px 18px;
+  }
+  .ol-sidebar .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--sub); }
+  .ol-sidebar .title { font-size: 19px; font-weight: 650; margin: 4px 0 18px; }
+  .ol-sidebar a { display: block; padding: 8px 10px; border-radius: 6px; color: var(--ink); font-size: 14px; }
+  .ol-sidebar a:hover { background: var(--mono-bg); text-decoration: none; }
+  .ol-sidebar a.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+
+  header, .layout, footer { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  header { padding-top: 34px; padding-bottom: 10px; }
+  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--sub); }
+  header h1 { margin: 6px 0 10px; font-size: 30px; }
+  header .scope { color: var(--sub); max-width: 76ch; margin: 0; font-size: 15px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 12px; margin: 26px 0 0; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; }
+  .kpi b { display: block; font-size: 23px; }
+  .kpi span { font-size: 12px; color: var(--sub); }
+
+  h2.sec { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--sub);
+    margin: 40px 0 14px; font-weight: 600; }
+
+  /* diagram */
+  .venn { position: relative; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px; display: flex; justify-content: center; }
+  .venn svg { width: min(100%, 680px); height: auto; overflow: visible; }
+  /* Set rengi inline geliyor: kategori sayisi dinamik, sabit .set-N sinifi
+     yazilamaz. Ilk uc renk yine --c1..--c3 temasindan okunuyor. */
+  .set { fill-opacity: .10; stroke-width: 1.5; }
+  .setlabel { font-size: 14px; font-weight: 650; text-anchor: middle; }
+  .setlabel .count { fill: var(--sub); font-weight: 400; }
+  .disc { cursor: pointer; }
+  .disc circle { stroke: var(--panel); stroke-width: 2; }
+  .disc circle.done { stroke: var(--good); stroke-width: 2.5; stroke-dasharray: 3 2; }
+  .disc text { font-family: "SF Mono", Menlo, Consolas, monospace; font-weight: 700;
+    text-anchor: middle; pointer-events: none; }
+  .disc:hover circle, .disc:focus circle { stroke: var(--ink); stroke-width: 3; }
+  .disc:focus { outline: none; }
+
+  .legend { position: absolute; left: 14px; top: 14px; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; font-size: 12px; max-width: 208px; }
+  .legend h4 { margin: 0 0 6px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--sub); font-weight: 600; }
+  .legend h4 + ul { margin-bottom: 12px; }
+  .legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+  .legend li { display: grid; grid-template-columns: 24px auto 1fr; gap: 8px; align-items: center; }
+  .legend b { font-weight: 600; }
+  .legend span { color: var(--sub); font-size: 10.5px; }
+  .legend i { display: block; width: 13px; height: 13px; border-radius: 50%; justify-self: center; }
+  .legend .ring { background: none; border: 2px solid var(--sub); border-radius: 50%; }
+
+  #card { position: fixed; z-index: 40; max-width: 380px; background: var(--panel);
+    border: 1px solid var(--accent); border-radius: 10px; padding: 13px 15px;
+    box-shadow: 0 14px 40px rgba(0,0,0,.18); pointer-events: none; display: none; }
+  #card h4 { margin: 0 0 7px; font-size: 14px; line-height: 1.35; }
+  #card .meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+  #card p { margin: 0; font-size: 12.5px; color: var(--sub); }
+  #card .where { margin-top: 7px; font-size: 11.5px; color: var(--sub); }
+
+  .tag { display: inline-block; font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--sub); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .plist th { text-align: left; color: var(--sub); font-weight: 600; font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .plist td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .plist tr:hover td { background: var(--mono-bg); }
+  .plist .id a { font-weight: 700; }
+  .plist .where { color: var(--sub); font-size: 12px; }
+  .pgroup { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; margin: 26px 0 8px; font-weight: 700; }
+  .pgroup span { color: var(--sub); font-weight: 400; }
+
+  .detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 14px; scroll-margin-top: 18px; }
+  .detail h3 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 10px; align-items: baseline; }
+  .dmeta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 0 0 11px; }
+  .dmeta code { color: var(--sub); font-size: 11.5px; }
+  .dproblem { margin: 0 0 13px; color: var(--sub); font-size: 14.5px; }
+  .dverified { margin: 0 0 13px; padding: 9px 13px; border-left: 3px solid var(--good);
+    background: var(--good-bg); border-radius: 0 6px 6px 0; font-size: 13.5px; }
+  .dverified b { color: var(--good); }
+  .dtable th { text-align: left; color: var(--sub); font-weight: 600; font-size: 10.5px;
+    letter-spacing: .12em; text-transform: uppercase; padding: 7px 11px;
+    border-bottom: 1px solid var(--line); width: 33.33%; }
+  .dtable td { padding: 11px; border-bottom: 1px solid var(--line); vertical-align: top; width: 33.33%; }
+  .dtable pre { margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+    word-break: break-word; background: var(--mono-bg); padding: 9px 10px; border-radius: 6px; }
+  .dtable .how { font-size: 13px; color: var(--sub); }
+  @media (max-width: 900px) {
+    .dtable, .dtable thead, .dtable tbody, .dtable tr, .dtable th, .dtable td { display: block; width: auto; }
+    .dtable thead { display: none; }
+    .dtable td::before { content: attr(data-l); display: block; font-size: 10.5px; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--sub); margin-bottom: 5px; }
+    .legend { position: static; max-width: none; margin-top: 12px; }
+    .venn { flex-direction: column; align-items: center; }
+  }
+
+  .newpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; margin-top: 12px; }
+  .newpanel input, .newpanel select { font: inherit; padding: 7px 9px; border: 1px solid var(--line);
+    border-radius: 6px; background: var(--bg); color: var(--ink); margin: 0 6px 8px 0; }
+  .cmdbox { margin-top: 10px; }
+  .cmdbox pre { background: var(--mono-bg); padding: 11px 13px; border-radius: 7px;
+    overflow-x: auto; font-size: 12.5px; margin: 0; }
+  .btn { font: inherit; font-size: 13px; padding: 7px 13px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .empty { color: var(--sub); }
+  footer { margin: 44px auto 60px; color: var(--sub); font-size: 14px; }
+  footer ul { padding-left: 20px; }
+</style>
+</head>
+<body class="has-ol-sidebar">
+<nav class="ol-sidebar">
+  <div class="kicker">OpenLead</div>
+  <div class="title">Workspace</div>
+  <a href="index.html">Home</a>
+  <a href="roadmap.html">Roadmap</a>
+  <a href="tasks.html">Task Board</a>
+  <a href="memory.html">Agent Memory</a>
+  <a href="analysis.html" class="active">Review Findings</a>
+</nav>
+
+<header>
+  <div class="kicker">Review Findings</div>
+  <h1 id="subject">Review</h1>
+  <p class="scope">One finding per reviewable defect or improvement, filed under one or more categories.
+    On the diagram, position shows which categories a finding belongs to, disc size shows effort, and disc
+    colour shows priority. Persisted through <code>scripts/analysis_cli.py</code>; this page is the rendered view.</p>
+  <div class="kpis" id="kpis"></div>
+</header>
+
+<div class="layout">
+  <h2 class="sec">Where the findings overlap</h2>
+  <div class="venn" id="venn"></div>
+  <p class="scope" style="text-align:center;margin-top:10px">Hover or focus an id for the detail. Click it to jump to the full entry.</p>
+
+  <h2 class="sec">By priority</h2>
+  <div class="newpanel">
+    <input id="nf-title" placeholder="Finding title" size="42">
+    <select id="nf-priority">
+      <option value="blocker">blocker</option>
+      <option value="critical">critical</option>
+      <option value="high">high</option>
+      <option value="medium" selected>medium</option>
+      <option value="low">low</option>
+    </select>
+    <select id="nf-effort">
+      <option>S</option><option selected>M</option><option>L</option><option>XL</option>
+    </select>
+    <span id="nf-cats"></span>
+    <button class="btn" id="nf-build">Build CLI command</button>
+    <div class="cmdbox" id="nf-cmdbox" hidden><pre id="nf-cmd"></pre>
+      <p class="scope" style="margin-top:8px">Write the problem, before, after and how to files first, then add
+        <code>--problem-file</code> and friends. The page re-renders automatically.</p></div>
+  </div>
+  <div id="plists"></div>
+
+  <h2 class="sec">Details</h2>
+  <div id="details"></div>
+</div>
+
+<footer>
+  <strong>How this board works</strong>
+  <ul>
+    <li>Data lives in <code>data/analysis.json</code>. <code>scripts/analysis_cli.py render</code> regenerates
+      this page from it, and every mutating command re-renders automatically.</li>
+    <li>As many categories as the review actually needs: the diagram draws one circle per category and
+      the overlap is the point. Past three circles a true Venn is geometrically impossible, so only the
+      regions that hold findings are drawn, each disc sitting where its categories meet. A finding that
+      fits none of them is a task, so it belongs on the <a href="tasks.html">board</a> instead.</li>
+    <li>Mark a fix with <code>analysis_cli.py status F-0001 --set fixed --note "how it was verified"</code>. The
+      note is the evidence, so write what you actually checked, not that you checked it.</li>
+    <li>Findings are a snapshot of one review. Long-lived work belongs on the <a href="roadmap.html">roadmap</a>,
+      and the reasoning behind a call belongs in <a href="memory.html">agent memory</a>.</li>
+  </ul>
+</footer>
+
+<div id="card" role="tooltip"></div>
+
+<script id="analysis-data" type="application/json">
+{
+  "_meta": {
+    "description": "Review findings: what an agent found while auditing this project, grouped by category, ordered by priority. Edit via scripts/analysis_cli.py, not by hand. Run its `render` command afterward to update analysis.html. Fully local, nothing here is ever pushed anywhere.",
+    "findingIdPrefix": "F-",
+    "nextFindingSeq": 1,
+    "subject": "",
+    "reviewedAt": "",
+    "reviewer": "",
+    "categories": {
+      "bug": {
+        "label": "Bug fixes",
+        "note": "Wrong behaviour, crashes, or silent data loss"
+      },
+      "perf": {
+        "label": "Performance",
+        "note": "Wall clock, memory, or wasted calls"
+      },
+      "ux": {
+        "label": "UI / UX",
+        "note": "What the operator sees, understands and can act on"
+      }
+    }
+  },
+  "findings": []
+}
+</script>
+
+<script>
+(function () {
+  var DATA = JSON.parse(document.getElementById('analysis-data').textContent);
+  var META = DATA._meta || {};
+  // Kategori sayisi analist ajanin karar verdigi kadar: diyagram ona gore
+  // kuruluyor (bkz. geometry() / regions()).
+  var CATS = Object.keys(META.categories || {});
+  var F = DATA.findings || [];
+
+  var PRIORITY = {
+    blocker:  { label: 'Blocker',  note: 'stops the thing working', dark: true },
+    critical: { label: 'Critical', note: 'breaks a core path',      dark: true },
+    high:     { label: 'High',     note: 'wrong or costly',         dark: true },
+    medium:   { label: 'Medium',   note: 'friction',                dark: false },
+    low:      { label: 'Low',      note: 'polish',                  dark: false }
+  };
+  var ORDER = ['blocker', 'critical', 'high', 'medium', 'low'];
+  var RADIUS = { S: 16, M: 22, L: 28, XL: 34 };
+  var EFFORT = { S: 'under 4 hours', M: 'about a day', L: 'a few days', XL: 'a week or more' };
+
+  var css = getComputedStyle(document.documentElement);
+  function colour(p) { return css.getPropertyValue('--p-' + p).trim() || '#888'; }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var sorted = F.slice().sort(function (a, b) {
+    var d = ORDER.indexOf(a.priority) - ORDER.indexOf(b.priority);
+    return d || (a.id < b.id ? -1 : 1);
+  });
+
+  /* ---------------------------------------------------------------- kpis -- */
+  function kpis() {
+    var cells = [];
+    ORDER.slice(0, 2).forEach(function (p) {
+      cells.push([F.filter(function (f) { return f.priority === p; }).length, PRIORITY[p].label.toLowerCase()]);
+    });
+    CATS.forEach(function (c) {
+      cells.push([F.filter(function (f) { return (f.categories || []).indexOf(c) > -1; }).length,
+                  META.categories[c].label.toLowerCase()]);
+    });
+    cells.push([F.filter(function (f) { return (f.categories || []).length > 1; }).length, 'in more than one']);
+    var hours = F.reduce(function (n, f) { return n + (Number(f.hours) || 0); }, 0);
+    cells.push(['~' + (Math.round(hours * 4) / 4) + 'h', 'total effort']);
+    cells.push([F.filter(function (f) { return f.status === 'fixed'; }).length + '/' + F.length, 'fixed']);
+
+    document.getElementById('kpis').innerHTML = cells.map(function (c) {
+      return '<div class="kpi"><b>' + esc(c[0]) + '</b><span>' + esc(c[1]) + '</span></div>';
+    }).join('');
+  }
+
+  /* ---------------------------------------------------------------- venn -- */
+
+  /* Kategori sayisi SABIT DEGIL. Analist ajan kac ayri kategoriye karar
+     verdiyse diyagram o kadar cemberle kuruluyor; geometri N'in fonksiyonu.
+
+     Yerlesim: N cember, merkezleri orijin etrafinda D yaricapli bir halkada
+     esit araliklarla, ilki tepede. R ve D su iki kosuldan cozuluyor:
+
+       komsu merkez uzakligi  2 D sin(pi/N) = K R      (komsular ortussun)
+       dis sinir              D + R = OUT              (viewBox sabit kalsin)
+
+     K = 1.016 ve OUT = 238, N = 3'te tam olarak eski elle yazilmis
+     R = 150 / D = 88 degerlerini veriyor — yani uc kategorili tahtalar
+     birebir eskisi gibi cikiyor, degisen sey yalnizca artik uce mahkum
+     olmamasi.
+
+     DURUSTLUK NOTU: N >= 4'te bu artik gercek bir Venn degil. Uc cemberden
+     sonra butun 2^N-1 bolgeyi cemberle cizmek geometrik olarak imkansiz
+     (dord icin elips, besten sonra iyice egzotik sekiller gerekiyor). Onun
+     yerine EULER tarzi bir yerlesim: yalnizca ICINDE BULGU OLAN bolgeler
+     ciziliyor ve her bulgu, ait oldugu kategorilerin merkezlerinin
+     bilesigine oturuyor. Okunurlugu bozan bos bolge kalmiyor. */
+  var OUT = 238, K = 1.016;
+  var N = Math.max(1, CATS.length);
+  var R = N === 1 ? 170 : OUT / (K / (2 * Math.sin(Math.PI / N)) + 1);
+  var D = N === 1 ? 0 : OUT - R;
+  var CENTRES = [];
+  for (var ci = 0; ci < N; ci++) {
+    var a = (-90 - ci * (360 / N)) * Math.PI / 180;
+    CENTRES.push({ x: D * Math.cos(a), y: D * Math.sin(a) });
+  }
+
+  /* Set renkleri. Ilk uc tanesi temanin --c1..--c3'u, yani uc kategorili
+     tahtalar tipatip eskisi gibi duruyor. Otesi elle secilmis bir tondan
+     geliyor: altin aci ile uretmek denendi ve dorduncu renk temanin
+     --c2 zeytinine (ton ~47) yapisiyordu. Bu dizi uc temel tonun
+     (~20, ~47, ~220) uzagindan gecirildi. Sekiz uzatma bitince aci
+     tekrarlaniyor ama parlaklik kaydiriliyor, boylece hicbir zaman
+     tukenmiyor. */
+  /* Ilk uc ton --c1..--c3'un yaklasigi; yalnizca o degiskenler okunamazsa
+     (temasiz bir baglam, ya da testler) devreye giriyorlar. */
+  var BASE_HUES = [20, 47, 220];
+  var EXTRA_HUES = [142, 288, 172, 328, 96, 258, 196, 118];
+  function setColour(i) {
+    if (i < 3) {
+      var v = css.getPropertyValue('--c' + (i + 1)).trim();
+      if (v) return v;
+    }
+    var k = i - 3;
+    if (k < 0) {
+      return 'hsl(' + BASE_HUES[i] + ' 62% '
+        + ((typeof matchMedia === 'function'
+            && matchMedia('(prefers-color-scheme: dark)').matches) ? 68 : 42) + '%)';
+    }
+    var dark = typeof matchMedia === 'function'
+      && matchMedia('(prefers-color-scheme: dark)').matches;
+    var band = Math.floor(k / EXTRA_HUES.length) % 3;
+    var light = (dark ? 68 : 42) + band * (dark ? -13 : 13);
+    return 'hsl(' + EXTRA_HUES[k % EXTRA_HUES.length] + ' 62% ' + light + '%)';
+  }
+
+  /* Bir bulgunun ait oldugu kategori indisleri, sirali. */
+  function indexSet(f) {
+    return (f.categories || []).map(function (c) { return CATS.indexOf(c); })
+      .filter(function (i) { return i > -1; }).sort(function (a, b) { return a - b; });
+  }
+  function keyOf(idx) { return idx.join(','); }
+
+  /* Bolgeler bulgulardan TURETILIYOR, elle sayilmiyor: hangi kategori
+     bilesimleri gercekten doluysa yalnizca onlar yer kapliyor.
+
+     Capa = uyelerin merkezlerinin ortalamasinin yonu, disari dogru
+     spread(k) kadar. k buyudukce spread kuculuyor; butun kategorilere giren
+     bir bulgu tam ortada oturuyor. N = 3'te bu, eski elle yazilmis yedi
+     capayla gorsel olarak ayni yeri veriyor (tekil capalar birebir). */
+  function regions() {
+    var seen = {}, out = [];
+    F.forEach(function (f) {
+      var idx = indexSet(f);
+      if (!idx.length) return;
+      var k = keyOf(idx);
+      if (seen[k]) return;
+      seen[k] = 1;
+      var mx = 0, my = 0;
+      idx.forEach(function (i) { mx += CENTRES[i].x; my += CENTRES[i].y; });
+      mx /= idx.length; my /= idx.length;
+      var len = Math.hypot(mx, my);
+      var t = N > 1 ? (idx.length - 1) / (N - 1) : 0;
+      var spread = (OUT - 48) * (1 - t);
+      var anchor = len < 1e-6
+        ? { x: 0, y: 0 }
+        : { x: mx / len * spread, y: my / len * spread };
+      out.push({ sets: idx, anchor: anchor });
+    });
+
+    /* Ayni capaya dusen bolgeler. Cift sayida kategoride karsilikli ciftlerin
+       (N=4'te {0,2} ve {1,3}) merkez ortalamasi ikisi de tam orijine dusuyor;
+       yon vektoru bilgiyi kaybediyor. Ustuste binmeleri yerine ortak capanin
+       etrafinda kucuk bir cember uzerinde, bilesim anahtarina gore sirali
+       olarak aciliyorlar — deterministik, ayni veri ayni resmi veriyor. */
+    var byPos = {};
+    out.forEach(function (r) {
+      var k = r.anchor.x.toFixed(0) + '|' + r.anchor.y.toFixed(0);
+      (byPos[k] = byPos[k] || []).push(r);
+    });
+    Object.keys(byPos).forEach(function (k) {
+      var group = byPos[k];
+      if (group.length < 2) return;
+      group.sort(function (a, b) {
+        return a.sets.length - b.sets.length || (keyOf(a.sets) < keyOf(b.sets) ? -1 : 1);
+      });
+      var rad = 34 + group.length * 6;
+      group.forEach(function (r, i) {
+        var ang = (-90 + i * (360 / group.length)) * Math.PI / 180;
+        r.anchor = { x: r.anchor.x + rad * Math.cos(ang), y: r.anchor.y + rad * Math.sin(ang) };
+      });
+    });
+    return out;
+  }
+
+  /* Kategori sayisi buyudukce komsu bolgeler birbirine yaklasiyor ve iki AYRI
+     bolgenin diskleri ust uste binebiliyor. Capalari daha da acmak diyagrami
+     sisirirdi; onun yerine yerlestirme sonrasi kisa bir gevsetme: ust uste
+     binen her cift birbirini iter, sonuc viewBox'a kirpilir. Deterministik
+     (rastgelelik yok) ve N <= 3'te hicbir sey ust uste binmedigi icin islemsiz
+     geciyor, yani eski tahtalarin gorunumu aynen duruyor. */
+  var VB = { x: -330, y: -285, w: 660, h: 545 };
+  function relax(discs, iterations) {
+    var pad = 1.5;
+    for (var it = 0; it < (iterations || 60); it++) {
+      var moved = false;
+      for (var i = 0; i < discs.length; i++) {
+        for (var j = i + 1; j < discs.length; j++) {
+          var a = discs[i], b = discs[j];
+          var dx = b.x - a.x, dy = b.y - a.y;
+          var dist = Math.hypot(dx, dy);
+          var want = a.r + b.r + pad;
+          if (dist >= want) continue;
+          moved = true;
+          // tam ust uste: bilesime gore sabit bir yone ac
+          if (dist < 1e-6) { dx = Math.cos(i + j); dy = Math.sin(i + j); dist = 1; }
+          var push = (want - dist) / 2 / dist;
+          a.x -= dx * push; a.y -= dy * push;
+          b.x += dx * push; b.y += dy * push;
+        }
+      }
+      for (var k = 0; k < discs.length; k++) {
+        var m = discs[k];
+        m.x = Math.min(VB.x + VB.w - m.r, Math.max(VB.x + m.r, m.x));
+        m.y = Math.min(VB.y + VB.h - m.r, Math.max(VB.y + m.r, m.y));
+      }
+      if (!moved) break;
+    }
+    return discs;
+  }
+
+  function same(a, b) { return a.length === b.length && a.every(function (v, i) { return v === b[i]; }); }
+
+  function pack(members, anchor) {
+    var gap = 7;
+    var perRow = members.length <= 2 ? members.length : members.length <= 4 ? 2 : 3;
+    var rows = [];
+    for (var i = 0; i < members.length; i += perRow) rows.push(members.slice(i, i + perRow));
+    var heights = rows.map(function (row) {
+      return Math.max.apply(null, row.map(function (m) { return m.r; })) * 2 + gap;
+    });
+    var total = heights.reduce(function (a, b) { return a + b; }, 0);
+    var y = anchor.y - total / 2;
+    rows.forEach(function (row, i) {
+      var cy = y + heights[i] / 2;
+      var width = row.reduce(function (n, m) { return n + m.r * 2; }, 0) + gap * (row.length - 1);
+      var x = anchor.x - width / 2;
+      row.forEach(function (m) { m.x = x + m.r; m.y = cy; x += m.r * 2 + gap; });
+      y += heights[i];
+    });
+    return members;
+  }
+
+  function venn() {
+    var host = document.getElementById('venn');
+    if (!F.length) { host.innerHTML = '<p class="empty" style="padding:40px">No findings yet. Add one with <code>analysis_cli.py add</code>.</p>'; return; }
+
+    var svg = ['<svg viewBox="-330 -285 660 545" role="img" aria-label="Findings grouped by category, sized by effort, coloured by priority">'];
+    CENTRES.forEach(function (c, i) {
+      svg.push('<circle class="set" cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1)
+        + '" r="' + R.toFixed(1) + '" fill="' + setColour(i) + '" stroke="' + setColour(i) + '"></circle>');
+    });
+    /* Etiket cemberin DISINA, merkezden disari dogru: N buyudukce cemberler
+       yana kayiyor ve sabit "tepedeki ustte, gerisi altta" kurali ust uste
+       biniyordu. Tek kategori halinde yon yok, tepeye yaziliyor. */
+    CENTRES.forEach(function (c, i) {
+      var n = F.filter(function (f) { return (f.categories || []).indexOf(CATS[i]) > -1; }).length;
+      var len = Math.hypot(c.x, c.y) || 1;
+      var ux = N === 1 ? 0 : c.x / len, uy = N === 1 ? -1 : c.y / len;
+      var lx = c.x + ux * (R + 20);
+      var ly = c.y + uy * (R + 20) + (uy < 0 ? -2 : 12);
+      svg.push('<text class="setlabel" x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1)
+        + '" fill="' + setColour(i) + '">'
+        + esc(META.categories[CATS[i]].label) + ' <tspan class="count">' + n + '</tspan></text>');
+    });
+
+    /* Once BUTUN diskler paketlenip toplaniyor, sonra bir kez gevsetiliyor:
+       gevsetme bolgeler ARASI ust uste binmeyi de cozmek zorunda, tek tek
+       bolge icinde calissa komsu bolgenin diskini gormezdi. */
+    var tumDiskler = [];
+    regions().forEach(function (region) {
+      var members = sorted.filter(function (f) { return same(indexSet(f), region.sets); })
+        .map(function (f) { return { f: f, r: RADIUS[f.effort] || 18 }; })
+        .sort(function (a, b) { return b.r - a.r || (a.f.id < b.f.id ? -1 : 1); });
+      pack(members, region.anchor);
+      members.forEach(function (m) { tumDiskler.push(m); });
+    });
+    relax(tumDiskler);
+
+    tumDiskler.forEach(function (m) {
+      var p = PRIORITY[m.f.priority] || PRIORITY.medium;
+      var font = m.r >= 26 ? 13 : m.r >= 20 ? 12 : 11;
+      svg.push('<g class="disc" data-id="' + esc(m.f.id) + '" tabindex="0" role="button" aria-label="'
+        + esc(m.f.id + ', ' + p.label + ', effort ' + m.f.effort + ': ' + m.f.title) + '">'
+        + '<circle cx="' + m.x.toFixed(1) + '" cy="' + m.y.toFixed(1) + '" r="' + m.r + '" fill="'
+        + colour(m.f.priority) + '"' + (m.f.status === 'fixed' ? ' class="done"' : '') + '></circle>'
+        + '<text x="' + m.x.toFixed(1) + '" y="' + (m.y + font * 0.35).toFixed(1) + '" style="font-size:' + font
+      + 'px;fill:' + (p.dark ? '#fff' : '#1b1b18') + '">' + esc(m.f.id.replace(/^F-0*/, 'F')) + '</text></g>');
+    });
+    svg.push('</svg>');
+
+    var legend = ['<aside class="legend"><h4>Priority</h4><ul>'];
+    ORDER.forEach(function (p) {
+      legend.push('<li><i style="background:' + colour(p) + '"></i><b>' + PRIORITY[p].label
+        + '</b><span>' + PRIORITY[p].note + '</span></li>');
+    });
+    legend.push('</ul><h4>Size is effort</h4><ul>');
+    Object.keys(RADIUS).forEach(function (k) {
+      var d = Math.round(RADIUS[k] * 0.72);
+      legend.push('<li><i class="ring" style="width:' + d + 'px;height:' + d + 'px"></i><b>' + k
+        + '</b><span>' + EFFORT[k] + '</span></li>');
+    });
+    legend.push('</ul><h4>Ring</h4><ul><li><i class="ring" style="width:13px;height:13px;border-style:dashed;border-color:var(--good)"></i><b>fixed</b><span>closed and checked</span></li></ul></aside>');
+
+    host.innerHTML = svg.join('') + legend.join('');
+    wireDiscs();
+  }
+
+  /* ------------------------------------------------------------ hovercard - */
+  var card = document.getElementById('card');
+  function showCard(el) {
+    var f = F.filter(function (x) { return x.id === el.dataset.id; })[0];
+    if (!f) return;
+    var p = PRIORITY[f.priority] || PRIORITY.medium;
+    card.innerHTML = '<h4>' + esc(f.id) + '. ' + esc(f.title) + '</h4><div class="meta">'
+      + (f.categories || []).map(function (c) {
+          return '<span class="tag">' + esc((META.categories[c] || {}).label || c) + '</span>'; }).join('')
+      + '<span class="tag">' + esc(p.label) + '</span>'
+      + '<span class="tag">effort ' + esc(f.effort) + (f.hours ? ', ~' + f.hours + 'h' : '') + '</span>'
+      + (f.status === 'fixed' ? '<span class="tag">fixed</span>' : '')
+      + '</div><p>' + esc((f.problem || '').slice(0, 320)) + '</p>'
+      + (f.where ? '<div class="where">' + esc(f.where) + '</div>' : '');
+    var r = el.getBoundingClientRect();
+    card.style.display = 'block';
+    var w = card.offsetWidth, h = card.offsetHeight;
+    var x = r.left + r.width / 2 - w / 2;
+    var y = r.top - h - 12;
+    if (y < 8) y = r.bottom + 12;
+    card.style.left = Math.max(8, Math.min(innerWidth - w - 8, x)) + 'px';
+    card.style.top = Math.max(8, Math.min(innerHeight - h - 8, y)) + 'px';
+  }
+  function hideCard() { card.style.display = 'none'; }
+
+  function wireDiscs() {
+    Array.prototype.forEach.call(document.querySelectorAll('.disc'), function (el) {
+      el.addEventListener('mouseenter', function () { showCard(el); });
+      el.addEventListener('focus', function () { showCard(el); });
+      el.addEventListener('mouseleave', hideCard);
+      el.addEventListener('blur', hideCard);
+      el.addEventListener('click', function () { location.hash = 'detail-' + el.dataset.id; });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'detail-' + el.dataset.id; }
+      });
+    });
+  }
+  addEventListener('scroll', hideCard, { passive: true });
+
+  /* -------------------------------------------------------------- tables -- */
+  function tags(f) {
+    return (f.categories || []).map(function (c) {
+      return '<span class="tag">' + esc((META.categories[c] || {}).label || c) + '</span>';
+    }).join(' ');
+  }
+
+  function plists() {
+    var html = ORDER.map(function (p) {
+      var rows = sorted.filter(function (f) { return f.priority === p; });
+      if (!rows.length) return '';
+      return '<h3 class="pgroup" style="color:' + colour(p) + '">' + PRIORITY[p].label
+        + ' <span>' + rows.length + '</span></h3>'
+        + '<table class="plist"><thead><tr><th>ID</th><th>Finding</th><th>Categories</th>'
+        + '<th>Effort</th><th>Where</th><th>Status</th></tr></thead><tbody>'
+        + rows.map(function (f) {
+            return '<tr><td class="id"><a href="#detail-' + esc(f.id) + '">' + esc(f.id) + '</a></td>'
+              + '<td>' + esc(f.title) + '</td><td>' + tags(f) + '</td>'
+              + '<td><b>' + esc(f.effort) + '</b> <span class="where">' + esc(EFFORT[f.effort] || '')
+              + (f.hours ? ', ~' + f.hours + 'h' : '') + '</span></td>'
+              + '<td class="where">' + esc(f.where) + '</td>'
+              + '<td>' + (f.status === 'fixed'
+                  ? '<span style="color:var(--good)">fixed</span>'
+                  : '<span class="where">' + esc(f.status) + '</span>') + '</td></tr>';
+          }).join('')
+        + '</tbody></table>';
+    }).join('');
+    document.getElementById('plists').innerHTML = html || '<p class="empty">Nothing filed yet.</p>';
+  }
+
+  function details() {
+    document.getElementById('details').innerHTML = sorted.map(function (f) {
+      var p = PRIORITY[f.priority] || PRIORITY.medium;
+      return '<section class="detail" id="detail-' + esc(f.id) + '">'
+        + '<h3><span style="color:' + colour(f.priority) + ';font-weight:700">' + esc(f.id) + '</span> '
+        + esc(f.title) + '</h3>'
+        + '<p class="dmeta">' + tags(f) + '<span class="tag">' + esc(p.label) + '</span>'
+        + '<span class="tag">effort ' + esc(f.effort) + (f.hours ? ', ~' + f.hours + 'h' : '') + '</span>'
+        + (f.where ? '<code>' + esc(f.where) + '</code>' : '') + '</p>'
+        + (f.problem ? '<p class="dproblem">' + esc(f.problem) + '</p>' : '')
+        + (f.status === 'fixed' && f.verified
+            ? '<p class="dverified"><b>Fixed and checked.</b> ' + esc(f.verified) + '</p>' : '')
+        + '<table class="dtable"><thead><tr><th>Before</th><th>After</th><th>How</th></tr></thead>'
+        + '<tbody><tr>'
+        + '<td data-l="Before"><pre>' + esc(f.before || '(not recorded)') + '</pre></td>'
+        + '<td data-l="After"><pre>' + esc(f.after || '(not recorded)') + '</pre></td>'
+        + '<td data-l="How" class="how">' + esc(f.how || '(not recorded)') + '</td>'
+        + '</tr></tbody></table></section>';
+    }).join('') || '<p class="empty">Nothing filed yet.</p>';
+  }
+
+  /* --------------------------------------------------------- new finding -- */
+  function newPanel() {
+    document.getElementById('nf-cats').innerHTML = CATS.map(function (c) {
+      return '<label style="margin-right:10px;font-size:13px"><input type="checkbox" value="' + esc(c) + '"> '
+        + esc(META.categories[c].label) + '</label>';
+    }).join('');
+
+    document.getElementById('nf-build').addEventListener('click', function () {
+      var title = document.getElementById('nf-title').value.trim() || 'Describe the finding';
+      var cats = Array.prototype.filter.call(
+        document.querySelectorAll('#nf-cats input:checked'), function () { return true; })
+        .map(function (i) { return i.value; });
+      if (!cats.length) cats = [CATS[0]];
+      var cmd = 'python3 scripts/analysis_cli.py add \\\n  --title ' + JSON.stringify(title)
+        + ' \\\n  ' + cats.map(function (c) { return '--category ' + c; }).join(' ')
+        + ' \\\n  --priority ' + document.getElementById('nf-priority').value
+        + ' --effort ' + document.getElementById('nf-effort').value;
+      document.getElementById('nf-cmd').textContent = cmd;
+      document.getElementById('nf-cmdbox').hidden = false;
+    });
+  }
+
+  if (META.subject) document.getElementById('subject').textContent = META.subject;
+  kpis(); venn(); plists(); details(); newPanel();
+})();
+</script>
+</body>
+</html>

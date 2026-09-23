@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Memory · OpenLead Workspace</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1b1b18; --sub: #6b6b63;
+    --line: #e5e3dc; --mono-bg: #f1efe8;
+    --good: #1c7a4d; --good-bg: #e8f5ee;
+    --accent: #2f6fed; --accent-bg: rgba(47,111,237,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #1f2023; --ink: #eceae5; --sub: #9a9890;
+      --line: #33342f; --mono-bg: #26272a;
+      --good: #5fd39a; --good-bg: #123326;
+      --accent: #7aa2f7; --accent-bg: rgba(122,162,247,0.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.92em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  body.has-ol-sidebar { margin-left: 232px; }
+  .ol-sidebar {
+    position: fixed; top: 0; left: 0; width: 232px; height: 100vh; overflow-y: auto;
+    background: #fbfbfa; border-right: 1px solid #e5e3dc; padding: 1.6rem 1rem 1.6rem 1.3rem;
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    z-index: 100; box-sizing: border-box;
+  }
+  .ol-sidebar .kicker { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8a8778; font-weight: 700; margin-bottom: 0.25rem; }
+  .ol-sidebar .title { font-size: 0.95rem; font-weight: 700; color: #1b1b18; margin-bottom: 1.3rem; line-height: 1.3; }
+  .ol-sidebar a { display: block; padding: 0.45rem 0.6rem; margin-bottom: 0.1rem; border-radius: 7px; color: #3a3a34; text-decoration: none; font-size: 0.86rem; }
+  .ol-sidebar a:hover { background: #eeece4; }
+  .ol-sidebar a.active { background: #2f6fed; color: #fff; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .ol-sidebar { background: #1a1b1e; border-right-color: #33342f; }
+    .ol-sidebar .kicker { color: #9a9890; }
+    .ol-sidebar .title { color: #eceae5; }
+    .ol-sidebar a { color: #cfcdc6; }
+    .ol-sidebar a:hover { background: #26272a; }
+    .ol-sidebar a.active { background: #7aa2f7; color: #14151a; }
+  }
+  @media (max-width: 860px) {
+    .ol-sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid #e5e3dc; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+    .ol-sidebar .title, .ol-sidebar .kicker { width: 100%; }
+    body.has-ol-sidebar { margin-left: 0; }
+  }
+
+  header { padding: 1.6rem 1.5rem 1rem; }
+  header .kicker { color: var(--sub); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  header h1 { margin: 0.3rem 0 0.4rem; font-size: 1.7rem; }
+  header p.scope { color: var(--sub); margin: 0; font-size: 0.95rem; max-width: 90ch; }
+
+  .layout { display: flex; gap: 1.2rem; padding: 0 1.5rem 3rem; align-items: flex-start; }
+  .journal-list { flex: 0 0 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; max-height: 74vh; overflow-y: auto; padding: 0.6rem; }
+  .journal-list .lh { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.5rem 0.7rem; }
+  .journal-list .lh h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--sub); margin: 0; }
+  .newbtn { background: var(--accent-bg); color: var(--accent); border: none; border-radius: 7px; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; cursor: pointer; }
+  .jitem { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 8px; padding: 0.6rem 0.6rem; cursor: pointer; margin-bottom: 0.15rem; color: var(--ink); font-family: inherit; }
+  .jitem:hover { background: var(--mono-bg); }
+  .jitem.active { background: var(--accent-bg); }
+  .jitem .jname { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }
+  .jitem .jmeta { font-size: 0.72rem; color: var(--sub); }
+  .empty-state { color: var(--sub); font-size: 0.85rem; padding: 1rem 0.6rem; text-align: center; }
+
+  .detail { flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.5rem 1.8rem; min-height: 74vh; }
+  .detail .d-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.6rem; }
+  .detail h2 { margin: 0 0 0.2rem; font-size: 1.4rem; }
+  .detail .d-id { font-family: "SF Mono", monospace; font-size: 0.78rem; color: var(--sub); }
+  .metarow { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--sub); margin-bottom: 1.1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+  .metarow b { color: var(--ink); font-weight: 600; }
+  .content-box { background: var(--mono-bg); border-radius: 10px; padding: 1rem 1.2rem; white-space: pre-wrap; font-size: 0.92rem; line-height: 1.6; min-height: 200px; }
+  .content-box:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .editbar { display: flex; gap: 0.5rem; margin-top: 0.8rem; align-items: center; flex-wrap: wrap; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+  .btn.secondary { background: var(--mono-bg); color: var(--ink); border: 1px solid var(--line); }
+  .hint { color: var(--sub); font-size: 0.8rem; }
+  .cmdbox { display: none; margin-top: 0.7rem; }
+  .cmdbox.show { display: block; }
+  .cmdbox pre { background: #14151a; color: #d6e2ff; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.78rem; overflow-x: auto; margin: 0.4rem 0; white-space: pre-wrap; }
+
+  .newpanel { display: none; background: var(--mono-bg); border-radius: 10px; padding: 0.9rem; margin-bottom: 0.6rem; }
+  .newpanel.show { display: block; }
+  .newpanel input { width: 100%; margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 0.4rem 0.6rem; font-size: 0.82rem; color: var(--ink); }
+
+  footer { margin: 1rem 1.5rem 0; padding: 1.2rem 0 0; border-top: 1px solid var(--line); color: var(--sub); font-size: 0.88rem; max-width: 1400px; }
+  footer strong { color: var(--ink); }
+  footer ul { padding-left: 1.2rem; }
+  /* rendered Markdown (descriptions, comments, journals) */
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p { margin: 0 0 0.6rem; }
+  .md h1.md-h, .md h2.md-h, .md h3.md-h,
+  .md h4.md-h, .md h5.md-h, .md h6.md-h { margin: 0.9rem 0 0.4rem; line-height: 1.3; font-weight: 650; }
+  .md h1.md-h { font-size: 1.15rem; } .md h2.md-h { font-size: 1.05rem; }
+  .md h3.md-h { font-size: 0.98rem; } .md h4.md-h, .md h5.md-h, .md h6.md-h { font-size: 0.92rem; }
+  .md ul, .md ol { margin: 0 0 0.6rem; padding-left: 1.3rem; }
+  .md li { margin: 0.15rem 0; }
+  .md code { background: var(--mono-bg); border-radius: 4px; padding: 0.08em 0.32em;
+             font-family: "SF Mono", ui-monospace, monospace; font-size: 0.86em; }
+  .md pre { background: var(--mono-bg); border-radius: 8px; padding: 0.7rem 0.9rem;
+            overflow-x: auto; margin: 0 0 0.6rem; }
+  .md pre code { background: none; padding: 0; font-size: 0.82em; line-height: 1.5; }
+  .md blockquote { margin: 0 0 0.6rem; padding: 0.1rem 0 0.1rem 0.8rem;
+                   border-left: 3px solid var(--line); color: var(--sub); }
+  .md hr { border: 0; border-top: 1px solid var(--line); margin: 0.9rem 0; }
+  .md a { color: inherit; }
+  .content-box.md { white-space: normal; }
+  .viewtabs { display: flex; gap: 0.35rem; margin: 0 0 0.5rem; }
+  .vtab { background: none; border: 1px solid var(--line); color: var(--sub); border-radius: 999px;
+          padding: 0.22rem 0.7rem; font: inherit; font-size: 0.78rem; cursor: pointer; }
+  .vtab.active { background: var(--mono-bg); color: var(--ink); }
+</style>
+</head>
+<body class="has-ol-sidebar">
+<nav class="ol-sidebar">
+  <div class="kicker">OpenLead</div>
+  <div class="title">Workspace</div>
+  <a href="index.html">Home</a>
+  <a href="roadmap.html">Roadmap</a>
+  <a href="tasks.html">Task Board</a>
+  <a href="memory.html" class="active">Agent Memory</a>
+  <a href="analysis.html">Review Findings</a>
+</nav>
+
+<header>
+  <div class="kicker">Agent Memory</div>
+  <h1>Journals</h1>
+  <p class="scope">Each journal is a log an agent (or a human) owns and names: working notes, decisions,
+    dead ends, handoffs. Read the relevant one before redoing analysis someone already did. Persisted through
+    <code>scripts/memory_cli.py</code>; this page is the rendered view.</p>
+</header>
+
+<div class="layout">
+  <div class="journal-list">
+    <div class="lh"><h2>Journals</h2><button class="newbtn" id="newbtn">+ New</button></div>
+    <div class="newpanel" id="newpanel">
+      <input id="np-name" placeholder="Journal name">
+      <input id="np-owner" placeholder="Owner (your agent/name)">
+      <div class="editbar">
+        <button class="btn" id="np-build">Build CLI command</button>
+        <button class="btn secondary" id="np-cancel">Cancel</button>
+      </div>
+      <div class="cmdbox" id="np-cmdbox"><pre id="np-cmd"></pre><p class="hint">Write your content to a file first, then run this (it reads <code>--content-file</code>). Re-open this page after, it re-renders automatically.</p></div>
+    </div>
+    <div id="jlist"></div>
+  </div>
+  <div class="detail" id="detail"></div>
+</div>
+
+<footer>
+  <strong>How this journal works</strong>
+  <ul>
+    <li>Data lives in <code>data/memory.json</code>. <code>scripts/memory_cli.py render</code> regenerates this
+      page from it. Every <code>create</code>/<code>append</code>/<code>update</code>/<code>contributor</code>
+      call re-renders automatically.</li>
+    <li>The content pane is editable in-browser for quick edits, but nothing here saves itself; there's no
+      server. Use <b>Copy content</b>, save it to a file, then <code>memory_cli.py append</code> (adds a
+      timestamped section, the normal case) or <code>update --content-file</code> (replaces the whole body).</li>
+    <li>One journal per distinct thread of work, named by whoever owns it. Don't pile unrelated work into one
+      entry just because it already exists.</li>
+  </ul>
+</footer>
+
+<script id="journal-data" type="application/json">
+{
+  "_meta": {
+    "description": "Agent/human journal entries. Edit via scripts/memory_cli.py, not by hand. Run its `render` command afterward to update memory.html. Fully local, nothing here is ever pushed anywhere.",
+    "entryIdPrefix": "M-",
+    "nextEntrySeq": 1
+  },
+  "entries": []
+}
+</script>
+
+<script>
+(function () {
+  var DATA = JSON.parse(document.getElementById('journal-data').textContent);
+  var ENTRIES = DATA.entries;
+  var byId = {};
+  ENTRIES.forEach(function (e) { byId[e.id] = e; });
+  var SORTED = ENTRIES.slice().sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
+  var activeId = SORTED.length ? SORTED[0].id : null;
+
+  var jlist = document.getElementById('jlist');
+  var detail = document.getElementById('detail');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function fmtDate(iso) { return (iso || '').replace('T', ' '); }
+
+  // --- Markdown ---------------------------------------------------------------
+  // Agents write Markdown into descriptions, comments and journals whether or not
+  // anything renders it, so the pages render it. Deliberately a subset, not
+  // CommonMark: headings, **bold**, *italic*, `code`, ``` fences, - / 1. lists,
+  // > quotes, --- rules, [text](url), paragraphs. No tables, no nesting, no HTML
+  // passthrough. The source text is escaped FIRST and the only tags in the output
+  // are the ones these two functions emit, so nothing in the data can inject markup.
+  // Keep this block identical in every page that has one; tests/test_markdown.js
+  // asserts the copies have not drifted apart.
+  function mdInline(s) {
+    var parts = String(s).split('`'), out = '';
+    for (var i = 0; i < parts.length; i++) {
+      // odd indexes are the inside of a code span: no other markup applies there
+      if (i % 2) { out += '<code>' + parts[i] + '</code>'; continue; }
+      out += parts[i]
+        .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function (m, text, href) {
+          // only schemes that can't execute; anything else stays literal text
+          return /^(https?:\/\/|mailto:|[./#])/i.test(href)
+            ? '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + text + '</a>'
+            : m;
+        })
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    }
+    return out;
+  }
+
+  function mdToHtml(src) {
+    var lines = esc(src == null ? '' : src).split('\n');   // '>' is now '&gt;', '&' is '&amp;'
+    var BLOCK = /^\s*(```|#{1,6}\s|[-*+]\s|\d+[.)]\s|&gt;|(---|\*\*\*|___)\s*$)/;
+    var html = '', list = null, i = 0;
+    function closeList() { if (list) { html += '</' + list + '>'; list = null; } }
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^\s*```/.test(line)) {
+        closeList();
+        var code = [];
+        i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+        i++;                                   // the closing fence, if there is one
+        html += '<pre><code>' + code.join('\n') + '</code></pre>';
+        continue;
+      }
+      if (/^\s*$/.test(line)) { closeList(); i++; continue; }
+      var h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (h) {
+        closeList();
+        var n = h[1].length;
+        html += '<h' + n + ' class="md-h">' + mdInline(h[2]) + '</h' + n + '>';
+        i++; continue;
+      }
+      if (/^\s*(---|\*\*\*|___)\s*$/.test(line)) { closeList(); html += '<hr>'; i++; continue; }
+      if (/^\s*&gt;\s?/.test(line)) {
+        closeList();
+        var quote = [];
+        while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) {
+          quote.push(lines[i++].replace(/^\s*&gt;\s?/, ''));
+        }
+        html += '<blockquote>' + quote.map(mdInline).join('<br>') + '</blockquote>';
+        continue;
+      }
+      var item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+      if (item) {
+        var want = /^\s*\d/.test(line) ? 'ol' : 'ul';
+        if (list !== want) { closeList(); html += '<' + want + '>'; list = want; }
+        html += '<li>' + mdInline(item[1]) + '</li>';
+        i++; continue;
+      }
+      closeList();
+      var para = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !BLOCK.test(lines[i])) para.push(lines[i++]);
+      html += '<p>' + para.map(mdInline).join('<br>') + '</p>';
+    }
+    closeList();
+    return html;
+  }
+
+
+  function renderList() {
+    if (!ENTRIES.length) {
+      jlist.innerHTML = '<div class="empty-state">No journals yet. Click "+ New" to see how to create one.</div>';
+      return;
+    }
+    jlist.innerHTML = SORTED.map(function (e) {
+      return '<button class="jitem' + (e.id === activeId ? ' active' : '') + '" data-id="' + esc(e.id) + '">' +
+        '<div class="jname">' + esc(e.name) + '</div>' +
+        '<div class="jmeta">' + esc(e.id) + ' · ' + esc(e.owner) + ' · ' + esc(fmtDate(e.updatedAt)) + '</div>' +
+        '</button>';
+    }).join('');
+    jlist.querySelectorAll('.jitem').forEach(function (el) {
+      el.addEventListener('click', function () {
+        activeId = el.getAttribute('data-id');
+        renderList();
+        renderDetail();
+      });
+    });
+  }
+
+  function renderDetail() {
+    var e = byId[activeId];
+    if (!e) {
+      detail.innerHTML = '<p class="hint">Select a journal from the list, or create one.</p>';
+      return;
+    }
+    detail.innerHTML =
+      '<div class="d-head"><div><div class="d-id">' + esc(e.id) + '</div><h2>' + esc(e.name) + '</h2></div></div>' +
+      '<div class="metarow">' +
+        '<span><b>Owner</b> ' + esc(e.owner) + '</span>' +
+        '<span><b>Contributors</b> ' + esc((e.contributors || []).join(', ') || 'none') + '</span>' +
+        '<span><b>Created</b> ' + esc(fmtDate(e.createdAt)) + '</span>' +
+        '<span><b>Updated</b> ' + esc(fmtDate(e.updatedAt)) + '</span>' +
+      '</div>' +
+      '<div class="viewtabs">' +
+        '<button class="vtab active" id="tab-rendered">Rendered</button>' +
+        '<button class="vtab" id="tab-source">Source</button>' +
+      '</div>' +
+      '<div class="content-box md" id="content-rendered">' + mdToHtml(e.content || '') + '</div>' +
+      '<div class="content-box" id="content-box" contenteditable="true" hidden>' + esc(e.content || '') + '</div>' +
+      '<div class="editbar">' +
+        '<button class="btn secondary" id="copy-content">Copy content</button>' +
+        '<button class="btn secondary" id="build-append">Build append command</button>' +
+        '<span class="hint">Edits here are draft-only until saved via the CLI (see footer).</span>' +
+      '</div>' +
+      '<div class="cmdbox" id="append-cmdbox"><pre id="append-cmd"></pre><p class="hint">Save your edited/added text to a file, then run this.</p></div>';
+
+    // The source view is the editable one: Markdown is written, not clicked. The rendered
+    // view is read-only on purpose, so an edit can never be made against generated HTML.
+    var rendered = document.getElementById('content-rendered');
+    var source = document.getElementById('content-box');
+    function showSource(on) {
+      rendered.hidden = on;
+      source.hidden = !on;
+      document.getElementById('tab-rendered').classList.toggle('active', !on);
+      document.getElementById('tab-source').classList.toggle('active', on);
+      if (on) source.focus();
+    }
+    document.getElementById('tab-rendered').onclick = function () { showSource(false); };
+    document.getElementById('tab-source').onclick = function () { showSource(true); };
+
+    document.getElementById('copy-content').onclick = function () {
+      var text = document.getElementById('content-box').innerText;
+      navigator.clipboard.writeText(text).catch(function () {});
+    };
+    document.getElementById('build-append').onclick = function () {
+      var cmd = 'python3 scripts/memory_cli.py append ' + e.id + ' --content-file /path/to/your-notes.txt --author "you"';
+      document.getElementById('append-cmd').textContent = cmd;
+      document.getElementById('append-cmdbox').classList.add('show');
+    };
+  }
+
+  document.getElementById('newbtn').addEventListener('click', function () {
+    document.getElementById('newpanel').classList.toggle('show');
+  });
+  document.getElementById('np-cancel').addEventListener('click', function () {
+    document.getElementById('newpanel').classList.remove('show');
+  });
+  document.getElementById('np-build').addEventListener('click', function () {
+    var name = document.getElementById('np-name').value || 'untitled';
+    var owner = document.getElementById('np-owner').value || 'someone';
+    function q(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+    var cmd = 'python3 scripts/memory_cli.py create --name ' + q(name) + ' --owner ' + q(owner) +
+              ' --content-file /path/to/your-notes.txt';
+    document.getElementById('np-cmd').textContent = cmd;
+    document.getElementById('np-cmdbox').classList.add('show');
+  });
+
+  renderList();
+  renderDetail();
+})();
+</script>
+
+</body>
+</html>

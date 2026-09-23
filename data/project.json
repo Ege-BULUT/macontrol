@@ -1,0 +1,5 @@
+{
+  "name": "macontrol",
+  "tagline": "PureMac-grade cleanup and Radix-grade disk visualization in one fast, native macOS app.",
+  "pitch": "macontrol merges system cleanup (app uninstall with leftovers, caches, logs, bloat) and disk space visualization (drill-down sunburst/treemap, reveal in Finder, delete) into one app. We study proven open-source projects first, take what works, improve it, and rewrite what does not. Every area runs the same loop: research, analysis, spikes, benchmarks, report, integration, improvement, tests, fixes, verification."
+}

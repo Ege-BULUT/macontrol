@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap · OpenLead Workspace</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1b1b18; --sub: #6b6b63;
+    --line: #e5e3dc; --mono-bg: #f1efe8;
+    --good: #1c7a4d; --good-bg: #e8f5ee;
+    --bad: #b3261e; --bad-bg: #fdecea;
+    --warn: #9a6700; --warn-bg: #fff4de;
+    --dup: #5b4fc4; --dup-bg: #ecebfb;
+    --accent: #2f6fed; --accent-bg: rgba(47,111,237,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #1f2023; --ink: #eceae5; --sub: #9a9890;
+      --line: #33342f; --mono-bg: #26272a;
+      --good: #5fd39a; --good-bg: #123326;
+      --bad: #ff8a80; --bad-bg: #3a1a17;
+      --warn: #f0c674; --warn-bg: #3a2f10;
+      --dup: #b8b0ff; --dup-bg: #262151;
+      --accent: #7aa2f7; --accent-bg: rgba(122,162,247,0.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 4rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.92em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  body.has-ol-sidebar { margin-left: 232px; }
+  .ol-sidebar {
+    position: fixed; top: 0; left: 0; width: 232px; height: 100vh; overflow-y: auto;
+    background: #fbfbfa; border-right: 1px solid #e5e3dc; padding: 1.6rem 1rem 1.6rem 1.3rem;
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    z-index: 100; box-sizing: border-box;
+  }
+  .ol-sidebar .kicker { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8a8778; font-weight: 700; margin-bottom: 0.25rem; }
+  .ol-sidebar .title { font-size: 0.95rem; font-weight: 700; color: #1b1b18; margin-bottom: 1.3rem; line-height: 1.3; }
+  .ol-sidebar a { display: block; padding: 0.45rem 0.6rem; margin-bottom: 0.1rem; border-radius: 7px; color: #3a3a34; text-decoration: none; font-size: 0.86rem; }
+  .ol-sidebar a:hover { background: #eeece4; }
+  .ol-sidebar a.active { background: #2f6fed; color: #fff; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .ol-sidebar { background: #1a1b1e; border-right-color: #33342f; }
+    .ol-sidebar .kicker { color: #9a9890; }
+    .ol-sidebar .title { color: #eceae5; }
+    .ol-sidebar a { color: #cfcdc6; }
+    .ol-sidebar a:hover { background: #26272a; }
+    .ol-sidebar a.active { background: #7aa2f7; color: #14151a; }
+  }
+  @media (max-width: 860px) {
+    .ol-sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid #e5e3dc; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+    .ol-sidebar .title, .ol-sidebar .kicker { width: 100%; }
+    body.has-ol-sidebar { margin-left: 0; }
+  }
+
+  header { padding: 2.6rem 1.5rem 1.4rem; max-width: 1120px; margin: 0 auto; }
+  header .kicker { color: var(--sub); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  header h1 { margin: 0.3rem 0 0.5rem; font-size: 2.1rem; }
+  header p.scope { color: var(--sub); margin: 0; font-size: 1.02rem; max-width: 78ch; }
+  main { max-width: 1120px; margin: 0 auto; padding: 0 1.5rem; }
+
+  .diagram-wrap { margin: 1.8rem 0 2.6rem; overflow-x: auto; }
+  .diagram-wrap svg { display: block; height: auto; }
+  .empty-state { color: var(--sub); font-size: 0.92rem; padding: 2rem; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
+
+  section.milestones h2 { font-size: 1.4rem; margin: 0 0 0.3rem; }
+  section.milestones > p.hint { color: var(--sub); font-size: 0.92rem; margin: 0 0 1.4rem; max-width: 78ch; }
+
+  .m-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.5rem; margin-bottom: 1rem; }
+  .m-card.status-done { border-left: 4px solid var(--good); }
+  .m-card.status-next { border-left: 4px solid var(--accent); }
+  .m-card.status-planned { border-left: 4px solid var(--line); }
+  .m-card .m-top { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+  .m-card .m-id { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.78rem; color: var(--sub); font-weight: 700; }
+  .m-card h3 { margin: 0; font-size: 1.14rem; flex: 1 1 auto; }
+  .status-pill { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.18rem 0.55rem; border-radius: 999px; }
+  .status-pill.done { background: var(--good-bg); color: var(--good); }
+  .status-pill.next { background: var(--accent-bg); color: var(--accent); }
+  .status-pill.planned { background: var(--mono-bg); color: var(--sub); }
+  .m-card p.desc { margin: 0.4rem 0 0.8rem; color: var(--ink); }
+  .m-card .why { color: var(--sub); font-size: 0.92rem; margin: 0 0 0.8rem; }
+  .m-card ul.examples { margin: 0 0 0.9rem; padding-left: 1.1rem; font-size: 0.92rem; }
+  .m-card ul.examples li { margin-bottom: 0.35rem; }
+  .tag { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.08rem 0.4rem; border-radius: 4px; margin-right: 0.35rem; background: var(--accent-bg); color: var(--accent); }
+  .m-card .m-footer { display: flex; gap: 0.6rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--sub); }
+  .m-footer .chip { background: var(--mono-bg); border-radius: 6px; padding: 0.2rem 0.55rem; }
+
+  .note { background: var(--mono-bg); border-radius: 10px; padding: 1rem 1.2rem; font-size: 0.9rem; color: var(--sub); margin-top: 1.6rem; }
+  .note strong { color: var(--ink); }
+  footer { max-width: 1120px; margin: 3rem auto 0; padding: 1.5rem 1.5rem 0; border-top: 1px solid var(--line); color: var(--sub); font-size: 0.92rem; }
+  footer strong { color: var(--ink); }
+  footer ul { padding-left: 1.2rem; }
+</style>
+</head>
+<body class="has-ol-sidebar">
+<nav class="ol-sidebar">
+  <div class="kicker">OpenLead</div>
+  <div class="title">Workspace</div>
+  <a href="index.html">Home</a>
+  <a href="roadmap.html" class="active">Roadmap</a>
+  <a href="tasks.html">Task Board</a>
+  <a href="memory.html">Agent Memory</a>
+  <a href="analysis.html">Review Findings</a>
+</nav>
+
+<header>
+  <div class="kicker">Roadmap</div>
+  <h1>Milestones</h1>
+  <p class="scope" id="ol-intro">The plan, sequenced.</p>
+</header>
+
+<main>
+
+<div class="diagram-wrap" id="ol-diagram"></div>
+
+<section class="milestones">
+  <h2>Milestone detail</h2>
+  <p class="hint">Each milestone links to its own filtered view of the <a href="tasks.html">task board</a>.</p>
+  <div id="ol-cards"></div>
+  <div id="ol-notes"></div>
+</section>
+
+</main>
+
+<footer>
+  <strong>How this page works</strong>
+  <ul>
+    <li>Data lives in <code>data/roadmap.json</code>. <code>scripts/roadmap_cli.py render</code> regenerates
+      this page (both the diagram AND the cards) from it. Every mutating command re-renders automatically.</li>
+    <li>The diagram's x-axis is execution order, not calendar time. It draws exactly one node per milestone,
+      evenly spaced, colored by status (done / next / planned). No dates are implied.</li>
+    <li>Keep milestone <code>name</code> short (2-4 words). It has to fit next to its neighbors on the diagram.
+      Put the real detail in <code>description</code>/<code>why</code>, which only show in the cards below.</li>
+  </ul>
+</footer>
+
+<script id="roadmap-data" type="application/json">
+{
+  "_meta": {
+    "description": "Roadmap data. Edit via scripts/roadmap_cli.py, not by hand. Run its `render` command afterward to update roadmap.html. Fully local, nothing here is ever pushed anywhere.",
+    "milestoneIdPrefix": "M",
+    "nextMilestoneSeq": 9
+  },
+  "intro": "The plan, sequenced.",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Source research",
+      "status": "next",
+      "description": "Survey proven open-source cleaners and disk visualizers, license-check them, and pick what to reuse, what to improve and what to rewrite.",
+      "why": "Reusing proven wheels is the core strategy; picking wrong here costs every later milestone.",
+      "examples": [],
+      "chips": [
+        "Loop: research, analysis, report"
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "Scan engine",
+      "status": "planned",
+      "description": "Fastest possible filesystem walk and size aggregation (getattrlistbulk, parallel walk, APFS clones and hard links counted once), benchmarked against the candidates.",
+      "why": "Speed of the scan decides whether the app feels instant; both cleanup and visualization sit on it.",
+      "examples": [],
+      "chips": [
+        "Loop: spikes, benchmarks"
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "App shell & UI",
+      "status": "planned",
+      "description": "SwiftUI app skeleton, design system, navigation, permissions onboarding (Full Disk Access).",
+      "why": "One shell that both feature sets plug into, designed once.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M4",
+      "name": "Disk visualizer",
+      "status": "planned",
+      "description": "Sunburst / treemap, drill-down into any folder, reveal in Finder, move to Trash, live size updates.",
+      "why": "Radix-grade half of the product.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M5",
+      "name": "System cleaner",
+      "status": "planned",
+      "description": "Caches, logs, dev junk (Xcode DerivedData, simulators, package caches), language files, large and old files.",
+      "why": "PureMac-grade half of the product.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M6",
+      "name": "App uninstaller",
+      "status": "planned",
+      "description": "Remove apps with every leftover (Containers, Application Support, Preferences, LaunchAgents), plus removable bundled Apple apps where SIP allows.",
+      "why": "Most requested cleanup feature, and the riskiest one.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M7",
+      "name": "Safety & verification",
+      "status": "planned",
+      "description": "Dry-run everywhere, Trash-first deletes, protected-path allowlist, test suite over fixture trees, benchmarks in CI.",
+      "why": "A cleaner that deletes the wrong thing once is uninstalled forever.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M8",
+      "name": "Release",
+      "status": "planned",
+      "description": "Signing, notarization, update channel, landing page.",
+      "why": "Ship it.",
+      "examples": [],
+      "chips": []
+    }
+  ],
+  "notes": []
+}
+</script>
+
+<script>
+(function () {
+  var DATA = JSON.parse(document.getElementById('roadmap-data').textContent);
+  var MS = DATA.milestones || [];
+
+  document.getElementById('ol-intro').textContent = DATA.intro || 'The plan, sequenced.';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---- diagram: N evenly-spaced nodes on a horizontal baseline, colored by status ----
+  function renderDiagram() {
+    var wrap = document.getElementById('ol-diagram');
+    if (!MS.length) {
+      wrap.innerHTML = '<div class="empty-state">No milestones yet. Add one with '
+        + '<code>python3 scripts/roadmap_cli.py add --name "..."</code>.</div>';
+      return;
+    }
+    var left = 62, gap = 128, top = 112, h = 300;
+    // The legend row below the track is a fixed ~500px wide regardless of how many
+    // milestones there are, so with fewer than four the track alone would set a viewBox
+    // narrower than the legend and clip it off the right edge (at one milestone the
+    // viewBox is 124 wide and the legend is gone entirely).
+    var width = Math.max(left * 2 + gap * Math.max(0, MS.length - 1), 560);
+    var svg = [];
+    svg.push('<svg viewBox="0 0 ' + width + ' ' + h + '" style="min-width:' + Math.max(width, 600) + 'px">');
+    svg.push('<rect width="' + width + '" height="' + h + '" fill="var(--bg)"/>');
+    svg.push('<line x1="' + left + '" y1="' + top + '" x2="' + (left + gap * (MS.length - 1)) +
+              '" y2="' + top + '" stroke="#9a9890" stroke-width="1" opacity="0.4"/>');
+
+    var STROKE = { done: '#1c7a4d', next: '#2f6fed', planned: '#9a9890' };
+    var LABEL = { done: 'DONE', next: 'UP NEXT', planned: 'PLANNED' };
+
+    MS.forEach(function (m, i) {
+      var x = left + gap * i;
+      var status = (m.status === 'done' || m.status === 'next') ? m.status : 'planned';
+      var stroke = STROKE[status];
+      if (i > 0) {
+        var px = left + gap * (i - 1);
+        svg.push('<line x1="' + (px + 11) + '" y1="' + top + '" x2="' + (x - 11) + '" y2="' + top +
+                  '" stroke="#9a9890" stroke-width="1.5"/>');
+      }
+      if (status === 'done') {
+        svg.push('<circle cx="' + x + '" cy="' + top + '" r="11" fill="' + stroke + '" stroke="' + stroke + '"/>');
+        svg.push('<path d="M ' + (x - 5) + ' ' + top + ' L ' + (x - 1) + ' ' + (top + 4) + ' L ' + (x + 6) + ' ' + (top - 4) +
+                  '" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>');
+      } else if (status === 'next') {
+        svg.push('<circle cx="' + x + '" cy="' + top + '" r="11" fill="' + stroke + '22" stroke="' + stroke + '" stroke-width="2"/>');
+        svg.push('<circle cx="' + x + '" cy="' + top + '" r="4" fill="' + stroke + '"/>');
+      } else {
+        svg.push('<circle cx="' + x + '" cy="' + top + '" r="9" fill="var(--bg)" stroke="' + stroke + '" stroke-width="1.5"/>');
+      }
+      svg.push('<rect x="' + (x - 62) + '" y="66" width="124" height="16" rx="2" fill="var(--bg)"/>');
+      var fullLabel = m.id + ' · ' + m.name;
+      svg.push('<text x="' + x + '" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" ' +
+               'font-family="-apple-system,sans-serif"><title>' + esc(fullLabel) + '</title>' +
+               '<tspan class="ol-ms-label">' + esc(fullLabel) + '</tspan></text>');
+      svg.push('<rect x="' + (x - 52) + '" y="128" width="104" height="14" rx="2" fill="var(--bg)"/>');
+      svg.push('<text x="' + x + '" y="139" text-anchor="middle" font-size="9" font-weight="700" letter-spacing="0.04em" ' +
+               'fill="' + stroke + '" font-family="-apple-system,sans-serif">' + LABEL[status] + '</text>');
+      if (m.chips && m.chips[0]) {
+        svg.push('<rect x="' + (x - 52) + '" y="146" width="104" height="14" rx="2" fill="var(--bg)"/>');
+        svg.push('<text x="' + x + '" y="157" text-anchor="middle" font-size="9" fill="var(--sub)" ' +
+                 'font-family="-apple-system,sans-serif">' + esc(m.chips[0]) + '</text>');
+      }
+    });
+
+    var legendY = 200;
+    svg.push('<line x1="' + left + '" y1="' + legendY + '" x2="' + (width - left) +
+              '" y2="' + legendY + '" stroke="#9a9890" stroke-width="0.8" opacity="0.35"/>');
+    svg.push('<text x="' + left + '" y="' + (legendY + 22) + '" font-size="8" letter-spacing="0.12em" fill="var(--sub)" ' +
+             'font-family="\'SF Mono\', monospace">LEGEND</text>');
+    [['Done', STROKE.done], ['Up next', STROKE.next], ['Planned', STROKE.planned]].forEach(function (pair, i) {
+      var lx = left + 120 + i * 130;
+      svg.push('<circle cx="' + lx + '" cy="' + (legendY + 19) + '" r="6" fill="' + pair[1] + '22" stroke="' + pair[1] + '" stroke-width="1.5"/>');
+      svg.push('<text x="' + (lx + 14) + '" y="' + (legendY + 22) + '" font-size="10" fill="var(--ink)" ' +
+               'font-family="-apple-system,sans-serif">' + pair[0] + '</text>');
+    });
+    svg.push('</svg>');
+    wrap.innerHTML = svg.join('');
+
+    // The label box is 124px wide but nodes are only 128px apart, so a label whose
+    // rendered width exceeds ~120px runs into its neighbor. getComputedTextLength() is
+    // the real rendered width (font-family/weight-aware), so trim to that instead of
+    // guessing from character count. Full text survives in the <title> tooltip.
+    wrap.querySelectorAll('.ol-ms-label').forEach(function (tspan) {
+      var budget = 120;
+      if (tspan.getComputedTextLength() <= budget) return;
+      var s = tspan.textContent;
+      while (s.length > 1 && tspan.getComputedTextLength() > budget) {
+        s = s.slice(0, -1);
+        tspan.textContent = s + '…';
+      }
+    });
+  }
+
+  // ---- detail cards ----
+  function renderCards() {
+    var host = document.getElementById('ol-cards');
+    if (!MS.length) { host.innerHTML = ''; return; }
+    host.innerHTML = MS.map(function (m) {
+      var status = (m.status === 'done' || m.status === 'next') ? m.status : 'planned';
+      var pillLabel = status === 'done' ? 'Done' : (status === 'next' ? 'Up next' : 'Planned');
+      var examples = (m.examples || []).map(function (e) {
+        return '<li>' + (e.tag ? '<span class="tag">' + esc(e.tag) + '</span> ' : '') + esc(e.text) + '</li>';
+      }).join('');
+      var chips = (m.chips || []).map(function (c) {
+        return '<span class="chip">' + esc(c) + '</span>';
+      }).join('');
+      return '<div class="m-card status-' + status + '">' +
+        '<div class="m-top"><span class="m-id">' + esc(m.id) + '</span><h3>' + esc(m.name) + '</h3>' +
+        '<span class="status-pill ' + status + '">' + pillLabel + '</span></div>' +
+        (m.description ? '<p class="desc">' + esc(m.description) + '</p>' : '') +
+        (m.why ? '<p class="why"><b>Why here:</b> ' + esc(m.why) + '</p>' : '') +
+        (examples ? '<ul class="examples">' + examples + '</ul>' : '') +
+        '<div class="m-footer">' + chips +
+        '<span class="chip"><a href="tasks.html?milestone=' + esc(m.id) + '">Tasks →</a></span></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderNotes() {
+    var host = document.getElementById('ol-notes');
+    var notes = DATA.notes || [];
+    host.innerHTML = notes.map(function (n) {
+      return '<div class="note">' + esc(n) + '</div>';
+    }).join('');
+  }
+
+  renderDiagram();
+  renderCards();
+  renderNotes();
+})();
+</script>
+
+</body>
+</html>

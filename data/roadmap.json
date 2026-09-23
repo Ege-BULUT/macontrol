@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "description": "Roadmap data. Edit via scripts/roadmap_cli.py, not by hand. Run its `render` command afterward to update roadmap.html. Fully local, nothing here is ever pushed anywhere.",
+    "milestoneIdPrefix": "M",
+    "nextMilestoneSeq": 9
+  },
+  "intro": "The plan, sequenced.",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Source research",
+      "status": "next",
+      "description": "Survey proven open-source cleaners and disk visualizers, license-check them, and pick what to reuse, what to improve and what to rewrite.",
+      "why": "Reusing proven wheels is the core strategy; picking wrong here costs every later milestone.",
+      "examples": [],
+      "chips": [
+        "Loop: research, analysis, report"
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "Scan engine",
+      "status": "planned",
+      "description": "Fastest possible filesystem walk and size aggregation (getattrlistbulk, parallel walk, APFS clones and hard links counted once), benchmarked against the candidates.",
+      "why": "Speed of the scan decides whether the app feels instant; both cleanup and visualization sit on it.",
+      "examples": [],
+      "chips": [
+        "Loop: spikes, benchmarks"
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "App shell & UI",
+      "status": "planned",
+      "description": "SwiftUI app skeleton, design system, navigation, permissions onboarding (Full Disk Access).",
+      "why": "One shell that both feature sets plug into, designed once.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M4",
+      "name": "Disk visualizer",
+      "status": "planned",
+      "description": "Sunburst / treemap, drill-down into any folder, reveal in Finder, move to Trash, live size updates.",
+      "why": "Radix-grade half of the product.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M5",
+      "name": "System cleaner",
+      "status": "planned",
+      "description": "Caches, logs, dev junk (Xcode DerivedData, simulators, package caches), language files, large and old files.",
+      "why": "PureMac-grade half of the product.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M6",
+      "name": "App uninstaller",
+      "status": "planned",
+      "description": "Remove apps with every leftover (Containers, Application Support, Preferences, LaunchAgents), plus removable bundled Apple apps where SIP allows.",
+      "why": "Most requested cleanup feature, and the riskiest one.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M7",
+      "name": "Safety & verification",
+      "status": "planned",
+      "description": "Dry-run everywhere, Trash-first deletes, protected-path allowlist, test suite over fixture trees, benchmarks in CI.",
+      "why": "A cleaner that deletes the wrong thing once is uninstalled forever.",
+      "examples": [],
+      "chips": []
+    },
+    {
+      "id": "M8",
+      "name": "Release",
+      "status": "planned",
+      "description": "Signing, notarization, update channel, landing page.",
+      "why": "Ship it.",
+      "examples": [],
+      "chips": []
+    }
+  ],
+  "notes": []
+}

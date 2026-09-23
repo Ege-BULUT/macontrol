@@ -1,0 +1,135 @@
+{
+  "_meta": {
+    "description": "Task board data. Edit via scripts/tasks_cli.py, not by hand. Run its `render` command afterward to update tasks.html. Fully local, nothing here is ever pushed anywhere.",
+    "columns": [
+      "backlog",
+      "analyze",
+      "planning",
+      "development",
+      "ready_for_review",
+      "testing",
+      "accepted",
+      "rejected"
+    ],
+    "columnLabels": {
+      "backlog": "Backlog",
+      "analyze": "Analyze",
+      "planning": "Planning",
+      "development": "Development",
+      "ready_for_review": "Ready for Review",
+      "testing": "Testing",
+      "accepted": "Accepted (Done)",
+      "rejected": "Rejected"
+    },
+    "urgencyLevels": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ],
+    "taskIdPrefix": "T-",
+    "nextTaskSeq": 5
+  },
+  "tasks": [
+    {
+      "id": "T-0001",
+      "title": "Survey open-source cleaners (PureMac, Pearcleaner, Mole, etc.)",
+      "description": "Stars, activity, license, architecture, what each does best. Output: comparison report.",
+      "status": "backlog",
+      "urgency": "high",
+      "tag": "research",
+      "milestone": "M1",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [],
+      "owner": "",
+      "createdAt": "2026-09-23T09:29:08",
+      "updatedAt": "2026-09-23T09:29:08",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-23T09:29:08",
+          "actor": "unspecified",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        }
+      ],
+      "sessions": []
+    },
+    {
+      "id": "T-0002",
+      "title": "Survey open-source disk visualizers (GrandPerspective, Radix-like apps)",
+      "description": "Check whether Radix itself is open source. Compare scan speed, visualization, drill-down UX, license.",
+      "status": "backlog",
+      "urgency": "high",
+      "tag": "research",
+      "milestone": "M1",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [],
+      "owner": "",
+      "createdAt": "2026-09-23T09:29:09",
+      "updatedAt": "2026-09-23T09:29:09",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-23T09:29:09",
+          "actor": "unspecified",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        }
+      ],
+      "sessions": []
+    },
+    {
+      "id": "T-0003",
+      "title": "License matrix and reuse plan",
+      "description": "GPL vs MIT/Apache decides what can be copied vs only studied. Decide macontrol's own license.",
+      "status": "backlog",
+      "urgency": "high",
+      "tag": "research",
+      "milestone": "M1",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [],
+      "owner": "",
+      "createdAt": "2026-09-23T09:29:09",
+      "updatedAt": "2026-09-23T09:29:09",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-23T09:29:09",
+          "actor": "unspecified",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        }
+      ],
+      "sessions": []
+    },
+    {
+      "id": "T-0004",
+      "title": "Scan benchmark harness",
+      "description": "Same fixture tree + real home dir, cold/warm cache, time and memory per candidate walker.",
+      "status": "backlog",
+      "urgency": "medium",
+      "tag": "engine",
+      "milestone": "M2",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [],
+      "owner": "",
+      "createdAt": "2026-09-23T09:29:09",
+      "updatedAt": "2026-09-23T09:29:09",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-23T09:29:09",
+          "actor": "unspecified",
+          "event": "created",
+          "detail": "status=backlog, urgency=medium"
+        }
+      ],
+      "sessions": []
+    }
+  ]
+}

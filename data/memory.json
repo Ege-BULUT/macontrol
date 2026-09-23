@@ -1,0 +1,8 @@
+{
+  "_meta": {
+    "description": "Agent/human journal entries. Edit via scripts/memory_cli.py, not by hand. Run its `render` command afterward to update memory.html. Fully local, nothing here is ever pushed anywhere.",
+    "entryIdPrefix": "M-",
+    "nextEntrySeq": 1
+  },
+  "entries": []
+}

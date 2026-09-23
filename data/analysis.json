@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "description": "Review findings: what an agent found while auditing this project, grouped by category, ordered by priority. Edit via scripts/analysis_cli.py, not by hand. Run its `render` command afterward to update analysis.html. Fully local, nothing here is ever pushed anywhere.",
+    "findingIdPrefix": "F-",
+    "nextFindingSeq": 1,
+    "subject": "",
+    "reviewedAt": "",
+    "reviewer": "",
+    "categories": {
+      "bug": { "label": "Bug fixes", "note": "Wrong behaviour, crashes, or silent data loss" },
+      "perf": { "label": "Performance", "note": "Wall clock, memory, or wasted calls" },
+      "ux": { "label": "UI / UX", "note": "What the operator sees, understands and can act on" }
+    }
+  },
+  "findings": []
+}
