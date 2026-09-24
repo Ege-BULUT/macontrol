@@ -14,7 +14,7 @@ struct AppSection: Identifiable {
 }
 
 /// The open confirmation sheet, fixed when it opens.
-struct UninstallConfirmation: Identifiable {
+struct UninstallConfirmation: Identifiable, RemovalConfirmation {
     let id = UUID()
     let plan: UninstallPlan
     /// Chosen leftovers in plan order. With the bundle, exactly what `Uninstaller.uninstall` trashes.
@@ -23,6 +23,10 @@ struct UninstallConfirmation: Identifiable {
     var isWorking = false
     var report: TrashReport?
     var errorMessage: String?
+    /// The mode it opened with, and the rest of hardcore mode's state (DESIGN-debloat section 1.1).
+    var run = RemovalRun()
+    /// Rows the administrator helper removes: root-owned leftovers, and the bundle when root owns it.
+    var adminCount = 0
 
     var rows: [TrashSheetRow] {
         [TrashSheetRow(url: plan.app.url, bytes: plan.appMeasurement.allocated)]
@@ -87,6 +91,13 @@ public final class UninstallModel {
     private(set) var appsError: String?
     private(set) var planError: String?
     var confirmation: UninstallConfirmation?
+    /// The app's one switch; `AppModel` hands every screen the same instance.
+    var hardcore = HardcoreMode()
+    var support = RemovalSupport()
+    /// The uninstaller can hand root-owned leftovers to the administrator helper. False: v1, they are Reveal in Finder only.
+    var canUseAdministrator: Bool
+    /// Whether the bundle itself needs the helper: an App Store app is owned by root.
+    var needsAdministrator: (URL) -> Bool = { ProtectedPaths.refusal(for: $0) == .needsAdministrator }
 
     /// Per app, per leftover: what the user checked or unchecked, across app switches and re-scans. Every other
     /// leftover follows the current plan's `isPreselected` (F-0011, F-0022).
@@ -103,6 +114,7 @@ public final class UninstallModel {
     public init(uninstaller: Uninstaller?, apps: [InstalledApp] = [], plan: UninstallPlan? = nil, engine: ScanEngine? = ScanEngine()) {
         self.uninstaller = uninstaller
         self.engine = engine
+        self.canUseAdministrator = uninstaller?.canUseAdministrator ?? false
         self.apps = apps
         self.hasLoadedApps = !apps.isEmpty
         self.selectedApp = plan?.app.id
@@ -259,21 +271,25 @@ public final class UninstallModel {
     /// Chosen leftovers of the shown plan.
     var leftoverSelection: Set<URL> { Set(chosenLeftovers.map(\.url)) }
 
-    /// Nothing is chosen for an app that can't be uninstalled, and root-owned leftovers never are:
-    /// v1 offers Reveal in Finder for them.
+    /// Nothing is chosen for an app that can't be uninstalled. Root-owned leftovers only with the administrator
+    /// helper; without it, v1 offers Reveal in Finder for them.
     func isChosen(_ leftover: Leftover) -> Bool {
-        guard canUninstall, !leftover.needsAdministrator, let plan else { return false }
+        guard canUninstall, canChoose(leftover), let plan else { return false }
         return choices[plan.app.url]?[leftover.url]?.chosen ?? leftover.isPreselected
     }
 
+    func canChoose(_ leftover: Leftover) -> Bool {
+        !leftover.needsAdministrator || canUseAdministrator
+    }
+
     func setChosen(_ chosen: Bool, _ leftover: Leftover) {
-        guard canUninstall, !leftover.needsAdministrator, let plan else { return }
+        guard canUninstall, canChoose(leftover), let plan else { return }
         choices[plan.app.url, default: [:]][leftover.url] =
             LeftoverChoice(chosen: chosen, note: leftover.note, wasPreselected: leftover.isPreselected)
     }
 
     func toggle(_ urls: Set<URL>) {
-        let targets = (plan?.leftovers ?? []).filter { urls.contains($0.url) && !$0.needsAdministrator }
+        let targets = (plan?.leftovers ?? []).filter { urls.contains($0.url) && canChoose($0) }
         let turnOn = targets.contains { !isChosen($0) }
         for leftover in targets { setChosen(turnOn, leftover) }
     }
@@ -292,23 +308,42 @@ public final class UninstallModel {
         guard let plan, canUninstall, confirmation == nil else { return }
         // The app may have been opened since it was selected; the sheet must say it will be asked to quit.
         refreshRunning(plan.app)
-        confirmation = UninstallConfirmation(plan: plan, leftovers: chosenLeftovers, appIsRunning: isRunning(plan.app))
+        var confirmation = UninstallConfirmation(plan: plan, leftovers: chosenLeftovers, appIsRunning: isRunning(plan.app))
+        confirmation.run = RemovalRun(mode: hardcore.mode, urls: confirmation.rows.map(\.url), support: support)
+        if canUseAdministrator {
+            confirmation.adminCount = confirmation.leftovers.count(where: \.needsAdministrator) + (needsAdministrator(plan.app.url) ? 1 : 0)
+        }
+        self.confirmation = confirmation
     }
 
-    /// Runs exactly the confirmed uninstall, then applies each outcome.
+    /// "Delete Permanently" after the restore point failed: go on without one.
+    func confirmWithoutRestorePoint() async {
+        confirmation?.run.restorePointProblem = nil
+        confirmation?.run.goesOnWithoutRestorePoint = true
+        await confirmUninstall()
+    }
+
+    /// Runs exactly the confirmed uninstall, in the mode the sheet opened with, then applies each outcome.
     func confirmUninstall() async {
-        guard let pending = confirmation, pending.report == nil, !pending.isWorking else { return }
+        guard let pending = confirmation, pending.report == nil, !pending.isWorking, pending.run.restorePointProblem == nil else { return }
         confirmation?.isWorking = true
         defer { confirmation?.isWorking = false }
+        guard await support.makeRestorePoint(in: self, \.confirmation) else { return }
         let chosen = Set(pending.leftovers.map(\.url))
+        let mode = pending.run.mode
         do {
-            let report = if let uninstaller {
-                try await uninstaller.uninstall(pending.plan, leftovers: chosen)
-            } else {
-                // Demo data: nothing real to move.
-                TrashReport(batch: UUID(), outcomes: pending.rows.map { .refused($0.url, .notImplemented) })
+            // ponytail: the restore point's name is not recorded on uninstall journal lines yet: Uninstaller.uninstall
+            // takes no restorePoint (asked on T-0075). The snapshot is still made before anything is deleted.
+            let (report, freed) = try await support.measuring(mode, pending.rows.map(\.url)) {
+                if let uninstaller {
+                    try await uninstaller.uninstall(pending.plan, leftovers: chosen, mode: mode)
+                } else {
+                    // Demo data: nothing real to move.
+                    TrashReport(batch: UUID(), outcomes: pending.rows.map { .refused($0.url, .notImplemented) })
+                }
             }
             apply(report, to: pending.plan)
+            confirmation?.run.freed = freed
             confirmation?.report = report
         } catch {
             confirmation?.errorMessage = pending.failureMessage(for: error)
@@ -318,9 +353,9 @@ public final class UninstallModel {
         }
     }
 
-    /// A trashed app leaves the list; otherwise its trashed leftovers leave its plan.
+    /// A trashed or deleted app leaves the list; otherwise its removed leftovers leave its plan.
     func apply(_ report: TrashReport, to plan: UninstallPlan) {
-        let trashed = report.trashedURLs
+        let trashed = report.removedURLs
         let appID = plan.app.id
         if trashed.contains(plan.app.url) {
             apps.removeAll { $0.id == appID }

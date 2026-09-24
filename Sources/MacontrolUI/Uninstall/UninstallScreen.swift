@@ -177,17 +177,26 @@ struct UninstallSheet: View {
         if let confirmation = model.confirmation {
             let name = confirmation.plan.app.name
             let count = confirmation.leftovers.count
+            let run = confirmation.run
             TrashSheet(
-                title: "Uninstall \(name)?",
-                message: (count == 0 ? "\(name) moves to the Trash." : "\(name) and \(count == 1 ? "1 item" : "\(count) items") it left behind move to the Trash.")
-                    + " Put them back from History until you empty the Trash, which is when the space is freed.",
+                title: run.isPermanent ? "Uninstall \(name) permanently?" : "Uninstall \(name)?",
+                message: run.isPermanent
+                    ? PermanentText.message(freesUpTo: run.bytes(of: confirmation.rows))
+                    : (count == 0 ? "\(name) moves to the Trash." : "\(name) and \(count == 1 ? "1 item" : "\(count) items") it left behind move to the Trash.")
+                        + " Put them back from History until you empty the Trash, which is when the space is freed.",
                 warning: confirmation.appIsRunning ? "\(name) is open. It will be asked to quit first, so save your work." : nil,
-                notes: confirmation.notes,
+                notes: AdminText.notes(count: confirmation.adminCount, mode: run.mode) + confirmation.notes,
                 rows: confirmation.rows,
-                confirmTitle: "Uninstall",
+                confirmTitle: run.isPermanent ? PermanentText.confirm : "Uninstall",
                 report: confirmation.report,
                 isWorking: confirmation.isWorking,
                 errorMessage: confirmation.errorMessage,
+                mode: run.mode,
+                restorePoint: run.isPermanent
+                    ? Binding { model.confirmation?.run.wantsRestorePoint ?? false } set: { model.confirmation?.run.wantsRestorePoint = $0 }
+                    : nil,
+                run: run,
+                onGoOnWithoutRestorePoint: { Task { await model.confirmWithoutRestorePoint() } },
                 onConfirm: { Task { await model.confirmUninstall() } },
                 onClose: { model.confirmation = nil }
             )
