@@ -38,7 +38,8 @@ import Testing
         Rule(#"fork\(|"fork""#, ["PrivilegedHelper/main.swift"]),
         Rule(#"posix_spawn|vfork|exec[lv]"#),
         Rule("AppleScript", ["Safety/PrivilegedLauncher.swift"]),
-        Rule("unlinkat", ["Safety/RemovalEngine.swift"]),
+        // RemovalEngine's walk, and the helper's request folder: two fixed names and the folder, by descriptor.
+        Rule("unlinkat", ["Safety/RemovalEngine.swift", "Safety/PrivilegedRouting.swift"]),
         Rule(#"unlink(?!at)"#),
         Rule("renameatx_np|renamex_np", ["Safety/TrashService.swift", "Safety/TrashBatch.swift", "Safety/PrivilegedExecutor.swift"]),
         Rule(#"rename\(|renameat(?!x_np)"#),
@@ -88,6 +89,8 @@ import Testing
         #expect(offenses.isEmpty, "not allowed in these files: \(offenses)")
         // F-0053: the only way into the Trash is Finder's own, via FileManager.
         #expect(files.map { $0.text.components(separatedBy: "FileManager.default.trashItem(at:").count - 1 }.reduce(0, +) == 1)
+        // Exactly one script: the launcher's fixed source (section 3.10).
+        #expect(files.map { $0.text.components(separatedBy: "NSAppleScript(source:").count - 1 }.reduce(0, +) == 1)
     }
 
     /// One sample per rule: it fails outside its files, and passes in the first file it is allowed in.
@@ -103,6 +106,7 @@ import Testing
         ("@_silgen_name(\"execve\") func run() -> Int32", nil, "PrivilegedHelper/main.swift"),
         ("let script = NSAppleScript(source: source)", "Safety/PrivilegedLauncher.swift", "Safety/PrivilegedRouting.swift"),
         ("unlinkat(fd, name, AT_REMOVEDIR)", "Safety/RemovalEngine.swift", "Safety/PrivilegedExecutor.swift"),
+        ("unlinkat(folder, \"request.json\", 0)", "Safety/PrivilegedRouting.swift", "Safety/PrivilegedLauncher.swift"),
         ("unlink(path)", nil, "Safety/RemovalEngine.swift"),
         ("renameatx_np(from, name, trash, name, UInt32(RENAME_EXCL))", "Safety/PrivilegedExecutor.swift", "Safety/RemovalEngine.swift"),
         ("renamex_np(a, b, UInt32(RENAME_EXCL))", "Safety/TrashBatch.swift", "Uninstaller/Uninstaller.swift"),

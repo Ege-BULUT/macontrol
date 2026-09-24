@@ -148,8 +148,9 @@ public actor TrashService {
     }
 
     /// Journals what an administrator helper finished while the app was gone, once, at launch (section 3.8).
-    /// Stub (T-0072): does nothing. privileged-helper builds it.
-    public func recoverPrivilegedResults() {}
+    public func recoverPrivilegedResults() {
+        PrivilegedRouting.recover(journalURL: journalURL)
+    }
 
     /// Moves a batch back where it came from, newest first. An item is restored only if it is still
     /// in the Trash as the same object and nothing has taken its original path since. Permanent deletions and
