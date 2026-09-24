@@ -84,7 +84,8 @@ import Testing
             (path: String(file.path.dropFirst(Self.sources.path.count + 1)), text: try String(contentsOf: file, encoding: .utf8))
         }
         #expect(files.count > 50 && files.contains { $0.path == "Safety/TrashService.swift" })
-        #expect(try Self.audit(files) == [])
+        let offenses = try Self.audit(files)
+        #expect(offenses.isEmpty, "not allowed in these files: \(offenses)")
         // F-0053: the only way into the Trash is Finder's own, via FileManager.
         #expect(files.map { $0.text.components(separatedBy: "FileManager.default.trashItem(at:").count - 1 }.reduce(0, +) == 1)
     }
