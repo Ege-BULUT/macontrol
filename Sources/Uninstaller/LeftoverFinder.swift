@@ -26,6 +26,10 @@ struct LeftoverFinder {
     let others: [InstalledApp]
     let home: URL
     let systemRoot: URL
+    /// Apple's removable apps and what they install (DESIGN-debloat section 4.3).
+    var profiles: AppleProfiles = .bundled
+    /// SIP's `restricted` flag. Only the kernel sets it, so tests pass their own.
+    var isRestricted: @Sendable (URL) -> Bool = { FileSystem.status(of: $0).map { $0.st_flags & LeftoverFinder.restrictedFlag != 0 } ?? false }
 
     /// Library folders whose items are named after bundle identifiers, with the suffixes they add (longest first).
     private static let identifierFolders: [(path: String, suffixes: [String])] = [
@@ -39,13 +43,10 @@ struct LeftoverFinder {
     ]
     /// Folders where apps keep data under their plain name (the cask oracle: Application Support 54%, Logs 78%).
     private static let nameFolders = ["Application Support", "Caches", "Logs"]
-    /// Apple's music apps keep most of their size outside the bundle (topic-platform-constraints A9).
-    private static let contentLibraries: [String: [String]] = [
-        "com.apple.garageband10": ["Application Support/GarageBand", "Application Support/Logic", "Audio/Apple Loops"],
-        "com.apple.logic10": ["Application Support/Logic", "Audio/Apple Loops"],
-    ]
 
     static let containerMetadata = ".com.apple.containermanagerd.metadata.plist"
+    /// SF_RESTRICTED, which Swift does not import.
+    static let restrictedFlag: UInt32 = 0x0008_0000
 
     private var homeLibrary: URL { home.appendingPathComponent("Library") }
     private var systemLibrary: URL { systemRoot.appendingPathComponent("Library") }
@@ -57,7 +58,11 @@ struct LeftoverFinder {
     }
 
     func run() -> Result {
-        var found: [LeftoverCandidate] = []
+        // Only an app signed as Apple's App Store app gets its profile: a copy that merely claims Xcode's identifier
+        // must not be offered Apple's shared content.
+        let profile = app.kind == .appleAppStore ? profiles.profile(for: app.bundleIdentifier) : nil
+        // The profile first: where it and the generic search find the same path, its notes win.
+        var found = profile.map(profileItems) ?? []
         for (folder, suffixes) in Self.identifierFolders {
             found += identifierNamed(in: homeLibrary.appendingPathComponent(folder), suffixes: suffixes)
         }
@@ -68,12 +73,13 @@ struct LeftoverFinder {
         found += containers()
         found += groupContainers()
         found += launchdJobs()
-        found += contentLibraries()
         found += exactNames()
+        let neverTouch = (profile?.neverTouch ?? []).map(url(of:))
+        found.removeAll { candidate in neverTouch.contains { AppleProfiles.overlaps(candidate.url.path, $0.path) } }
         return Result(
             candidates: Self.outermostUnique(found),
             bundleLaunchdLabels: LaunchdJob.labels(in: app.url.appendingPathComponent("Contents/Library/LaunchAgents"), of: app.url),
-            notes: rootDaemonNotes() + receiptNotes()
+            notes: rootDaemonNotes() + receiptNotes(skipping: profile?.receipts ?? []) + (profile.map(keptByMacOS) ?? [])
         )
     }
 
@@ -208,12 +214,53 @@ struct LeftoverFinder {
         return others.first { job.runs(inside: $0.url) }.map { "Starts \($0.name)" }
     }
 
-    private func contentLibraries() -> [LeftoverCandidate] {
-        guard let id = app.bundleIdentifier, let paths = Self.contentLibraries[id] else { return [] }
-        return paths.filter { FileSystem.exists(systemLibrary.appendingPathComponent($0)) }.map { path in
-            let sharer = others.first { Self.contentLibraries[$0.bundleIdentifier ?? ""]?.contains(path) == true }
-            return candidate(systemLibrary.appendingPathComponent(path), .contentLibrary, note: sharer.map { "Also used by \($0.name)" })
+    // MARK: Apple's profile
+
+    static let unverifiedNote = "macontrol hasn't checked this location on a real install yet."
+
+    /// Each profile item and receipt file that exists. A SIP-restricted item is not a candidate: it becomes a
+    /// "Kept by macOS" note, since even root can't remove it.
+    private func profileItems(_ profile: AppleProfile) -> [LeftoverCandidate] {
+        let unverified = profile.verified ? nil : Self.unverifiedNote
+        let items = profile.items.compactMap { item -> LeftoverCandidate? in
+            let url = url(of: item.path)
+            guard FileSystem.exists(url), !isRestricted(url) else { return nil }
+            let note = [sharedNote(item.sharedWith), item.note, unverified].compactMap { $0 }.joined(separator: " ")
+            return candidate(url, .appleProfile, note: note.isEmpty ? nil : note)
         }
+        let receipts = systemRoot.appendingPathComponent("private/var/db/receipts")
+        let receiptFiles = profile.receipts.flatMap { id in ["plist", "bom"].map { receipts.appendingPathComponent("\(id).\($0)") } }
+            .filter { FileSystem.exists($0) && !isRestricted($0) }
+            .map { candidate($0, .appleProfile, note: unverified) }
+        return items + receiptFiles
+    }
+
+    private func keptByMacOS(_ profile: AppleProfile) -> [String] {
+        let restrictedItems = profile.items.map { url(of: $0.path) }.filter { FileSystem.exists($0) && isRestricted($0) }.map(\.lastPathComponent)
+        let kept = profile.keptByMacOS.filter { FileSystem.exists(url(of: $0.path)) }.map(\.name)
+        return (restrictedItems + kept).map { "Kept by macOS: \($0). It sits where even an administrator can't change it." }
+    }
+
+    /// "Also used by Logic Pro, which is installed." or "Also used by Logic Pro and MainStage (not installed)."
+    private func sharedNote(_ identifiers: [String]) -> String? {
+        guard !identifiers.isEmpty else { return nil }
+        var installed: [String] = []
+        for id in identifiers {
+            for other in others where other.bundleIdentifier == id && !installed.contains(other.name) { installed.append(other.name) }
+        }
+        if !installed.isEmpty {
+            return "Also used by \(Self.list(installed)), which \(installed.count == 1 ? "is" : "are") installed."
+        }
+        return "Also used by \(Self.list(identifiers.map { profiles.profile(for: $0)?.name ?? $0 })) (not installed)."
+    }
+
+    private static func list(_ names: [String]) -> String {
+        names.count < 2 ? names.joined() : names.dropLast().joined(separator: ", ") + " and " + names.last!
+    }
+
+    /// `~/…` is in the home folder, `/…` below the system root.
+    private func url(of path: String) -> URL {
+        path.hasPrefix("~/") ? home.appendingPathComponent(String(path.dropFirst(2))) : systemRoot.appendingPathComponent(String(path.dropFirst()))
     }
 
     /// Folders named exactly like the app, and the app's own subfolder in a vendor folder
@@ -250,10 +297,12 @@ struct LeftoverFinder {
     }
 
     /// Package receipts are reported, never removed: the receipt is how macOS knows what the package installed.
-    private func receiptNotes() -> [String] {
+    /// The receipts of an Apple profile are leftovers instead, since the profile lists what the package installed.
+    private func receiptNotes(skipping profileReceipts: [String]) -> [String] {
         let folder = systemRoot.appendingPathComponent("private/var/db/receipts")
         return FileSystem.children(of: folder)
-            .filter { $0.hasSuffix(".plist") && claim(String($0.dropLast(".plist".count))) != nil }
+            .filter { $0.hasSuffix(".plist") && !profileReceipts.contains(String($0.dropLast(".plist".count))) }
+            .filter { claim(String($0.dropLast(".plist".count))) != nil }
             .map { "Installed by the package \($0.dropLast(".plist".count)). Files it put outside the app may remain." }
     }
 
