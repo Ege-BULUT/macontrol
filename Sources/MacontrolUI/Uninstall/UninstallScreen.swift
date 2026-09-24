@@ -26,11 +26,17 @@ struct UninstallScreen: View {
 
 private struct AppListPane: View {
     @Bindable var model: UninstallModel
+    // The view keeps the choice across launches; the model mirrors it for its own list logic.
+    @AppStorage("uninstallFilter") private var filter = AppFilter.all
+    @AppStorage("uninstallSort") private var sort = AppSort.nameAscending
 
     var body: some View {
         VStack(spacing: 0) {
             SearchField(prompt: "Search apps", text: $model.query)
-                .padding(12)
+                .padding([.horizontal, .top], 12)
+                .padding(.bottom, 8)
+            AppListControls(model: model, filter: $filter, sort: $sort)
+                .padding([.horizontal, .bottom], 12)
             Divider()
             if !model.hasLoadedApps {
                 ProgressView("Finding apps…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -43,13 +49,28 @@ private struct AppListPane: View {
                     Button("Try Again") { Task { await model.loadApps() } }
                 }
             } else if model.sections.isEmpty {
-                ContentUnavailableView.search(text: model.query)
+                Group {
+                    if model.filter == .all {
+                        ContentUnavailableView.search(text: model.query)
+                    } else {
+                        let query = model.query.trimmingCharacters(in: .whitespaces)
+                        ContentUnavailableView {
+                            Label(query.isEmpty ? model.filter.emptyTitle : "\(model.filter.emptyTitle) match", systemImage: "line.3.horizontal.decrease.circle")
+                        } description: {
+                            if !query.isEmpty { Text("Nothing here matches “\(query)”.") }
+                        } actions: {
+                            Button("Show All Apps") { filter = .all }
+                        }
+                    }
+                }
+                // Fills the pane, so the search field stays at the top.
+                .frame(maxHeight: .infinity)
             } else {
                 List(selection: $model.selectedApp) {
                     ForEach(model.sections) { section in
                         Section {
                             // The size goes in as a value, so a new size redraws its own row only.
-                            ForEach(section.apps) { AppRow(app: $0, size: model.sizes[$0.url], model: model) }
+                            ForEach(section.apps) { AppRow(app: $0, size: model.sizes[$0.url], showsDate: sort.usesDate, model: model) }
                         } header: {
                             HStack {
                                 Text(section.kind.sectionTitle)
@@ -62,12 +83,68 @@ private struct AppListPane: View {
                 .listStyle(.inset)
             }
         }
+        .onChange(of: filter, initial: true) { model.filter = filter }
+        .onChange(of: sort, initial: true) { model.sort = sort }
+        // Keyed by the apps, identities included: a reinstalled app lost its size and is measured again.
+        .task(id: sort.usesSize ? model.apps : []) {
+            if sort.usesSize { await model.measureAll() }
+        }
     }
+}
+
+/// All, User or System with their counts, and the sort menu. ⌥⌘1-3 pick the filter, ⌃⌥⌘1-6 the order.
+private struct AppListControls: View {
+    let model: UninstallModel
+    @Binding var filter: AppFilter
+    @Binding var sort: AppSort
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Picker("Show", selection: $filter) {
+                ForEach(AppFilter.allCases) { Text("\($0.title) \(model.count($0))").tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Show all apps, apps from other developers, or Apple's apps (⌥⌘1, ⌥⌘2, ⌥⌘3)")
+            Menu {
+                ForEach(Array(AppSort.allCases.enumerated()), id: \.element) { index, option in
+                    if index > 0, index.isMultiple(of: 2) { Divider() }
+                    // The shortcut here only labels the item; the hidden buttons below make it work while the menu is closed.
+                    Toggle(option.title, isOn: Binding(get: { sort == option }, set: { if $0 { sort = option } }))
+                        .keyboardShortcut(Self.key(index), modifiers: [.control, .option, .command])
+                }
+            } label: {
+                Label("Sort", systemImage: "arrow.up.arrow.down")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .labelStyle(.iconOnly)
+            .fixedSize()
+            .help("Sort order: \(sort.title)")
+            .accessibilityLabel("Sort: \(sort.title)")
+        }
+        .background {
+            Group {
+                ForEach(Array(AppFilter.allCases.enumerated()), id: \.element) { index, option in
+                    Button(option.title) { filter = option }.keyboardShortcut(Self.key(index), modifiers: [.option, .command])
+                }
+                ForEach(Array(AppSort.allCases.enumerated()), id: \.element) { index, option in
+                    Button(option.title) { sort = option }.keyboardShortcut(Self.key(index), modifiers: [.control, .option, .command])
+                }
+            }
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private static func key(_ index: Int) -> KeyEquivalent { KeyEquivalent(Character(String(index + 1))) }
 }
 
 private struct AppRow: View {
     let app: InstalledApp
     let size: UInt64?
+    /// Sorted by date added: the row shows the date the order comes from, not the size.
+    let showsDate: Bool
     let model: UninstallModel
 
     var body: some View {
@@ -81,7 +158,7 @@ private struct AppRow: View {
                     .help("Part of macOS")
             }
             Spacer(minLength: 8)
-            Text(size?.formattedBytes ?? "–")
+            Text(showsDate ? app.dateAdded?.formatted(date: .abbreviated, time: .omitted) ?? "–" : size?.formattedBytes ?? "–")
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
