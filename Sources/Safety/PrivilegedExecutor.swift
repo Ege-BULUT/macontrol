@@ -139,16 +139,42 @@ public struct PrivilegedExecutor: Sendable {
     func process(_ item: PrivilegedRequest.Item, op: DeletionMode, home: String, policy: ProtectionPolicy, trash: Int32) -> HelperOutcome {
         if let refusal = refusal(of: item, home: home, policy: policy) { return refusal }
         let path = item.path
+        var info = stat()
+        let isFolder = lstat(path, &info) == 0 && info.st_mode & S_IFMT == S_IFDIR
+        // D4: cloud items, the personal databases and evicted iCloud content go to the Trash even in permanent mode.
+        var erase = op == .permanent && policy.trashOnlyReason(canonical: path) == nil && info.st_flags & UInt32(SF_DATALESS) == 0
+        // Root never clears a flag: a locked or system-protected entry inside keeps the whole item.
+        switch ProtectionPolicy.removalBlocker(inside: path, forErase: erase) {
+        case .refused(let reason)?: return .refused(reason)
+        case .dataless?: erase = false
+        case nil: break
+        }
         if isLaunchDaemon(path), let failure = stopDaemon(path) { return failure }
+        // D3, the code the app uses: a file is one unlinkat in place; a folder goes to the Trash first, then the
+        // trashed copy is erased, so a stop halfway leaves the rest in the Trash, never half an app in place.
+        if erase && !isFolder {
+            switch RemovalEngine().deleteFile(canonical: path, identity: item.identity) {
+            case .removed: return .deleted
+            case .changed: return .refused(.identityChanged)
+            case .failed(let failures), .partly(let failures):
+                return .failed("It could not be deleted: \(failures.first?.reason ?? "unknown error").")
+            }
+        }
         let moved = moveToTrash(path, identity: item.identity, home: home, trash: trash)
-        guard op == .permanent, case .trashed(let to) = moved else { return moved }
-        // ponytail: the erase is permanent-engine's RemovalEngine (T-0074), the code the app uses; until it merges, a
-        // permanent item stops in the Trash and says so.
-        return .failed("Moved to the Trash, but not deleted yet. Empty the Trash to finish.", to: to)
+        guard erase, case .trashed(let to) = moved else { return moved }
+        switch RemovalEngine().erase(trashed: URL(fileURLWithPath: to), identity: item.identity) {
+        case .removed: return .deleted
+        case .changed: return .failed("Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.", to: to)
+        case .failed(let failures):
+            // Nothing was removed: it is whole in the Trash.
+            return .failed(TrashBatch.notDeleted(failures, trashName: (to as NSString).lastPathComponent), to: to)
+        case .partly(let failures):
+            return .failed(TrashBatch.partlyDeleted(failures, trashName: (to as NSString).lastPathComponent), partial: true)
+        }
     }
 
     /// Every check before a change, none of which touches the disk: the canonical spelling, the root allowlist, the
-    /// requesting user's policy, identity, locked items inside, and `requiresGone`.
+    /// requesting user's policy, identity, and `requiresGone`. What is inside a folder is `process`'s removal blocker.
     func refusal(of item: PrivilegedRequest.Item, home: String, policy: ProtectionPolicy) -> HelperOutcome? {
         let path: String
         do throws(RefusalReason) {
@@ -163,8 +189,6 @@ public struct PrivilegedExecutor: Sendable {
             return .refused(reason)
         }
         guard FileIdentity(url: URL(fileURLWithPath: path)) == item.identity else { return .refused(.identityChanged) }
-        // Root never clears a flag: a locked file inside still stops the whole item.
-        if let locked = ProtectionPolicy.lockedItem(inside: path) { return .refused(.holdsLocked(locked)) }
         if let gone = item.requiresGone {
             var info = stat()
             guard lstat(gone, &info) != 0 && errno == ENOENT else {

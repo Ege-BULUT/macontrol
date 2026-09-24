@@ -291,10 +291,26 @@ extension PrivilegedResultLine {
         let lines = try fx.execute([try fx.item("root/Library/Application Support/Vendor/X")], op: .permanent)
 
         #expect(Sandbox.difference(fx.tree(), Sandbox.expected(before, without: ["root/Library/Application Support/Vendor/X"])) == [])
-        withKnownIssue("T-0074: RemovalEngine is not merged yet, so the helper stops a permanent item in the Trash") {
-            #expect(lines.first?.status == "deleted", "\(lines)")
-            #expect(fx.trashNames.isEmpty)
-        }
+        #expect(lines.first?.status == "deleted", "\(lines)")
+        #expect(fx.trashNames.isEmpty)
+    }
+
+    /// D3: a file is one unlinkat in place, never a Trash move; D4: a personal database goes to the Trash even in
+    /// permanent mode, and is not erased there.
+    @Test func permanentDeletesAFileInPlaceAndKeepsPersonalDataInTheTrash() throws {
+        let fx = try RootFixture()
+        try fx.file("root/Library/Logs/com.vendor.app.log")
+        try fx.file("home/Library/Application Support/AddressBook/Sources/card.abcdp")
+        let before = fx.tree()
+
+        let lines = try fx.execute([
+            try fx.item("root/Library/Logs/com.vendor.app.log"), try fx.item("home/Library/Application Support/AddressBook"),
+        ], op: .permanent)
+
+        #expect(lines.map(\.status) == ["deleted", "trashed"], "\(lines)")
+        #expect(fx.trashNames == ["AddressBook"])
+        let removed = ["root/Library/Logs/com.vendor.app.log", "home/Library/Application Support/AddressBook"]
+        #expect(Sandbox.difference(fx.tree(), Sandbox.expected(before, without: removed)) == [])
     }
 
     /// Scope, then the policy, on this Mac's real paths (read-only: only the checks run). sec 3b's systemNeverTouch
@@ -309,10 +325,6 @@ extension PrivilegedResultLine {
         guard let identity = FileIdentity(url: URL(fileURLWithPath: path)) else { return }
         let executor = PrivilegedExecutor(testRoot: "/", home: fx.home.path, launchctl: fx.launchctl)
         let refusal = executor.refusal(of: .init(path: path, identity: identity), home: fx.home.path, policy: PrivilegedExecutor.policy(home: fx.home.path))
-        withKnownIssue("T-0074: the systemNeverTouch additions of sec 3b are not merged yet") {
-            #expect(refusal == .refused(.protectedLocation(place)))
-        } when: {
-            waitsForTheEngine
-        }
+        #expect(refusal == .refused(.protectedLocation(place)), "engine additions: \(waitsForTheEngine)")
     }
 }
