@@ -18,14 +18,19 @@ public struct InstalledApp: Sendable, Identifiable, Hashable {
     public var version: String?
     public var kind: AppKind
     public var identity: FileIdentity?
+    /// When the app landed in its folder (Finder's Date Added), else when the bundle was created. Nil if unreadable.
+    public var dateAdded: Date?
 
-    public init(url: URL, name: String, bundleIdentifier: String?, version: String?, kind: AppKind, identity: FileIdentity?) {
+    public init(
+        url: URL, name: String, bundleIdentifier: String?, version: String?, kind: AppKind, identity: FileIdentity?, dateAdded: Date? = nil
+    ) {
         self.url = url
         self.name = name
         self.bundleIdentifier = bundleIdentifier
         self.version = version
         self.kind = kind
         self.identity = identity
+        self.dateAdded = dateAdded
     }
 }
 
