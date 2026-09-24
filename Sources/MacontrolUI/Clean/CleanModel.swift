@@ -15,7 +15,7 @@ enum SpaceEstimate: Equatable {
 }
 
 /// The open review sheet: exactly the items that will move, fixed when the sheet opens.
-struct CleanReview: Identifiable {
+struct CleanReview: Identifiable, RemovalConfirmation {
     let id = UUID()
     /// Rechecked just before the move, so sizes and skip reasons are as fresh as the outcome.
     var items: [CleanupItem]
@@ -27,6 +27,8 @@ struct CleanReview: Identifiable {
     var report: TrashReport?
     /// Items the recheck held back, with the reason. They stay listed and are not sent to the Trash.
     var notMoved: [URL: String] = [:]
+    /// The mode it opened with, and the rest of hardcore mode's state (DESIGN-debloat section 1.1).
+    var run = RemovalRun()
 }
 
 /// A category section: its items, largest first, filtered by the search.
@@ -51,16 +53,28 @@ public final class CleanModel {
     /// Moved to the Trash this session. Their bytes are "In Trash", not freed (F-0042).
     private(set) var inTrash: [CleanupItem] = []
     var review: CleanReview?
+    /// The app's one switch; `AppModel` hands every screen the same instance.
+    var hardcore = HardcoreMode()
+    var support = RemovalSupport()
+    /// Items owned by the system, found only when the administrator helper can remove them (DESIGN-debloat 1.4).
+    var adminItems: Set<URL> = []
+    var needsAdministrator: (URL) -> Bool = { ProtectedPaths.refusal(for: $0) == .needsAdministrator }
 
     private let cleaner: Cleaner?
     private let trash: TrashService?
     private let engine: ScanEngine?
+    /// Removes root-owned items through the helper, one dialog per clean. Nil: v1, they are refused.
+    let administrator: PrivilegedLauncher?
 
-    public init(cleaner: Cleaner?, trash: TrashService?, engine: ScanEngine? = ScanEngine(), items: [CleanupItem] = []) {
+    public init(
+        cleaner: Cleaner?, trash: TrashService?, engine: ScanEngine? = ScanEngine(), items: [CleanupItem] = [],
+        administrator: PrivilegedLauncher? = nil
+    ) {
         self.cleaner = cleaner
         self.trash = trash
         self.engine = engine
         self.items = items
+        self.administrator = administrator
         self.selection = Set(items.filter(\.isPreselected).map(\.url))
         self.hasScanned = !items.isEmpty
     }
@@ -80,6 +94,7 @@ public final class CleanModel {
         scanError = nil
         items = []
         selection = []
+        adminItems = []
         // The last figure belongs to the last selection; the footer must not pair it with the new one.
         estimate = .working
         await Task { await consume(cleaner.scan()) }.value
@@ -92,6 +107,7 @@ public final class CleanModel {
             for try await item in stream {
                 items.append(item)
                 if item.isPreselected { selection.insert(item.url) }
+                if administrator != nil && needsAdministrator(item.url) { adminItems.insert(item.url) }
             }
         } catch {
             scanError = error.localizedDescription
@@ -148,12 +164,21 @@ public final class CleanModel {
 
     /// Drives `.task(id:)` for the estimate. Constant while scanning: each streamed-in preselected item
     /// would otherwise start another walk of the whole selection, competing with the scan for the disk.
-    var estimateKey: Set<URL>? { isScanning ? nil : selection }
+    /// The mode is part of it: in hardcore mode, items that still go to the Trash (D4) free nothing now.
+    /// An open review keeps its own mode, so the View menu's Turn Off does not change the figure its sheet shows.
+    var estimateKey: EstimateKey? { isScanning ? nil : EstimateKey(selection: selection, mode: estimateMode) }
+
+    private var estimateMode: DeletionMode { review?.run.mode ?? hardcore.mode }
+
+    struct EstimateKey: Hashable {
+        let selection: Set<URL>
+        let mode: DeletionMode
+    }
 
     /// Recomputes what the checked items free. Called from `.task(id: estimateKey)`, which cancels stale runs.
     func refreshEstimate() async {
         guard !isScanning else { return }
-        let selected = selectedItems
+        let selected = estimateMode == .permanent ? selectedItems.filter { support.trashOnlyReason($0.url) == nil } : selectedItems
         let allocated = selected.reduce(0) { $0 + $1.measurement.allocated }
         guard let engine, cleaner != nil else {
             // Demo data has no files to measure.
@@ -179,15 +204,26 @@ public final class CleanModel {
         review = CleanReview(
             items: listed,
             nestedCount: selected.count - kept.count,
-            hiddenBySearch: listed.filter { !visible.contains($0.url) }.count
+            hiddenBySearch: listed.filter { !visible.contains($0.url) }.count,
+            run: RemovalRun(mode: hardcore.mode, urls: listed.map(\.url), support: support)
         )
+    }
+
+    /// "Delete Permanently" after the restore point failed: go on without one.
+    func confirmWithoutRestorePoint() async {
+        review?.run.restorePointProblem = nil
+        review?.run.goesOnWithoutRestorePoint = true
+        await confirmReview()
     }
 
     /// Checks the reviewed items again, moves the ones that still pass, then applies each outcome.
     /// The scan can be hours old: an app launched since keeps its cache (F-0015).
     func confirmReview() async {
-        guard let pending = review, pending.report == nil, !pending.isWorking else { return }
+        guard let pending = review, pending.report == nil, !pending.isWorking, pending.run.restorePointProblem == nil else { return }
         review?.isWorking = true
+        defer { review?.isWorking = false }
+        guard await support.makeRestorePoint(in: self, \.review) else { return }
+        let run = review?.run ?? pending.run
         var toMove = pending.items
         if let cleaner {
             let checked = await cleaner.recheck(pending.items)
@@ -201,14 +237,17 @@ public final class CleanModel {
         }
         let batch = toMove.map(\.trashItem)
         // No cleaner means no recheck, so nothing may reach a real Trash either.
-        let report = if let trash, cleaner != nil {
-            batch.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await trash.moveToTrash(batch)
-        } else {
-            // Demo data: nothing real to move.
-            TrashReport(batch: UUID(), outcomes: batch.map { .refused($0.url, .notImplemented) })
+        let (report, freed) = await support.measuring(run.mode, batch.map(\.url)) {
+            if let trash, cleaner != nil {
+                batch.isEmpty ? TrashReport(batch: UUID(), outcomes: [])
+                    : await trash.remove(batch, mode: run.mode, administrator: administrator, restorePoint: run.restorePoint)
+            } else {
+                // Demo data: nothing real to move.
+                TrashReport(batch: UUID(), outcomes: batch.map { .refused($0.url, .notImplemented) })
+            }
         }
         apply(report)
-        review?.isWorking = false
+        review?.run.freed = freed
         review?.report = report
     }
 
@@ -220,13 +259,17 @@ public final class CleanModel {
     }
 
     /// Trashed rows, and rows inside a trashed folder, leave the list and show under "In Trash".
+    /// Deleted rows leave the list for good.
     func apply(_ report: TrashReport) {
-        let trashed = report.trashedURLs.map(\.path)
-        let gone = items.filter { item in trashed.contains { item.url.path == $0 || item.url.path.hasPrefix($0 + "/") } }
-        let goneURLs = Set(gone.map(\.url))
+        func rows(under urls: Set<URL>) -> [CleanupItem] {
+            let paths = urls.map(\.path)
+            return items.filter { item in paths.contains { item.url.path == $0 || item.url.path.hasPrefix($0 + "/") } }
+        }
+        let trashed = rows(under: report.trashedURLs)
+        let goneURLs = Set((trashed + rows(under: report.deletedURLs)).map(\.url))
         // A cache recreated and trashed again is one row, not two with the same id.
         inTrash.removeAll { goneURLs.contains($0.url) }
-        inTrash += gone
+        inTrash += trashed
         items.removeAll { goneURLs.contains($0.url) }
         selection.subtract(goneURLs)
     }

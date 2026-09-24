@@ -8,6 +8,8 @@ import SwiftUI
 struct CleanRow: View {
     let item: CleanupItem
     @Binding var isChecked: Bool
+    /// Owned by the system; the administrator helper removes it (DESIGN-debloat section 1.4).
+    var isAdmin = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -37,6 +39,7 @@ struct CleanRow: View {
                 Button("Reveal in Finder") { item.url.revealInFinder() }
                     .controlSize(.small)
             }
+            if isAdmin { AdminBadge() }
             SafetyBadge(rule: item.rule)
             size.frame(width: 84, alignment: .trailing)
         }
@@ -69,6 +72,19 @@ struct CleanRow: View {
             .monospacedDigit()
             .foregroundStyle(item.canClean && isChecked ? .primary : .secondary)
             .help(item.measurement.isIncomplete ? "Some folders inside could not be read, so it may be larger." : "")
+    }
+}
+
+/// "Admin" on a row the administrator helper removes. Only shown when the helper is there.
+struct AdminBadge: View {
+    var body: some View {
+        Text(AdminText.badge)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Theme.cautionText)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(Theme.caution.opacity(0.14), in: .capsule)
+            .help(AdminText.badgeHelp)
     }
 }
 

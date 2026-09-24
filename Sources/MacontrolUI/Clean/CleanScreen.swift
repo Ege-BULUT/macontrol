@@ -91,7 +91,7 @@ struct CleanScreen: View {
                         CleanRow(item: item, isChecked: Binding(
                             get: { model.isChecked(item) },
                             set: { model.setChecked($0, item) }
-                        ))
+                        ), isAdmin: model.adminItems.contains(item.url))
                     }
                 } header: {
                     GroupHeader(group: group, model: model)
@@ -157,6 +157,13 @@ struct CleanScreen: View {
         let count = model.selectedItems.count
         guard count > 0 else { return "Nothing selected" }
         let selected = "\(count) selected"
+        if model.hardcore.isOn {
+            switch model.estimate {
+            case .working: return "\(selected), working out what this frees…"
+            case .freesNow(let estimate): return "\(selected), frees up to \(estimate.freesNow.formattedBytes)"
+            case .atMost(let bytes): return "\(selected), frees up to \(bytes.formattedBytes)"
+            }
+        }
         switch model.estimate {
         case .working: return "\(selected), working out what this frees…"
         case .freesNow(let estimate): return "\(selected), frees about \(estimate.freesNow.formattedBytes) once you empty the Trash"
@@ -171,6 +178,7 @@ struct CleanScreen: View {
         if !model.inTrash.isEmpty {
             return "\(model.inTrashBytes.formattedBytes) is in the Trash and frees when you empty it."
         }
+        if model.hardcore.isOn { return "Hardcore mode is on: items skip the Trash and can't be put back." }
         return "Items go to the Trash. Put them back from History until you empty the Trash."
     }
 }

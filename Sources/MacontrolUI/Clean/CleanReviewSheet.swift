@@ -8,18 +8,38 @@ struct CleanReviewSheet: View {
 
     var body: some View {
         let current = model.review ?? review
+        let count = current.items.count
+        let permanent = current.run.isPermanent
+        let rows = current.items.map { TrashSheetRow(url: $0.url, bytes: $0.measurement.allocated) }
         TrashSheet(
-            title: current.items.count == 1 ? "Move 1 item to the Trash?" : "Move \(current.items.count) items to the Trash?",
-            message: message,
+            title: permanent
+                ? PermanentText.title(count: count)
+                : (count == 1 ? "Move 1 item to the Trash?" : "Move \(count) items to the Trash?"),
+            message: permanent ? PermanentText.message(freesUpTo: freesUpTo ?? current.run.bytes(of: rows)) : message,
             warning: warning(current),
-            rows: current.items.map { TrashSheetRow(url: $0.url, bytes: $0.measurement.allocated) },
-            confirmTitle: "Move to Trash",
+            notes: AdminText.notes(count: current.items.count { model.adminItems.contains($0.url) }, mode: current.run.mode),
+            rows: rows,
+            confirmTitle: permanent ? PermanentText.confirm : "Move to Trash",
             report: current.report,
             notMoved: current.notMoved,
             isWorking: current.isWorking,
+            mode: current.run.mode,
+            restorePoint: permanent ? Binding { model.review?.run.wantsRestorePoint ?? false } set: { model.review?.run.wantsRestorePoint = $0 } : nil,
+            run: current.run,
+            freesUpTo: freesUpTo,
+            onGoOnWithoutRestorePoint: { Task { await model.confirmWithoutRestorePoint() } },
             onConfirm: { Task { await model.confirmReview() } },
             onClose: { model.review = nil }
         )
+    }
+
+    /// The engine's clone-aware figure; in hardcore mode the estimate already leaves out what still goes to the Trash.
+    private var freesUpTo: UInt64? {
+        switch model.estimate {
+        case .freesNow(let estimate): estimate.freesNow
+        case .atMost(let bytes): bytes
+        case .working: nil
+        }
     }
 
     private var message: String {

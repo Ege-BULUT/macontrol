@@ -228,7 +228,7 @@ import TestSupport
         await model.refreshEstimate()
         #expect(model.estimate == .working)
         await scan.value
-        #expect(model.estimateKey == model.selection)
+        #expect(model.estimateKey?.selection == model.selection)
     }
 
     @Test func scanStreamsARealCatalogAndEstimatesTheSelection() async throws {
