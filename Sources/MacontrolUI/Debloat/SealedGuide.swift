@@ -29,6 +29,10 @@ struct SealedGuide {
     static let acknowledgement = "I have a backup and I accept these risks"
     static let protectionsOff = "System Integrity Protection and Authenticated Root are off on this Mac."
     static let waitsForVerification = "macontrol doesn't remove system apps itself until this procedure and its undo have been tested on macOS 14, 15 and 26. Until then, these are steps you run yourself."
+    static let neededForUndo = "The undo steps need this app."
+    /// The undo steps turn FileVault back on in System Settings and run `bless` in Terminal, so these are never removed.
+    /// Lowercased: the system volume is case-insensitive.
+    static let appsTheUndoNeeds: Set<String> = ["system/applications/system settings.app", "system/applications/utilities/terminal.app"]
 
     /// The apps' paths below the mount point, `System/Applications/Chess.app`, in the order given.
     let removable: [String]
@@ -45,7 +49,11 @@ struct SealedGuide {
         for app in apps {
             let name = app.deletingPathExtension().lastPathComponent
             if let relative = Self.pathOnSystemVolume(app) {
-                removable.append(relative)
+                if Self.appsTheUndoNeeds.contains(relative.lowercased()) {
+                    skipped.append((name, Self.neededForUndo))
+                } else {
+                    removable.append(relative)
+                }
             } else {
                 skipped.append((name, Self.isWritable(app.lastPathComponent)
                     ? "This guide covers only apps in /System/Applications and its Utilities folder."
@@ -80,10 +88,15 @@ struct SealedGuide {
                      detail: "In Recovery, choose Utilities > Terminal and run these two commands. Then restart from the Apple menu.",
                      commands: ["csrutil disable", "csrutil authenticated-root disable"]),
                 Step(title: "Check that both are off",
-                     detail: "Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password.",
-                     commands: ["csrutil status", "csrutil authenticated-root status"],
-                     verified: true),
+                     detail: "Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password. Then open this guide in macontrol again and copy the next commands from there: they name the disk your Mac started up from, which can change after a restart.",
+                     commands: ["csrutil status", "csrutil authenticated-root status"]),
             ]
+        } else if unavailable == nil {
+            // FileVault must be off (risk 2); with the protections already off, nothing else has checked that.
+            steps.append(Step(title: "Check that FileVault is off",
+                              detail: "Open Terminal. This command should say \"FileVault is Off.\" It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.",
+                              commands: ["fdesetup status"],
+                              verified: true))
         }
         if unavailable == nil, let device {
             steps += [
@@ -99,7 +112,8 @@ struct SealedGuide {
             ]
         }
         self.steps = steps
-        undo = [
+        // Nothing to undo without removal steps, and a stray `bless --last-sealed-snapshot` would revert other root changes.
+        undo = steps.isEmpty ? [] : [
             Step(title: "Go back to the sealed snapshot",
                  detail: "Starts up from the previous sealed snapshot, which still has the apps. Then restart your Mac.",
                  commands: ["sudo bless --mount \(Self.quote("/")) --bootefi --last-sealed-snapshot"]),

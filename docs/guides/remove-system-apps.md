@@ -36,11 +36,25 @@ a command can't land on a different folder than the one it names. The examples b
 `/Users/you` and the system volume `/dev/disk3s3`. macontrol reads the system volume from the startup disk
 (`/dev/disk3s3s1` on the Mac this was written on) and drops the snapshot's last `s1`. Apps outside
 `/System/Applications` and its `Utilities` folder get no command, and neither does a name or home folder that holds a
-`$` or a line break.
+`$` or a line break. System Settings and Terminal get no command either: "The undo steps need this app." When no app
+is left to remove, the sheet shows no steps and no undo steps.
 
-If System Integrity Protection and Authenticated Root are already off, the sheet says so and starts at step 5:
+If System Integrity Protection and Authenticated Root are already off, the sheet says so:
 
 > System Integrity Protection and Authenticated Root are off on this Mac. macontrol doesn't remove system apps itself until this procedure and its undo have been tested on macOS 14, 15 and 26. Until then, these are steps you run yourself.
+
+It then leaves out steps 1 to 4 below and numbers its own steps from 1: first this FileVault check, then steps 5 to 7
+(so "Mount the system volume" is step 2 there).
+
+### Check that FileVault is off *(verified)*
+
+Open Terminal. This command should say "FileVault is Off." It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.
+
+```sh
+fdesetup status
+```
+
+Verified: on macOS 26.6 it runs without a password and prints `FileVault is Off.` on a Mac with FileVault off.
 
 ## Steps
 
@@ -66,16 +80,17 @@ csrutil authenticated-root disable
 
 `csrutil` on macOS 26.6 lists `authenticated-root disable` as "Only available in Recovery OS".
 
-### 4. Check that both are off *(verified)*
+### 4. Check that both are off *(unverified)*
 
-Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password.
+Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password. Then open this guide in macontrol again and copy the next commands from there: they name the disk your Mac started up from, which can change after a restart.
 
 ```sh
 csrutil status
 csrutil authenticated-root status
 ```
 
-Verified: both run without a password on macOS 26.6. Their output with the protections off has not been seen yet.
+Both run without a password on macOS 26.6 (checked), but their output with the protections off has not been seen
+yet, so the step is unverified.
 
 ### 5. Mount the system volume *(unverified)*
 

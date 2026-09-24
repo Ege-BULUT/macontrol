@@ -57,8 +57,42 @@ import Uninstaller
         #expect(host.texts(role: .button) == Array(repeating: "Copy", count: guide.commands.count) + ["Close"])
         let shown = host.texts(role: .staticText)
         for command in guide.commands { #expect(shown.contains(command), "\(command) is not shown") }
-        #expect(shown.filter { $0 == "Unverified" }.count == guide.steps.count + guide.undo.count - 1)
-        #expect(shown.filter { $0 == "Verified" }.count == 1)
+        #expect(shown.filter { $0 == "Unverified" }.count == guide.steps.count + guide.undo.count)
+        #expect(!shown.contains("Verified"))
+    }
+
+    /// DebloatScreen builds the panel with `SealedAppPanel(app:size:)`, so no total is passed (review R2).
+    @Test func withoutTheTotalThePanelStillSaysUpdatesPutTheAppsBack() {
+        let host = Host(SealedAppPanel(app: Self.chess, size: Self.chessSize, integrity: Self.sipOn, home: Self.home), size: RootView.minimumSize)
+        defer { host.close() }
+        #expect(host.texts(role: .staticText).contains(
+            "macOS keeps this app on a sealed, read-only system volume. No app can remove it while System Integrity Protection is on. macOS updates put its own apps back."
+        ))
+        for integrity in [Self.sipOn, Self.sipOff, SystemIntegrity(filesystemProtected: false, authenticatedRoot: true)] {
+            #expect(SealedAppPanel.explanation(integrity, systemAppsSize: nil).hasSuffix(" macOS updates put its own apps back."))
+        }
+    }
+
+    /// Safari is Part of macOS (restricted) but lives in the App cryptex, not on the system volume (feasibility S3).
+    /// Its guide has no steps, so it shows no undo either (review R3).
+    @Test func safariIsNotCalledSealedAndItsGuideHasNothingToUndo() {
+        let safari = InstalledApp(url: URL(fileURLWithPath: "/Applications/Safari.app"), name: "Safari", bundleIdentifier: "com.apple.Safari",
+                                  version: "26.0", kind: .builtIn, identity: nil)
+        let panel = Host(SealedAppPanel(app: safari, size: 36_000_000, integrity: Self.sipOn, home: Self.home), size: RootView.minimumSize)
+        defer { panel.close() }
+        let texts = panel.texts(role: .staticText)
+        #expect(texts.contains(
+            "macOS protects this app, so macontrol can't remove it. It isn't in /System/Applications, so the expert guide doesn't cover it either. macOS updates put its own apps back."
+        ), "\(texts)")
+        #expect(!texts.contains { $0.contains("system volume.") })
+        #expect(panel.texts(role: .button) == ["Expert: remove system apps yourself…"])
+
+        let sheet = Host(SealedGuideSheet(apps: [safari], integrity: Self.sipOn, home: Self.home, acknowledged: true), size: Snapshot.sheetSize)
+        defer { sheet.close() }
+        let shown = sheet.texts(role: .staticText)
+        #expect(shown.contains("None of the chosen apps can be removed this way."))
+        #expect(!shown.contains("To undo") && !shown.contains("Steps"), "\(shown)")
+        #expect(sheet.texts(role: .button) == ["Close"])
     }
 
     @Test func sipOffShowsTheStateAndSkipsRecovery() throws {
@@ -74,7 +108,9 @@ import Uninstaller
         let texts = sheet.texts(role: .staticText)
         #expect(texts.contains("\(SealedGuide.protectionsOff) \(SealedGuide.waitsForVerification)"))
         #expect(!texts.contains("csrutil disable") && !texts.contains { $0.contains("Recovery") && $0.hasPrefix("1.") })
-        #expect(texts.contains("1. Mount the system volume"))
+        #expect(texts.contains("1. Check that FileVault is off") && texts.contains("fdesetup status"))
+        #expect(texts.contains("2. Mount the system volume"))
+        #expect(texts.filter { $0 == "Verified" }.count == 1)
     }
 
     @Test func theRisksShowBeforeTheBox() {

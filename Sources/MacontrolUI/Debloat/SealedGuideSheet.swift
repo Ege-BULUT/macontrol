@@ -106,7 +106,9 @@ struct SealedGuideSheet: View {
                 StepView(number: index + 1, step: step)
             }
         }
-        Text("To undo").font(.title3.weight(.semibold))
+        if !guide.undo.isEmpty {
+            Text("To undo").font(.title3.weight(.semibold))
+        }
         ForEach(Array(guide.undo.enumerated()), id: \.element.id) { index, step in
             StepView(number: index + 1, step: step)
         }
