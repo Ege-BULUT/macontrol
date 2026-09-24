@@ -4,6 +4,9 @@ import Safety
 
 /// What one of Apple's removable apps installs outside its bundle (DESIGN-debloat section 4.3).
 public struct AppleProfile: Decodable, Sendable {
+    /// The note on every item of a profile that is not `verified`.
+    public static let unverifiedNote = "macontrol hasn't checked this location on a real install yet."
+
     public struct Item: Decodable, Sendable {
         /// `/Library/<folder>/…` or `~/Library/…`.
         public var path: String

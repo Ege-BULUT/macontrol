@@ -216,12 +216,10 @@ struct LeftoverFinder {
 
     // MARK: Apple's profile
 
-    static let unverifiedNote = "macontrol hasn't checked this location on a real install yet."
-
     /// Each profile item and receipt file that exists. A SIP-restricted item is not a candidate: it becomes a
     /// "Kept by macOS" note, since even root can't remove it.
     private func profileItems(_ profile: AppleProfile) -> [LeftoverCandidate] {
-        let unverified = profile.verified ? nil : Self.unverifiedNote
+        let unverified = profile.verified ? nil : AppleProfile.unverifiedNote
         let items = profile.items.compactMap { item -> LeftoverCandidate? in
             let url = url(of: item.path)
             guard FileSystem.exists(url), !isRestricted(url) else { return nil }

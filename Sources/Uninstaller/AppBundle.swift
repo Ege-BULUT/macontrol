@@ -84,6 +84,15 @@ struct AppBundle {
         return teamIdentifier == "59GAB85EFG"
     }
 
+    /// Signed by Apple itself (`anchor apple`), as macOS installers are. Only the signed code directory is checked.
+    var isSignedByApple: Bool {
+        guard let code = staticCode else { return false }
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString("anchor apple" as CFString, [], &requirement) == errSecSuccess else { return false }
+        let flags = SecCSFlags(rawValue: kSecCSDoNotValidateExecutable | kSecCSDoNotValidateResources)
+        return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
+    }
+
     private var staticCode: SecStaticCode? {
         var code: SecStaticCode?
         return SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess ? code : nil
@@ -94,5 +103,13 @@ struct AppBundle {
         var information: CFDictionary?
         guard SecCodeCopySigningInformation(code, flags, &information) == errSecSuccess else { return nil }
         return information as? [String: Any]
+    }
+}
+
+extension InstalledApp {
+    /// A macOS installer (`Install macOS Tahoe.app`): Apple-signed and named so. Debloat lists these apart from
+    /// Apple's apps (DESIGN-debloat section 4.2); no `AppKind` of its own.
+    public var isMacOSInstaller: Bool {
+        kind != .builtIn && name.hasPrefix("Install macOS") && AppBundle(url: url).isSignedByApple
     }
 }

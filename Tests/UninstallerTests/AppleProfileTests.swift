@@ -200,16 +200,16 @@ import Testing
         #expect(alone.paths(relativeTo: library) == [
             "Application Support/GarageBand", "Application Support/Logic", "Audio/Apple Loops Index", "Audio/Apple Loops/Apple",
         ])
-        #expect(alone.leftovers.allSatisfy { $0.evidence == .appleProfile && $0.note?.hasSuffix(LeftoverFinder.unverifiedNote) == true })
+        #expect(alone.leftovers.allSatisfy { $0.evidence == .appleProfile && $0.note?.hasSuffix(AppleProfile.unverifiedNote) == true })
         #expect(alone.leftovers.allSatisfy { !$0.isPreselected && $0.note != nil })
         #expect(alone.leftover("Audio/Apple Loops/Apple", in: library)?.note
-            == "Also used by Logic Pro and MainStage (not installed). \(LeftoverFinder.unverifiedNote)")
-        #expect(alone.leftover("Application Support/GarageBand", in: library)?.note == LeftoverFinder.unverifiedNote)
+            == "Also used by Logic Pro and MainStage (not installed). \(AppleProfile.unverifiedNote)")
+        #expect(alone.leftover("Application Support/GarageBand", in: library)?.note == AppleProfile.unverifiedNote)
 
         try fx.app("Logic Pro", id: "com.apple.logic10")
         let withLogic = try await fx.uninstaller().plan(for: Self.appleApp(fx, "GarageBand"))
         #expect(withLogic.leftover("Audio/Apple Loops/Apple", in: library)?.note
-            == "Also used by Logic Pro, which is installed. \(LeftoverFinder.unverifiedNote)")
+            == "Also used by Logic Pro, which is installed. \(AppleProfile.unverifiedNote)")
         // ~/Music is never searched, and the user's own loops are neverTouch.
         #expect(!withLogic.leftovers.contains { $0.url.path.hasPrefix(fx.home.path) && $0.url.path.contains("Loops") })
     }
