@@ -40,8 +40,14 @@ struct AppBundle {
             bundleIdentifier: bundleIdentifier,
             version: info["CFBundleShortVersionString"] as? String,
             kind: kind(systemRoot: systemRoot),
-            identity: FileIdentity(url: url)
+            identity: FileIdentity(url: url),
+            dateAdded: dateAdded
         )
+    }
+
+    private var dateAdded: Date? {
+        let values = try? url.resourceValues(forKeys: [.addedToDirectoryDateKey, .creationDateKey])
+        return values?.addedToDirectoryDate ?? values?.creationDate
     }
 
     /// The name Finder shows. Asking LaunchServices for it registers the bundle there, so it is asked only for apps

@@ -22,6 +22,16 @@ import Uninstaller
         #expect(apps.filter { $0.kind == .builtIn }.map(\.name).sorted() == ["Chess", "Terminal"])
     }
 
+    /// Date Added is when the app arrived in its folder (Finder's Date Added), not when the bundle was made.
+    @Test func dateAddedIsWhenTheAppArrivedNotWhenItWasMade() async throws {
+        let fx = try Fixture()
+        let bundle = try fx.app("Editor", id: "com.example.Editor")
+        let made = Date(timeIntervalSince1970: 1_600_000_000)
+        try FileManager.default.setAttributes([.creationDate: made], ofItemAtPath: bundle.path)
+        let arrived = try #require(try await fx.app(named: "Editor").dateAdded)
+        #expect(arrived.timeIntervalSinceNow > -600, "got \(arrived), the bundle was made \(made)")
+    }
+
     /// A receipt alone does not make an app Apple's: the signature must be Apple's, with Apple's team.
     @Test func receiptWithoutApplesSignatureIsThirdParty() async throws {
         let fx = try Fixture()
