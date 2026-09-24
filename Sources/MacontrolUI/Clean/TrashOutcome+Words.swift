@@ -15,15 +15,34 @@ extension TrashOutcome {
         if case .trashed = self { true } else { false }
     }
 
-    /// What happened, in words a user can act on.
-    var words: String {
+    var isDeleted: Bool {
+        if case .deleted = self { true } else { false }
+    }
+
+    /// Gone from where it was: in the Trash or deleted for good.
+    var isRemoved: Bool { isTrashed || isDeleted }
+
+    /// Safety removed part of a folder and left the rest in the Trash (DESIGN-debloat section 2.4).
+    var isPartlyDeleted: Bool {
+        if case .failed(_, let message) = self { message.hasPrefix("Partly deleted") } else { false }
+    }
+
+    /// What happened, in words a user can act on. A permanent batch's other failures are Safety's own sentences
+    /// ("Moved to the Trash, but not deleted: …"), shown as they are.
+    func words(in mode: DeletionMode) -> String {
         switch self {
         case .trashed: "Moved to the Trash"
         case .deleted: "Deleted permanently"
         case .refused(_, let reason): reason.words
-        case .failed(_, let message): "Could not move it: \(message)"
+        case .failed(let url, let message) where isPartlyDeleted:
+            // Safety names the copy in the Trash: `… the rest is in the Trash as "<name>". …`
+            PermanentText.partlyDeleted(message.components(separatedBy: "as \"").dropFirst().first?
+                .components(separatedBy: "\"").first ?? url.lastPathComponent)
+        case .failed(_, let message): mode == .permanent ? message : "Could not move it: \(message)"
         }
     }
+
+    var words: String { words(in: .trash) }
 }
 
 extension RefusalReason {
@@ -44,6 +63,9 @@ extension RefusalReason {
 
 extension TrashReport {
     var trashedURLs: Set<URL> { Set(outcomes.filter(\.isTrashed).map(\.url)) }
+    var deletedURLs: Set<URL> { Set(outcomes.filter(\.isDeleted).map(\.url)) }
+    /// In the Trash or deleted: either way the item left its place.
+    var removedURLs: Set<URL> { trashedURLs.union(deletedURLs) }
 
     /// "Moved 2 of 3 items to the Trash"
     func summary(of count: Int) -> String {
