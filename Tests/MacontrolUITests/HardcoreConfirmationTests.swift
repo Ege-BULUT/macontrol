@@ -189,35 +189,36 @@ import Uninstaller
 
     // MARK: Criterion 7: the result is measured
 
+    /// The fake removal frees space as it runs, so a reading taken on the wrong side of it shows.
     @Test func freeSpaceIsReadRightBeforeAndAfterAPermanentBatchOnly() async {
-        let readings = OSAllocatedUnfairLock(initialState: [UInt64]([10_000, 60_000]))
+        let free = OSAllocatedUnfairLock(initialState: UInt64(10_000))
+        let reads = OSAllocatedUnfairLock(initialState: 0)
         var support = RemovalSupport()
-        support.available = { _ in readings.withLock { $0.isEmpty ? nil : $0.removeFirst() } }
+        support.available = { _ in reads.withLock { $0 += 1 }; return free.withLock { $0 } }
         let empty = TrashReport(batch: UUID(), outcomes: [])
-        let (_, freed) = await support.measuring(.permanent, []) { empty }
+        let (_, freed) = await support.measuring(.permanent, []) { free.withLock { $0 += 50_000 }; return empty }
         #expect(freed == 50_000)
-        readings.withLock { $0 = [1] }
-        let (_, none) = await support.measuring(.trash, []) { empty }
-        #expect(none == nil && readings.withLock { $0 } == [1], "a Trash batch read free space")
+        reads.withLock { $0 = 0 }
+        let (_, none) = await support.measuring(.trash, []) { free.withLock { $0 += 1 }; return empty }
+        #expect(none == nil && reads.withLock { $0 } == 0, "a Trash batch read free space")
         // Space that went down (another app wrote meanwhile) is reported as nothing freed, not a wrapped number.
-        readings.withLock { $0 = [500, 400] }
-        #expect(await support.measuring(.permanent, []) { empty }.freed == 0)
+        #expect(await support.measuring(.permanent, []) { free.withLock { $0 -= 100 }; return empty }.freed == 0)
     }
 
     /// The uninstall result reports the injected change of free space, with the snapshot line only below half.
     @Test(arguments: [(UInt64(100_000), false), (UInt64(1_000), true)])
     func theResultReportsTheMeasuredChange(freed: UInt64, snapshotLine: Bool) async throws {
         let fixture = try RemovalFixture()
-        // Deletes for real inside the fixture, as the engine would.
+        // Deletes for real inside the fixture, as the engine would, and the volume gains `freed` with the bundle.
+        let free = OSAllocatedUnfairLock(initialState: UInt64(5_000_000))
         let (model, _) = try await fixture.uninstallModel(outcome: { item in
             try? FileManager.default.removeItem(at: item.url)
+            if item.url.pathExtension == "app" { free.withLock { $0 += freed } }
             return .deleted(original: item.url)
         })
+        model.support.available = { _ in free.withLock { $0 } }
         model.hardcore.isOn = true
         model.beginUninstall()
-        // Read right before and right after the batch.
-        let readings = OSAllocatedUnfairLock(initialState: [UInt64(5_000_000), 5_000_000 + freed])
-        model.support.available = { _ in readings.withLock { $0.isEmpty ? nil : $0.removeFirst() } }
         await model.confirmUninstall()
         let confirmation = try #require(model.confirmation)
         #expect(confirmation.run.freed == freed)
