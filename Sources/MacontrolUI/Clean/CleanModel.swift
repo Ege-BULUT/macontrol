@@ -29,6 +29,8 @@ struct CleanReview: Identifiable, RemovalConfirmation {
     var notMoved: [URL: String] = [:]
     /// The mode it opened with, and the rest of hardcore mode's state (DESIGN-debloat section 1.1).
     var run = RemovalRun()
+    /// Listed items the administrator helper removes; zero without a launcher.
+    var adminCount = 0
 }
 
 /// A category section: its items, largest first, filtered by the search.
@@ -205,7 +207,8 @@ public final class CleanModel {
             items: listed,
             nestedCount: selected.count - kept.count,
             hiddenBySearch: listed.filter { !visible.contains($0.url) }.count,
-            run: RemovalRun(mode: hardcore.mode, urls: listed.map(\.url), support: support)
+            run: RemovalRun(mode: hardcore.mode, urls: listed.map(\.url), support: support),
+            adminCount: listed.count { adminItems.contains($0.url) }
         )
     }
 

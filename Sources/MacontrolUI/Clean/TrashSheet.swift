@@ -51,7 +51,7 @@ struct TrashSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header.padding(20)
-            if isPermanent && report == nil { PermanentStrip() }
+            if showsStrip { PermanentStrip() }
             Divider()
             // Notes scroll with the items: in the fixed header, a long list of them squeezed the items to a sliver.
             List {
@@ -62,17 +62,12 @@ struct TrashSheet: View {
                         }
                     }
                 }
-                if report == nil && (isPermanent || !notes.isEmpty) {
-                    let deleted = rows.filter { !isTrashOnly($0) }
-                    let trashed = rows.filter(isTrashOnly)
-                    if !deleted.isEmpty || trashed.isEmpty {
-                        Section(isPermanent ? PermanentText.listHeader : "Moves to the Trash") { rowViews(deleted) }
+                ForEach(sections, id: \.title) { section in
+                    if let title = section.title {
+                        Section(title) { rowViews(section.rows) }
+                    } else {
+                        rowViews(section.rows)
                     }
-                    if !trashed.isEmpty {
-                        Section(PermanentText.trashOnlyHeader) { rowViews(trashed) }
-                    }
-                } else {
-                    rowViews(rows)
                 }
             }
             .listStyle(.inset)
@@ -86,6 +81,20 @@ struct TrashSheet: View {
     }
 
     private func isTrashOnly(_ row: TrashSheetRow) -> Bool { isPermanent && run.trashOnly[row.url] != nil }
+
+    /// The red strip: every permanent sheet until the result is in (DESIGN-debloat section 1.4, r2: ux 12).
+    var showsStrip: Bool { isPermanent && report == nil }
+
+    /// The item list's sections. A permanent sheet lists trash-only items (D4) apart, under "Moved to the Trash".
+    var sections: [(title: String?, rows: [TrashSheetRow])] {
+        guard report == nil, isPermanent || !notes.isEmpty else { return [(nil, rows)] }
+        let deleted = rows.filter { !isTrashOnly($0) }
+        let trashed = rows.filter(isTrashOnly)
+        var sections: [(title: String?, rows: [TrashSheetRow])] = []
+        if !deleted.isEmpty || trashed.isEmpty { sections.append((isPermanent ? PermanentText.listHeader : "Moves to the Trash", deleted)) }
+        if !trashed.isEmpty { sections.append((PermanentText.trashOnlyHeader, trashed)) }
+        return sections
+    }
 
     private func rowViews(_ rows: [TrashSheetRow]) -> some View {
         ForEach(rows) { row in
@@ -119,12 +128,12 @@ struct TrashSheet: View {
         }
     }
 
-    private var heading: String {
+    var heading: String {
         guard let report else { return title }
         return isPermanent ? PermanentText.summary(deleted: report.deletedURLs.count, of: rows.count) : report.summary(of: rows.count)
     }
 
-    private var explanation: String {
+    var explanation: String {
         guard let report else {
             let ticked = isPermanent && restorePoint?.wrappedValue == true
             return ticked ? message + " " + PermanentText.restorePointSpace : message
@@ -332,8 +341,9 @@ private struct TrashSheetRowView: View {
                 }
             }
             Spacer(minLength: 12)
-            // What stayed behind is reachable from here even after its app or row is gone.
-            if isDone && outcome?.isRemoved != true {
+            // What stayed behind is reachable from here even after its app or row is gone. A partly deleted item's
+            // rest is in the Trash, not at its old path.
+            if isDone && outcome?.isRemoved != true && outcome?.isPartlyDeleted != true {
                 Button("Reveal in Finder") { row.url.revealInFinder() }
                     .controlSize(.small)
             }

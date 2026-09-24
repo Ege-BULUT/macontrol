@@ -62,7 +62,7 @@ struct HardcoreBanner: View {
                 .foregroundStyle(Theme.dangerText)
             Spacer(minLength: 8)
             Button(HardcoreText.turnOff) { hardcore.isOn = false }
-                .controlSize(.small)
+                .buttonStyle(.link)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)

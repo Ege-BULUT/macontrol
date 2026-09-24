@@ -17,7 +17,7 @@ struct CleanReviewSheet: View {
                 : (count == 1 ? "Move 1 item to the Trash?" : "Move \(count) items to the Trash?"),
             message: permanent ? PermanentText.message(freesUpTo: freesUpTo ?? current.run.bytes(of: rows)) : message,
             warning: warning(current),
-            notes: AdminText.notes(count: current.items.count { model.adminItems.contains($0.url) }, mode: current.run.mode),
+            notes: AdminText.notes(count: current.adminCount, mode: current.run.mode),
             rows: rows,
             confirmTitle: permanent ? PermanentText.confirm : "Move to Trash",
             report: current.report,
