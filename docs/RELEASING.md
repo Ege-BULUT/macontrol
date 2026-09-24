@@ -48,10 +48,17 @@ maintainer's Mac before tagging; CI tests come once the repo is public.
    scripts/make-signing-cert.sh --remove-export
    ```
 
-   It deletes the .p12, the .p12.b64 and the .p12 password. The keychain and its password stay,
-   so local builds still sign. Until you run it, anything that reads `~/.config/macontrol` gets
-   the private key. `scripts/test-signing.sh` checks the script and the workflow's certificate
-   check without touching a real keychain.
+   It first checks that the keychain still opens with the password left in `signing.env` and
+   still holds the identity; if not, it removes nothing. Then it deletes the .p12, the .p12.b64
+   and the .p12 password. The keychain and its password stay, so local builds still sign.
+
+   This removes the plain copies, not the key. The keychain file plus the password in
+   `signing.env` are still a full copy, readable by anything running as you, and the keychain can
+   be decrypted offline with that password (see "Who can sign as macontrol"). The script imports
+   the key with `security import -x`, which blocks `security export`, not that offline read. The
+   key made on 2026-09-24 was imported before `-x` and is extractable.
+   `scripts/test-signing.sh` checks the scripts and the workflow's certificate check without
+   touching a real keychain.
 
 ## Local builds
 
@@ -87,7 +94,8 @@ Swift 6.3):
 - runs `scripts/bundle-app.sh release` with `SIGN_IDENTITY="macontrol Self-Signed"`, checks the
   version, and checks the app with `codesign --verify --strict` against `RELEASE_REQUIREMENT`, the
   designated requirement pinned in the workflow. A build signed with any other certificate fails;
-- zips the app with `ditto` to `Macontrol-<version>.zip`, writes `Macontrol-<version>.zip.sha256`;
+- zips the app with `ditto --norsrc --noextattr` (no `._` entries, so `unzip` keeps the signature
+  intact) to `Macontrol-<version>.zip`, writes `Macontrol-<version>.zip.sha256`;
 - creates the GitHub Release with both files, or replaces the files if the release already exists.
 
 There is no build cache: GitHub restores one only for the same tag, and it would put old build
@@ -118,8 +126,6 @@ pre-release tag.
   requirement macOS stored, so the grant stays. The first certificate-signed release after the ad
   hoc v0.1.x builds needs one more grant. (Checked with `codesign --verify -R` on a changed build;
   not yet tested with a real grant through an update.)
-- **Unzipping:** with Finder or `ditto -x -k`. `unzip` leaves `._` files in the bundle and breaks the
-  signature.
 
 ## Who can sign as macontrol
 
@@ -128,10 +134,11 @@ the identifier `dev.macontrol.Macontrol` gets the grant on every user's Mac that
 a re-signed copy of `/bin/ls` satisfies the requirement).
 
 - **On the maintainer's Mac,** the keychain never locks, its password is in `signing.env`, and
-  codesign may use the key without a prompt. So any program you run can sign as macontrol. Step 3
-  removes the extractable copies, not this. A separate local certificate for dev builds, with the
-  release key only in the GitHub secrets and the offline backup, would close it: open decision
-  (T-0081).
+  codesign may use the key without a prompt. So any program you run can sign as macontrol, and can
+  copy the key: the keychain file and `signing.env` are both readable by anything running as you.
+  Step 3 removes only the .p12 and its password, not this. A separate local certificate for dev
+  builds, with the release key only in the GitHub secrets and the offline backup, would close it:
+  open decision (T-0081).
 - **On GitHub,** the key is in the two secrets and in a temporary keychain for one job.
 
 ## If the key leaks

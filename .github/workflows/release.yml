@@ -76,7 +76,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           ZIP="Macontrol-$VERSION.zip"
           mkdir -p dist
-          ditto -c -k --keepParent build/Macontrol.app "dist/$ZIP"
+          ditto -c -k --norsrc --noextattr --keepParent build/Macontrol.app "dist/$ZIP"   # no ._ entries: `unzip` would put them in the bundle
           (cd dist && shasum -a 256 "$ZIP" > "$ZIP.sha256" && cat "$ZIP.sha256")
           # Notes: this version's section of CHANGELOG.md ("## 0.2.0, <date>, preview").
           awk -v v="$VERSION" 'index($0, "## " v ",") == 1 || $0 == "## " v { f = 1; next } /^## / { f = 0 } f' \

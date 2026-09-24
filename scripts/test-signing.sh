@@ -21,6 +21,7 @@ case "$1" in
   list-keychains) if [ "${4:-}" = -s ]; then shift 4; printf '    "%s"\n' "$@" > "$HOME/search-list"
                   else cat "$HOME/search-list" 2>/dev/null || true; fi ;;
   find-identity) echo '  1) 00 "macontrol Self-Signed"' ;;
+  import) echo "$*" > "$HOME/import-args" ;;
 esac
 SH
 printf '#!/bin/bash\necho %s >&2\n' "'designated => identifier \"probe\" and certificate leaf = H\"00\"'" > "$T/bin/codesign"
@@ -35,9 +36,34 @@ for f in "$T/home/Library/Keychains/macontrol-signing.keychain-db" "$C/signing.e
     [ -f "$f" ] || fail "first run did not make $f"
 done
 grep -q 'macontrol-signing.keychain-db' "$T/home/search-list" || fail "keychain not on the search list"
+grep -q -- ' -x ' "$T/home/import-args" || fail "the key is imported extractable (no -x)"
 grep -q -- '--remove-export' "$T/out" || fail "first run does not say how to remove the export"
 
 cert && grep -q 'already set up' "$T/out" || fail "second run did not keep the setup"
+
+# signing-identity.sh: the name when the keychain opens with signing.env, else ad hoc.
+ident() { HOME="$1" PATH="$T/bin:$PATH" "$REPO/scripts/signing-identity.sh"; }
+mkdir -p "$T/empty"
+[ "$(ident "$T/home")" = "macontrol Self-Signed" ] || fail "signing-identity.sh does not find the identity"
+[ "$(ident "$T/empty")" = - ] || fail "signing-identity.sh without a setup is not ad hoc"
+
+# --remove-export refuses, and deletes nothing, when what stays would not open the key.
+HOME="$T/empty" PATH="$T/bin:$PATH" "$REPO/scripts/make-signing-cert.sh" --remove-export > "$T/out" 2>&1 \
+    && fail "--remove-export without a setup succeeded"
+grep -q 'no setup here' "$T/out" || fail "--remove-export without a setup did not say so"
+cp "$C/signing.env" "$T/env.good"
+kept() { [ -f "$C/macontrol-signing.p12" ] && [ -f "$C/macontrol-signing.p12.b64" ] && [ ! -e "$C/signing.env.new" ] \
+    && cmp -s "$C/signing.env" "$1"; }
+chmod 000 "$C/signing.env"                                                       # (A) unreadable env
+cert --remove-export && fail "--remove-export succeeded on an unreadable signing.env"
+chmod 600 "$C/signing.env"
+kept "$T/env.good" || fail "--remove-export on an unreadable signing.env removed or changed something"
+sed 's/^MACONTROL_KEYCHAIN_PASSWORD=.*/MACONTROL_KEYCHAIN_PASSWORD=stale/' "$T/env.good" > "$T/env.stale"
+cp "$T/env.stale" "$C/signing.env"                                               # (B) stale password
+[ "$(ident "$T/home")" = - ] || fail "signing-identity.sh signs with a keychain it cannot unlock"
+cert --remove-export && fail "--remove-export succeeded with a keychain password that does not open it"
+kept "$T/env.stale" || fail "--remove-export with a stale password removed or changed something"
+cp "$T/env.good" "$C/signing.env"
 
 cert --remove-export || fail "--remove-export"
 [ ! -e "$C/macontrol-signing.p12" ] && [ ! -e "$C/macontrol-signing.p12.b64" ] || fail "--remove-export left a .p12"
@@ -72,5 +98,19 @@ if /usr/bin/codesign -d -r- build/Macontrol.app 2>&1 | grep -qF 'certificate lea
     echo "certificate check: pinned leaf passes, a changed leaf fails"
 else
     echo "certificate check skipped: build/Macontrol.app is not certificate-signed"
+fi
+# The release zip must survive `unzip`: ditto's ._ entries for extended attributes break the seal.
+if [ -d build/Macontrol.app ]; then
+    FLAGS="$(sed -n 's/^ *ditto \(-c -k .*\) build\/Macontrol.app .*/\1/p' "$YML")"
+    [ -n "$FLAGS" ] || fail "no ditto zip line in $YML"
+    mkdir "$T/unzipped"
+    # shellcheck disable=SC2086
+    ditto $FLAGS build/Macontrol.app "$T/release.zip"
+    (cd "$T/unzipped" && unzip -q "$T/release.zip")
+    /usr/bin/codesign --verify --strict --deep "$T/unzipped/Macontrol.app" 2>/dev/null \
+        || fail "the release zip, opened with unzip, fails codesign --verify ($FLAGS)"
+    echo "release zip: an unzipped copy verifies"
+else
+    echo "release zip check skipped: no build/Macontrol.app"
 fi
 echo "test-signing: ok"

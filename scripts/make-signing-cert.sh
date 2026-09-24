@@ -16,7 +16,9 @@
 #
 # The .p12, its .b64 and the .p12 password hand the private key to anything that reads them. Once
 # the GitHub secrets are set and the .p12 and its password are backed up offline, --remove-export
-# deletes all three. The keychain and its password stay, so local builds still sign.
+# deletes all three, after checking that the keychain still opens and holds the identity. The keychain
+# and its password stay, so local builds still sign; together they are still a copy of the key (the
+# key is imported with -x, which stops `security export` but not an offline read of the keychain file).
 #
 # Run it again at any time: an existing setup is kept, the keychain is unlocked, put back on the
 # search list and codesign's key access is set again. Half-made setups are refused, never deleted.
@@ -46,9 +48,23 @@ add_to_search_list() {
 
 if [ "${1:-}" = --remove-export ]; then
     [ -f "$KEYCHAIN" ] && [ -f "$ENV_FILE" ] || die "no setup here, nothing removed"
-    /bin/rm -f "$P12" "$P12.b64"
-    grep -v '^MACONTROL_SIGNING_PASSWORD=' "$ENV_FILE" > "$ENV_FILE.new" || true
+    # The .p12 may be the last copy outside the keychain: write the new env, prove the keychain opens
+    # with it and holds the identity, and only then delete. Locked first, because unlocking an already
+    # unlocked keychain may not check the password.
+    rc=0
+    grep -v '^MACONTROL_SIGNING_PASSWORD=' "$ENV_FILE" > "$ENV_FILE.new" || rc=$?
+    if [ "$rc" -gt 1 ] || ! (
+        unset MACONTROL_KEYCHAIN_PASSWORD
+        . "$ENV_FILE.new" && [ -n "${MACONTROL_KEYCHAIN_PASSWORD:-}" ] \
+            && security lock-keychain "$KEYCHAIN" \
+            && security unlock-keychain -p "$MACONTROL_KEYCHAIN_PASSWORD" "$KEYCHAIN" \
+            && security find-identity -p codesigning "$KEYCHAIN" | grep -F "\"$NAME\"" >/dev/null
+    ); then
+        /bin/rm -f "$ENV_FILE.new"
+        die "$ENV_FILE is unreadable, or its keychain password does not open $KEYCHAIN with \"$NAME\" in it; nothing removed (the keychain may be locked now)"
+    fi
     mv "$ENV_FILE.new" "$ENV_FILE"
+    /bin/rm -f "$P12" "$P12.b64"
     echo "removed $P12, $P12.b64 and MACONTROL_SIGNING_PASSWORD; the keychain stays"
     exit 0
 fi
@@ -102,7 +118,7 @@ EOF
     security set-keychain-settings "$KEYCHAIN"        # no auto-lock timeout, no lock on sleep
     security unlock-keychain -p "$MACONTROL_KEYCHAIN_PASSWORD" "$KEYCHAIN"
     security import "$WORK/identity.p12" -k "$KEYCHAIN" -f pkcs12 -P "$MACONTROL_SIGNING_PASSWORD" \
-        -T /usr/bin/codesign >/dev/null
+        -x -T /usr/bin/codesign >/dev/null        # -x: non-extractable; the backup is the .p12
 
     base64 -i "$WORK/identity.p12" -o "$WORK/identity.p12.b64"
     printf 'MACONTROL_KEYCHAIN_PASSWORD=%s\nMACONTROL_SIGNING_PASSWORD=%s\n' \
