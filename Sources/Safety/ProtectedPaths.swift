@@ -204,7 +204,8 @@ struct ProtectionPolicy: Sendable {
     /// it makes the item go to the Trash instead. Only checked right before the sink, never while staging.
     static func removalBlocker(inside path: String, forErase: Bool) -> RemovalBlocker? {
         let folder = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard folder >= 0 else { return nil }
+        // A folder that cannot be listed cannot be emptied. A link swapped in for it is left to the sink's own checks.
+        guard folder >= 0 else { return forErase && Self.unreadable(errno) ? .refused(.needsAdministrator) : nil }
         var info = stat()
         guard fstat(folder, &info) == 0 else {
             close(folder)
@@ -239,7 +240,11 @@ struct ProtectionPolicy: Sendable {
             if RemovalEngine.isDotOrDotDot(name) { continue }
             let relative = level.prefix + RemovalEngine.string(name)
             var info = stat()
-            guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { continue }
+            guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else {
+                // Gone since the listing is fine; anything else is an entry the erase could not reach either.
+                if forErase && errno != ENOENT { sawUnwritable = true }
+                continue
+            }
             if info.st_flags & userLock != 0 { return .refused(.holdsLocked(relative)) }
             if info.st_flags & systemFlags != 0 { return .refused(.systemProtected) }
             let isDataless = info.st_flags & UInt32(SF_DATALESS) != 0
@@ -250,13 +255,12 @@ struct ProtectionPolicy: Sendable {
             if info.st_dev != device { return .refused(.protectedLocation(base + "/" + relative)) }
             let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             guard child >= 0 else {
-                // An unreadable folder cannot be emptied. A folder swapped for a link since the fstatat is left to the
-                // sink's own checks.
-                if forErase && (errno == EACCES || errno == EPERM) { sawUnwritable = true }
+                if forErase && Self.unreadable(errno) { sawUnwritable = true }
                 continue
             }
             if forErase && faccessat(child, ".", W_OK, AT_EACCESS) != 0 { sawUnwritable = true }
             guard let listing = fdopendir(child) else {
+                sawUnwritable = sawUnwritable || forErase
                 close(child)
                 continue
             }
@@ -264,6 +268,12 @@ struct ProtectionPolicy: Sendable {
         }
         if sawDataless { return .dataless }
         return sawUnwritable ? .refused(.needsAdministrator) : nil
+    }
+
+    /// Why a folder could not be opened for listing, apart from a link or a file swapped in for it, or it being gone:
+    /// no permission, too many open files, and the like. A walk that must reach everything counts these as blocking.
+    private static func unreadable(_ code: Int32) -> Bool {
+        code != ELOOP && code != ENOTDIR && code != ENOENT
     }
 
     /// A volume mounted below `path` (a disk image, an SMB or sshfs mount): moving the folder would

@@ -206,6 +206,24 @@ import TestSupport
         }
     }
 
+    /// A folder that cannot be listed (write and search, no read) cannot be emptied either, inside or as the item
+    /// itself: the pre-flight sends it to the administrator before anything moves.
+    @Test(arguments: [false, true])
+    func anUnreadableFolderNeedsTheAdministratorToErase(itself: Bool) async throws {
+        let folder = try fixture.tmp.directory("home/Library/Caches/sealed")
+        try fixture.tmp.file("home/Library/Caches/sealed/mine.bin", size: 10)
+        let inner = try fixture.tmp.directory("home/Library/Caches/sealed/inner")
+        try fixture.tmp.file("home/Library/Caches/sealed/inner/theirs.bin", size: 10)
+        let locked = itself ? folder : inner
+        #expect(chmod(locked.path, 0o300) == 0)
+        defer { chmod(locked.path, 0o755) }
+
+        let report = await fixture.guardedService().remove([TrashItem(url: folder, expectedIdentity: FileIdentity(url: folder))], mode: .permanent)
+
+        #expect(report.outcomes == [.refused(folder, .needsAdministrator)])
+        #expect(fixture.backendCalls.isEmpty)
+    }
+
     /// A leftover waits for its app: while anything is at the app's path, it is not touched, in either mode.
     @Test(arguments: [DeletionMode.trash, .permanent])
     func anItemWhoseRequiredGonePathExistsIsNotTouched(mode: DeletionMode) async throws {
