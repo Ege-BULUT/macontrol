@@ -8,15 +8,19 @@
 #   --zip PATH  serve this local release zip (Macontrol-<version>.zip) instead of downloading the newest
 #               GitHub release; skips every network call except the deploy itself
 #
-# dist/site holds: site/*, images from docs/assets (WebP screenshots, landing-page crops, a 256 px icon,
-# favicon.ico, a 1200x630 og.jpg), the OpenLead board under board/ (pages, data, attachments) and
-# downloads/<release>.zip. The release's version, size, date and SHA-256 are written into the HTML, every
-# download link points at the versioned file, and vercel.json gets a 307 from /downloads/latest.zip to it.
+# dist/site holds: site/* (with the link-preview image, site/assets/og.jpg), images from the release tag's
+# docs/assets (WebP screenshots, landing-page crops, a 256 px icon, favicon.ico), the OpenLead board under
+# board/ (pages, data, attachments) and downloads/<release>.zip. The release's version, size, date and
+# SHA-256 are written into the HTML, every download link points at the versioned file, and vercel.json gets
+# a 307 from /downloads/latest.zip to it.
 # The repo is private, so the zip is served from Vercel, never linked from GitHub. dist/ also holds release
 # archives, so only dist/site is rebuilt.
 #
 # The page copy describes one release line, SITE_RELEASE. Only a release from that line is served: bump
-# SITE_RELEASE in the same commit that updates the copy for the next minor version.
+# SITE_RELEASE in the same commit that updates the copy for the next minor version. A tag with a suffix
+# (v0.1.2-rc.1) is never served. v0.1.0 is marked as a pre-release on GitHub because the app is a preview, so
+# the tag, not that flag, separates a candidate from a release. The screenshots and the changelog come from the served release's tag,
+# not from the working tree, so a merge to main can't reach the live page before its release does.
 # Needs: cwebp (brew install webp); without --zip, gh logged in as Ege-BULUT with read access to the repo and
 # jq (in macOS 15 and later); without --dry-run, vercel.
 set -euo pipefail
@@ -45,12 +49,47 @@ command -v cwebp >/dev/null || { echo "cwebp not found (brew install webp)" >&2;
 /bin/rm -rf "$OUT"
 mkdir -p "$OUT/assets/shots" "$OUT/assets/crops" "$OUT/board" "$OUT/downloads"
 
+# Release zip: the newest release of the SITE_RELEASE line whose tag has no suffix
+if [ -n "$ZIP" ]; then
+    FILE="$(basename "$ZIP")"
+    VERSION="${FILE#Macontrol-}"; VERSION="${VERSION%.zip}"
+    cp "$ZIP" "$OUT/downloads/$FILE"
+else
+    # "<tag> <published> <newest tag overall>", or an empty line when the line has no release yet
+    LINE="$(gh release list --repo "$REPO" --limit 50 --exclude-drafts --json tagName,publishedAt |
+        jq -r --arg line "v$SITE_RELEASE." '.[0].tagName as $newest
+            | map(select(.tagName | startswith($line) and (contains("-") | not)))[0] // empty
+            | "\(.tagName) \(.publishedAt) \($newest)"')"
+    read -r TAG PUBLISHED NEWEST <<<"$LINE"
+    [ -n "$TAG" ] || { echo "no v$SITE_RELEASE.x release in $REPO" >&2; exit 1; }
+    [ "$TAG" = "$NEWEST" ] || echo "note: serving $TAG, not the newer $NEWEST: only v$SITE_RELEASE.x tags" \
+        "without a suffix are served. For the next line, update the copy and SITE_RELEASE together." >&2
+    gh release download "$TAG" --repo "$REPO" --pattern '*.zip' --dir "$OUT/downloads" --clobber
+    ZIPS=("$OUT"/downloads/*.zip)
+    [ ${#ZIPS[@]} -eq 1 ] || { echo "expected one zip in $TAG, got ${#ZIPS[@]}" >&2; exit 1; }
+    FILE="$(basename "${ZIPS[0]}")"
+    VERSION="${TAG#v}"
+fi
+case "$VERSION" in
+    *-*) echo "release $VERSION has a suffix: candidates are never served" >&2; exit 1 ;;
+    "$SITE_RELEASE".*) ;;
+    *) echo "release $VERSION is not a $SITE_RELEASE.x release, and the page describes $SITE_RELEASE." \
+        "Update the copy and SITE_RELEASE together." >&2; exit 1 ;;
+esac
+git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null ||
+    { echo "tag v$VERSION is not in this clone (git fetch --tags), and the images come from it" >&2; exit 1; }
+: "${PUBLISHED:=$(git log -1 --format=%cI "v$VERSION")}"
+TAGGED="$(mktemp -d)"
+trap '/bin/rm -rf "$TAGGED"' EXIT
+git archive "v$VERSION" CHANGELOG.md docs/assets | tar -x -C "$TAGGED"
+
 # Landing-page crops: the part of the window each section talks about, as "x y width height" in
-# screenshot pixels. The <img> width/height in site/index.html must match.
+# screenshot pixels. The screenshots are 2x, so the <img> width/height in site/index.html are half of these:
+# a crop then never shows above 1x on a Retina screen.
 crop_box() {
     case "$1" in
         disk-map-treemap) echo 330 88 1010 1140 ;;
-        clean) echo 325 88 1465 1052 ;;
+        clean) echo 325 88 1464 1052 ;;
         uninstall) echo 748 82 1036 1144 ;;
         overview) echo 450 150 1330 720 ;;
         history) echo 440 150 1330 720 ;;
@@ -59,21 +98,17 @@ crop_box() {
 
 # Site and images
 cp -R site/. "$OUT/"
-sips -Z 256 docs/assets/icon.png --out "$OUT/assets/icon.png" >/dev/null
-sips -Z 32 -s format ico docs/assets/icon.png --out "$OUT/favicon.ico" >/dev/null
-# Link previews: 1200x630 of the light sunburst and the folder list beside it.
-sips -c 772 1470 --cropOffset 345 330 docs/assets/screenshots/disk-map-sunburst-light.png --out "$OUT/og.png" >/dev/null
-sips -z 630 1200 -s format jpeg -s formatOptions 85 "$OUT/og.png" --out "$OUT/assets/og.jpg" >/dev/null
-/bin/rm -f "$OUT/og.png"
-for png in docs/assets/screenshots/*.png; do
+sips -Z 256 "$TAGGED/docs/assets/icon.png" --out "$OUT/assets/icon.png" >/dev/null
+sips -Z 32 -s format ico "$TAGGED/docs/assets/icon.png" --out "$OUT/favicon.ico" >/dev/null
+for png in "$TAGGED"/docs/assets/screenshots/*.png; do
     name="$(basename "${png%.png}")"
     cwebp -quiet -q 82 "$png" -o "$OUT/assets/shots/$name.webp"
     box="$(crop_box "${name%-*}")"
     [ -z "$box" ] || cwebp -quiet -q 82 -crop $box "$png" -o "$OUT/assets/crops/$name.webp"
 done
 
-# Changelog: rendered from CHANGELOG.md into the markers in docs/changelog.html.
-python3 - CHANGELOG.md "$OUT/docs/changelog.html" <<'PY'
+# Changelog: rendered from the tag's CHANGELOG.md into the markers in docs/changelog.html.
+python3 - "$TAGGED/CHANGELOG.md" "$OUT/docs/changelog.html" <<'PY'
 import html, re, sys
 # ponytail: headings, lists, paragraphs, **bold**, `code`, [links]; add fences/tables if CHANGELOG.md uses them
 def inline(t):
@@ -119,33 +154,6 @@ PY
 cp "$BOARD"/*.html "$OUT/board/"
 cp -R "$BOARD/data" "$BOARD/attachments" "$OUT/board/"
 cp -R "$BOARD/.vercel" "$OUT/.vercel"
-
-# Release zip: the newest release of the SITE_RELEASE line, pre-releases included
-if [ -n "$ZIP" ]; then
-    FILE="$(basename "$ZIP")"
-    VERSION="${FILE#Macontrol-}"; VERSION="${VERSION%.zip}"
-    cp "$ZIP" "$OUT/downloads/$FILE"
-    PUBLISHED="$(git log -1 --format=%cI "refs/tags/v$VERSION" 2>/dev/null || date -u +%FT%TZ)"
-else
-    # "<tag> <published> <newest tag overall>", or an empty line when the line has no release yet
-    LINE="$(gh release list --repo "$REPO" --limit 50 --exclude-drafts --json tagName,publishedAt |
-        jq -r --arg line "v$SITE_RELEASE." '.[0].tagName as $newest
-            | map(select(.tagName | startswith($line)))[0] // empty | "\(.tagName) \(.publishedAt) \($newest)"')"
-    read -r TAG PUBLISHED NEWEST <<<"$LINE"
-    [ -n "$TAG" ] || { echo "no v$SITE_RELEASE.x release in $REPO" >&2; exit 1; }
-    [ "$TAG" = "$NEWEST" ] || echo "note: serving $TAG, not the newer $NEWEST: the page describes $SITE_RELEASE." \
-        "Update the copy and SITE_RELEASE together to serve it." >&2
-    gh release download "$TAG" --repo "$REPO" --pattern '*.zip' --dir "$OUT/downloads" --clobber
-    ZIPS=("$OUT"/downloads/*.zip)
-    [ ${#ZIPS[@]} -eq 1 ] || { echo "expected one zip in $TAG, got ${#ZIPS[@]}" >&2; exit 1; }
-    FILE="$(basename "${ZIPS[0]}")"
-    VERSION="${TAG#v}"
-fi
-case "$VERSION" in
-    "$SITE_RELEASE".*) ;;
-    *) echo "release $VERSION is not a $SITE_RELEASE.x release, and the page describes $SITE_RELEASE." \
-        "Update the copy and SITE_RELEASE together." >&2; exit 1 ;;
-esac
 
 # The release goes into the HTML, so the page names, sizes and checks the download without JavaScript.
 SIZE="$(stat -f %z "$OUT/downloads/$FILE")"

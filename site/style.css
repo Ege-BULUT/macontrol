@@ -132,7 +132,7 @@ kbd {
 .shot { position: relative; margin: 0; }
 .shot img { filter: var(--shadow); }
 /* Landing crops: part of the window, so they get their own corners and edge */
-.shot.crop img { border-radius: 12px; border: 1px solid var(--line); }
+.shot.crop img { border-radius: 12px; border: 1px solid var(--line); margin-inline: auto; }
 .hero .shot { isolation: isolate; }
 @media (min-width: 901px) { .hero .shot { margin-right: clamp(-120px, (var(--wide) - 100vw) / 2 + 24px, 0px); } }
 /* The halo is the sunburst the app draws: the demo's six top-level folders at their real shares. */
@@ -249,7 +249,7 @@ figcaption { font-size: 14px; color: var(--text-2); margin-top: 14px; }
 .cta { text-align: center; }
 .cta img { width: 72px; height: 72px; margin: 0 auto 18px; }
 .cta h2 { font-size: clamp(28px, 3.4vw, 40px); letter-spacing: -0.025em; }
-.cta p { color: var(--text-2); margin: 12px auto 26px; max-width: 32em; }
+.cta p { color: var(--text-2); margin: 12px auto 26px; max-width: 32em; text-wrap: balance; }
 .cta .get { justify-content: center; }
 
 /* Footer */
