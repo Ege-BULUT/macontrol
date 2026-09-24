@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 CONFIG="${1:-release}"
 BUNDLE_ID="${BUNDLE_ID:-dev.macontrol.Macontrol}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
-VERSION="0.1.0"
+VERSION="0.1.1"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
 swift build -c "$CONFIG" --product Macontrol
