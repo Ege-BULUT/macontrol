@@ -211,7 +211,7 @@ struct TrashBatch {
 private extension TrashOutcome {
     var url: URL {
         switch self {
-        case .trashed(let url, _), .refused(let url, _), .failed(let url, _): url
+        case .trashed(let url, _), .deleted(let url), .refused(let url, _), .failed(let url, _): url
         }
     }
 }

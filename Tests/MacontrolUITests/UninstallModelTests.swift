@@ -365,7 +365,7 @@ struct RecordedActions {
         UninstallActions(
             quit: { _ in true },
             bootout: { _ in },
-            moveToTrash: { [batches] items in
+            remove: { [batches] items, _ in
                 batches.withLock { $0.append(items) }
                 return TrashReport(batch: UUID(), outcomes: items.map { .refused($0.url, .notImplemented) })
             }

@@ -11,6 +11,8 @@ let package = Package(
     products: [
         .executable(name: "Macontrol", targets: ["Macontrol"]),
         .executable(name: "mcscan", targets: ["mcscan"]),
+        // The privileged helper, bundled as Contents/Helpers/macontrol-priv (docs/DESIGN-debloat.md section 3).
+        .executable(name: "macontrol-priv", targets: ["PrivilegedHelper"]),
     ],
     targets: [
         // Shared model: file identity, the scan tree, sizes, permission probe.
@@ -26,16 +28,22 @@ let package = Package(
             resources: [.copy("Resources/catalog.json")]
         ),
         // Installed apps, leftovers, uninstall plans.
-        .target(name: "Uninstaller", dependencies: ["MacontrolCore", "ScanEngine", "Safety"]),
+        .target(
+            name: "Uninstaller",
+            dependencies: ["MacontrolCore", "ScanEngine", "Safety"],
+            resources: [.copy("Resources/apple-apps.json")]
+        ),
         // SwiftUI screens, view models, disk map geometry, snapshot renderer.
         .target(
             name: "MacontrolUI",
             dependencies: ["MacontrolCore", "ScanEngine", "Safety", "Cleaner", "Uninstaller"],
             swiftSettings: mainActorByDefault
         ),
-        .executableTarget(name: "Macontrol", dependencies: ["MacontrolUI"], swiftSettings: mainActorByDefault),
+        .executableTarget(name: "Macontrol", dependencies: ["MacontrolUI", "Safety"], swiftSettings: mainActorByDefault),
         // Command-line scanner for research/bench/run.sh.
         .executableTarget(name: "mcscan", dependencies: ["ScanEngine"]),
+        // Runs as root for one checked request, started by the app through the admin dialog.
+        .executableTarget(name: "PrivilegedHelper", dependencies: ["MacontrolCore", "Safety"]),
 
         .target(name: "TestSupport", path: "Tests/TestSupport"),
         .testTarget(name: "MacontrolCoreTests", dependencies: ["MacontrolCore", "TestSupport"]),

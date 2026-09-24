@@ -9,23 +9,26 @@ public struct UninstallActions: Sendable {
     public var quit: @Sendable (InstalledApp) async -> Bool
     /// Stops one user launchd job by its exact label; throws when it may still be running.
     public var bootout: @Sendable (_ label: String) async throws -> Void
-    public var moveToTrash: @Sendable ([TrashItem]) async -> TrashReport
+    /// One Safety batch in the given mode (`TrashService.remove`).
+    public var remove: @Sendable ([TrashItem], DeletionMode) async -> TrashReport
 
     public init(
         quit: @escaping @Sendable (InstalledApp) async -> Bool,
         bootout: @escaping @Sendable (_ label: String) async throws -> Void,
-        moveToTrash: @escaping @Sendable ([TrashItem]) async -> TrashReport
+        remove: @escaping @Sendable ([TrashItem], DeletionMode) async -> TrashReport
     ) {
         self.quit = quit
         self.bootout = bootout
-        self.moveToTrash = moveToTrash
+        self.remove = remove
     }
 
-    public static func live(trash: TrashService, launchctl: LaunchctlRunner = .system) -> UninstallActions {
+    public static func live(
+        trash: TrashService, launchctl: LaunchctlRunner = .system, administrator: PrivilegedLauncher? = nil
+    ) -> UninstallActions {
         UninstallActions(
             quit: { await RunningApps.quit($0) },
             bootout: { try await Launchd.bootout(label: $0, runner: launchctl) },
-            moveToTrash: { await trash.moveToTrash($0) }
+            remove: { await trash.remove($0, mode: $1, administrator: administrator) }
         )
     }
 }

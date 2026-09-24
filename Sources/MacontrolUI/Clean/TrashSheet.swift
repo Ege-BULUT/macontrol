@@ -26,6 +26,10 @@ struct TrashSheet: View {
     var notMoved: [URL: String] = [:]
     let isWorking: Bool
     var errorMessage: String?
+    /// The mode the confirmation opened with. Not shown yet: hardcore-ui makes the sheet mode-aware.
+    var mode: DeletionMode = .trash
+    /// The restore-point box of a permanent sheet; nil hides it.
+    var restorePoint: Binding<Bool>? = nil
     let onConfirm: () -> Void
     let onClose: () -> Void
 

@@ -15,7 +15,7 @@ extension AppKind {
 
 extension LeftoverEvidence {
     /// Display order: strongest evidence first, the unselected exact-name matches last.
-    static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName, .contentLibrary]
+    static let displayOrder: [LeftoverEvidence] = [.bundleIdentifier, .containerMetadata, .appGroup, .launchdJob, .exactName, .contentLibrary, .appleProfile]
 
     /// The evidence kinds present in `leftovers`, in display order. A kind missing from `displayOrder`
     /// still gets its section at the end, so no leftover is ever hidden.
@@ -33,6 +33,7 @@ extension LeftoverEvidence {
         case .launchdJob: "Background items"
         case .exactName: "Same name as the app"
         case .contentLibrary: "Sound library"
+        case .appleProfile: "Apple's content"
         }
     }
 
@@ -45,6 +46,7 @@ extension LeftoverEvidence {
         case .launchdJob: "They start a program inside the app and are stopped first."
         case .exactName: "Likely the app's, but not certain. Not selected: check them first."
         case .contentLibrary: "Loops and instruments for Apple's music apps. Removing them needs an administrator."
+        case .appleProfile: "Listed for this app in macontrol's catalog of Apple apps."
         }
     }
 
@@ -56,6 +58,7 @@ extension LeftoverEvidence {
         case .launchdJob: "gearshape.2.fill"
         case .exactName: "questionmark.folder.fill"
         case .contentLibrary: "music.note.list"
+        case .appleProfile: "apple.logo"
         }
     }
 }

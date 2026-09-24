@@ -5,6 +5,7 @@ extension TrashOutcome {
     var url: URL {
         switch self {
         case .trashed(let original, _): original
+        case .deleted(let original): original
         case .refused(let url, _): url
         case .failed(let url, _): url
         }
@@ -18,6 +19,7 @@ extension TrashOutcome {
     var words: String {
         switch self {
         case .trashed: "Moved to the Trash"
+        case .deleted: "Deleted permanently"
         case .refused(_, let reason): reason.words
         case .failed(_, let message): "Could not move it: \(message)"
         }

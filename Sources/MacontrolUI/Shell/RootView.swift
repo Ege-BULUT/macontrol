@@ -46,6 +46,7 @@ public struct RootView: View {
         case .diskMap: DiskMapScreen(model: model.diskMap)
         case .clean: CleanScreen(model: model.clean)
         case .uninstall: UninstallScreen(model: model.uninstall)
+        case .debloat: DebloatScreen(model: model.debloat)
         case .history: HistoryScreen(model: model.history)
         }
     }

@@ -1,6 +1,11 @@
 import AppKit
 import Foundation
 import MacontrolUI
+import Safety
+
+// First statement, before NSApplication or Dispatch starts a thread: tools macontrol runs, and the administrator
+// helper, never inherit BASH_ENV, DYLD_* and the like (DESIGN-debloat section 3.3 step 2).
+PrivilegedLauncher.scrubEnvironment()
 
 // Hidden modes, both exit when done:
 //   Macontrol --snapshot <dir>       renders every screen with demo data, light and dark

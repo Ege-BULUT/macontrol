@@ -371,4 +371,26 @@ import TestSupport
         let journal = String(decoding: try Data(contentsOf: fixture.journal), as: UTF8.self)
         #expect(history.map(\.originalPath) == [next.path, file.path], "\(journal)")
     }
+
+    /// v1 lines have no `asAdministrator` and always a `trashedPath`; they must keep decoding (T-0072).
+    /// A line without `trashedPath` is a permanent deletion, and Undo never touches it.
+    @Test func v1JournalLinesDecodeAndPermanentLinesHaveNoUndo() async throws {
+        let fixture = try TrashFixture()
+        let batch = UUID()
+        let (a, b, gone) = (fixture.home.appendingPathComponent("a"), fixture.home.appendingPathComponent("b"), fixture.trash.appendingPathComponent("a"))
+        let common = #""batch":"\#(batch.uuidString)","date":"2026-01-01T00:00:00Z","identity":{"device":1,"inode":2},"restored":false"#
+        let lines = [
+            #"{"allocated":4096,\#(common),"originalPath":"\#(a.path)","trashedPath":"\#(gone.path)"}"#,
+            #"{"allocated":0,\#(common),"originalPath":"\#(b.path)"}"#,
+        ]
+        try FileManager.default.createDirectory(at: fixture.journal.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: fixture.journal)
+
+        let history = await fixture.service().history()
+        #expect(history.map(\.originalPath) == [b.path, a.path])
+        #expect(history.map(\.isPermanent) == [true, false])
+        #expect(history.allSatisfy { !$0.asAdministrator && $0.restorePoint == nil })
+        // Only the trashed line is tried; it is no longer in the fixture Trash.
+        #expect(await fixture.service().undo(batch: batch) == [.failed(a, message: "It is no longer in the Trash.")])
+    }
 }

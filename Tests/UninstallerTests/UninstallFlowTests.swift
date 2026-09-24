@@ -160,6 +160,19 @@ import Testing
         #expect(bundle.expectedIdentity != nil && leftover.expectedIdentity != nil)
     }
 
+    /// T-0072: the mode reaches both batches, and the leftovers follow a bundle that came back `.deleted`.
+    @Test func permanentModeReachesBothBatchesAndLeftoversFollowADeletedBundle() async throws {
+        let fx = try demo()
+        let plan = try await fx.plan("Demo")
+        let exactName = try #require(plan.leftovers.first { $0.evidence == .exactName })
+
+        let report = try await fx.uninstaller().uninstall(plan, leftovers: [exactName.url], mode: .permanent)
+
+        #expect(report.outcomes == [.deleted(original: plan.app.url), .deleted(original: exactName.url)])
+        #expect(fx.recorder.modes == [.permanent, .permanent])
+        #expect(!FileManager.default.fileExists(atPath: exactName.url.path))
+    }
+
     /// F-0030: a failed step ends the uninstall; nothing after it runs.
     @Test func appThatDoesNotQuitStopsEverything() async throws {
         let fx = try demo()

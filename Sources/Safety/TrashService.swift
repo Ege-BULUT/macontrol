@@ -10,13 +10,22 @@ public struct TrashItem: Sendable, Hashable {
     public var keep: [URL]
     /// The scan's on-disk size, recorded in the journal for History.
     public var allocated: UInt64
+    /// Remove this item only if nothing exists at this path when its turn comes. An app's leftovers name the
+    /// app's bundle here, so no leftover is touched while the app is installed (DESIGN-debloat section 2.1).
+    public var requiresGone: URL?
 
-    public init(url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0) {
+    public init(url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0, requiresGone: URL? = nil) {
         self.url = url
         self.expectedIdentity = expectedIdentity
         self.keep = keep
         self.allocated = allocated
+        self.requiresGone = requiresGone
     }
+}
+
+/// Where a batch's items end up: the Trash (v1, the default), or gone for good (hardcore mode).
+public enum DeletionMode: String, Sendable, Hashable, Codable {
+    case trash, permanent
 }
 
 public enum RefusalReason: Error, Sendable, Hashable {
@@ -43,6 +52,8 @@ public enum RefusalReason: Error, Sendable, Hashable {
 
 public enum TrashOutcome: Sendable, Hashable {
     case trashed(original: URL, trashedTo: URL)
+    /// Gone for good (permanent mode).
+    case deleted(original: URL)
     case refused(URL, RefusalReason)
     case failed(URL, message: String)
 }
@@ -123,11 +134,29 @@ public actor TrashService {
         return TrashReport(batch: batch, outcomes: run.process(items))
     }
 
+    /// One batch in either mode, items in array order. `.needsAdministrator` items go to the helper in one request
+    /// when `administrator` is given (DESIGN-debloat section 3.6).
+    /// Stub (T-0072): `.trash` is `moveToTrash`; `.permanent` fails every item. permanent-engine builds the rest.
+    public func remove(
+        _ items: [TrashItem], mode: DeletionMode, cloudConfirmed: Bool = false,
+        administrator: PrivilegedLauncher? = nil, restorePoint: String? = nil
+    ) async -> TrashReport {
+        switch mode {
+        case .trash: moveToTrash(items, cloudConfirmed: cloudConfirmed)
+        case .permanent: TrashReport(batch: UUID(), outcomes: items.map { .failed($0.url, message: "Not built yet") })
+        }
+    }
+
+    /// Journals what an administrator helper finished while the app was gone, once, at launch (section 3.8).
+    /// Stub (T-0072): does nothing. privileged-helper builds it.
+    public func recoverPrivilegedResults() {}
+
     /// Moves a batch back where it came from, newest first. An item is restored only if it is still
-    /// in the Trash as the same object and nothing has taken its original path since.
+    /// in the Trash as the same object and nothing has taken its original path since. Permanent deletions and
+    /// items the administrator helper moved have no Undo (DESIGN-debloat D12).
     public func undo(batch: UUID) -> [RestoreOutcome] {
         let journal = TrashJournal(url: journalURL)
-        let pending = journal.entries().filter { $0.batch == batch && !$0.restored }
+        let pending = journal.entries().filter { $0.batch == batch && !$0.restored && !$0.isPermanent && !$0.asAdministrator }
         guard !pending.isEmpty else { return [] }
         let handle: FileHandle
         do {
@@ -145,12 +174,12 @@ public actor TrashService {
 
     private func restore(_ entry: JournalEntry, recordingTo journal: FileHandle) -> RestoreOutcome {
         let original = URL(fileURLWithPath: entry.originalPath)
-        guard FileIdentity(url: URL(fileURLWithPath: entry.trashedPath)) == entry.identity else {
+        guard let trashedPath = entry.trashedPath, FileIdentity(url: URL(fileURLWithPath: trashedPath)) == entry.identity else {
             return .failed(original, message: "It is no longer in the Trash.")
         }
         // RENAME_EXCL makes "only if the original path is free" atomic: nothing is ever replaced.
         // RENAME_NOFOLLOW_ANY: a link put in place of a folder on the way cannot send it elsewhere.
-        guard renamex_np(entry.trashedPath, entry.originalPath, UInt32(RENAME_EXCL | RENAME_NOFOLLOW_ANY)) == 0 else {
+        guard renamex_np(trashedPath, entry.originalPath, UInt32(RENAME_EXCL | RENAME_NOFOLLOW_ANY)) == 0 else {
             let code = errno
             let message = switch code {
             case EEXIST: "Something else is at its original location now."

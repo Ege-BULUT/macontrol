@@ -114,6 +114,9 @@ final class Recorder: @unchecked Sendable {
     }
 
     var events: [Event] { lock.withLock { recorded } }
+    /// The mode of each Trash batch, in order.
+    var modes: [DeletionMode] { lock.withLock { recordedModes } }
+    private var recordedModes: [DeletionMode] = []
 
     private func record(_ event: Event) {
         lock.withLock { recorded.append(event) }
@@ -132,24 +135,26 @@ final class Recorder: @unchecked Sendable {
                     throw UninstallError.bootoutFailed(label: label, status: 5)
                 }
             },
-            moveToTrash: { items in
+            remove: { items, mode in
                 self.record(.trash(items))
+                self.lock.withLock { self.recordedModes.append(mode) }
                 let refused = self.lock.withLock { self.refusedPath }
-                let outcomes = items.map { $0.url.path == refused ? .refused($0.url, .identityChanged) : self.moveIntoTrash($0.url) }
+                let outcomes = items.map { $0.url.path == refused ? .refused($0.url, .identityChanged) : self.moveIntoTrash($0.url, mode) }
                 self.lock.withLock { self.afterTrashing }?()
                 return TrashReport(batch: UUID(), outcomes: outcomes)
             }
         )
     }
 
-    private func moveIntoTrash(_ url: URL) -> TrashOutcome {
+    /// Permanent mode moves too, as the real engine's first step does (DESIGN-debloat D3), and reports `.deleted`.
+    private func moveIntoTrash(_ url: URL, _ mode: DeletionMode) -> TrashOutcome {
         guard url.path.hasPrefix(fixture.path + "/"), !url.path.split(separator: "/").contains("..") else {
             return .refused(url, .protectedLocation("Outside the fixture"))
         }
         let destination = trash.appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent)
         do {
             try FileManager.default.moveItem(at: url, to: destination)
-            return .trashed(original: url, trashedTo: destination)
+            return mode == .permanent ? .deleted(original: url) : .trashed(original: url, trashedTo: destination)
         } catch {
             return .failed(url, message: error.localizedDescription)
         }

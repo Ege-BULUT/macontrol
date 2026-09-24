@@ -43,6 +43,8 @@ public enum LeftoverEvidence: String, Sendable, Hashable {
     case exactName
     /// A content library of Apple's music apps (Apple Loops, GarageBand and Logic sounds). Admin-only in v1.
     case contentLibrary
+    /// An item of the app's profile in the bundled `apple-apps.json` (DESIGN-debloat section 4.3).
+    case appleProfile
 
     public var preselected: Bool { self != .exactName && self != .contentLibrary }
 }
@@ -97,6 +99,29 @@ public struct UninstallPlan: Sendable {
         self.blocker = blocker
         self.bundleLaunchdLabels = bundleLaunchdLabels
         self.notes = notes
+    }
+}
+
+/// One app of a batch uninstall: its plan and the leftovers the user chose.
+public struct UninstallJob: Sendable {
+    public var plan: UninstallPlan
+    public var leftovers: Set<URL>
+
+    public init(plan: UninstallPlan, leftovers: Set<URL>) {
+        self.plan = plan
+        self.leftovers = leftovers
+    }
+}
+
+/// What a batch uninstall did: one report for every app that went ahead, and why each skipped app was skipped,
+/// keyed by the app's URL.
+public struct UninstallBatchReport: Sendable {
+    public var report: TrashReport
+    public var skipped: [URL: UninstallError]
+
+    public init(report: TrashReport, skipped: [URL: UninstallError]) {
+        self.report = report
+        self.skipped = skipped
     }
 }
 

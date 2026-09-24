@@ -5,8 +5,9 @@ import Testing
 import TestSupport
 
 @Suite struct ShellTests {
-    @Test func sectionShortcutsAreCommandOneToFive() {
-        #expect(SidebarItem.allCases.map { String($0.shortcut.character) } == ["1", "2", "3", "4", "5"])
+    @Test func sectionShortcutsAreCommandOneToSix() {
+        #expect(SidebarItem.allCases.map { String($0.shortcut.character) } == ["1", "2", "3", "4", "5", "6"])
+        #expect(SidebarItem.debloat.shortcut == "5" && SidebarItem.history.shortcut == "6")
     }
 
     /// Walking "/" counts the Data volume twice through firmlinks (F-0031).
