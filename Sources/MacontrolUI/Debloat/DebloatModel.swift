@@ -23,14 +23,21 @@ struct DebloatApp: Identifiable {
     }
 }
 
+/// A ticked Xcode's step before the uninstall: what CoreSimulator listed when the sheet opened, and what it deletes.
+struct RuntimeStep {
+    let xcode: InstalledApp
+    let listed: [SimRuntime]
+    let runtimes: [SimRuntime]
+}
+
 /// The open confirmation, fixed when it opens: its mode, jobs and runtimes do not follow later changes.
 struct DebloatConfirmation: Identifiable {
     let id = UUID()
     let mode: DeletionMode
     /// Every ticked app with its chosen leftovers, in list order.
     let jobs: [UninstallJob]
-    /// Runtimes deleted first, per Xcode bundle.
-    let runtimes: [(xcode: InstalledApp, runtimes: [SimRuntime])]
+    /// One per ticked Xcode, run before the uninstall.
+    let runtimes: [RuntimeStep]
     let rows: [TrashSheetRow]
     let notes: [String]
     /// Items the administrator helper moves: they have no Undo in History (D12).
@@ -41,6 +48,11 @@ struct DebloatConfirmation: Identifiable {
     var report: TrashReport?
     var notMoved: [URL: String] = [:]
     var message: String?
+    /// An Xcode that `xcode-select` points into is gone.
+    var brokeDeveloperTools = false
+
+    /// The `xcode-select --reset` line: before the run when it would break git and clang, after it when it did (review 2, 9).
+    var showsResetCommand: Bool { report == nil ? breaksDeveloperTools : brokeDeveloperTools }
 
     var runtimeBytes: UInt64 { runtimes.flatMap(\.runtimes).reduce(0) { $0 + $1.bytes } }
     var rowBytes: UInt64 { rows.reduce(0) { $0 + $1.bytes } }
@@ -55,7 +67,7 @@ struct DebloatConfirmation: Identifiable {
         text += administratorItems == 0
             ? "Put them back from History until then."
             : "Items owned by the system can't be put back from History: drag them out of the Trash in Finder. The rest can be put back from History until then."
-        if !runtimes.isEmpty { text += " The simulator runtimes are deleted now and can't be put back." }
+        if runtimeBytes > 0 { text += " The simulator runtimes are deleted now and can't be put back." }
         return text
     }
 }
@@ -191,13 +203,13 @@ public final class DebloatModel {
             }
             var runtimes: [SimRuntime] = []
             var failure: String?
-            if profiles.profile(for: app.bundleIdentifier)?.simulatorRuntimes == true {
+            if hasRuntimes(app) {
                 do {
                     runtimes = try await runtimeTool.list(xcode: app.url)
                 } catch {
                     // "Couldn't look" is not "there are none": removing Xcode takes CoreSimulator, the only tool that
                     // deletes runtimes, and would leave them in SIP-restricted AssetsV2 for good (review 1).
-                    failure = "Couldn't list its simulator runtimes, so \(app.name) is kept: without it, nothing could delete them. Try Scan Again."
+                    failure = "Couldn't list its simulator runtimes, so \(app.name) is kept: without it, nothing could delete them. Open \(app.name) once, then Scan Again."
                 }
             }
             update(app.url) { $0.plan = plan; $0.runtimes = runtimes; $0.failure = failure }
@@ -235,12 +247,18 @@ public final class DebloatModel {
     /// The plan's note; CoreSimulator while runtimes stay; in hardcore mode the warning for an app's own documents
     /// (section 4.5, security 5).
     func note(for leftover: Leftover, of row: DebloatApp) -> String? {
+        if let note = leftover.note, note.hasPrefix(SimRuntimeTool.heldNote) {
+            // CoreSimulator.framework holds the only tool that deletes runtimes. The plan holds it back on every screen;
+            // here it waits only while runtimes stay (review 1, 2; review 2, 1).
+            let rest = note.dropFirst(SimRuntimeTool.heldNote.count).trimmingCharacters(in: .whitespaces)
+            let held = !row.runtimes.isEmpty && !runtimesChosen(row)
+                ? "Holds the only tool that deletes simulator runtimes. Without it, the \(row.runtimeBytes.formattedBytes) of runtimes left unticked stay on this Mac until you reinstall \(row.app.name)."
+                : nil
+            let text = [held, rest].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+            return text.isEmpty ? nil : text
+        }
         if let note = leftover.note { return note }
         let path = leftover.url.path
-        // CoreSimulator.framework holds the only tool that deletes runtimes (review 2).
-        if leftover.evidence == .appleProfile, path.hasSuffix("/Library/Developer/PrivateFrameworks"), !row.runtimes.isEmpty, !runtimesChosen(row) {
-            return "Holds the only tool that deletes simulator runtimes. Without it, the \(row.runtimeBytes.formattedBytes) of runtimes left unticked stay on this Mac until you reinstall \(row.app.name)."
-        }
         let inContainers = path.contains("/Library/Containers/") || path.contains("/Library/Group Containers/")
         return hardcore.isOn && inContainers ? "May hold documents you made in \(row.app.name)." : nil
     }
@@ -259,7 +277,7 @@ public final class DebloatModel {
 
     /// "Also used by Xcode-beta": runtimes belong to CoreSimulator, which every installed Xcode shares (security 10).
     func runtimeNote(_ row: DebloatApp) -> String? {
-        let others = allApps.filter { $0.url != row.app.url && profiles.profile(for: $0.bundleIdentifier)?.simulatorRuntimes == true }
+        let others = allApps.filter { $0.url != row.app.url && hasRuntimes($0) }
         return others.isEmpty ? nil : "Also used by \(others.map(\.name).joined(separator: ", "))"
     }
 
@@ -331,7 +349,7 @@ public final class DebloatModel {
         var jobs: [UninstallJob] = []
         var rows: [TrashSheetRow] = []
         var notes: [String] = []
-        var runtimes: [(xcode: InstalledApp, runtimes: [SimRuntime])] = []
+        var runtimes: [RuntimeStep] = []
         var administratorItems = 0
         var breaksDeveloperTools = false
         // A shared folder ticked in two rows goes once, with the first app (review 5).
@@ -344,8 +362,11 @@ public final class DebloatModel {
             rows.append(TrashSheetRow(url: plan.app.url, bytes: plan.appMeasurement.allocated))
             rows += leftovers.map { TrashSheetRow(url: $0.url, bytes: $0.measurement.allocated) }
             administratorItems += leftovers.filter(\.needsAdministrator).count + (Self.isOwnedBySystem(plan.app.url) ? 1 : 0)
-            let fresh = runtimesChosen(row) ? row.runtimes.filter { seenRuntimes.insert($0.id).inserted } : []
-            if !fresh.isEmpty { runtimes.append((row.app, fresh)) }
+            // Every Xcode gets its step, runtimes ticked or not: it is checked and listed again before it goes (review 2, 2).
+            if hasRuntimes(row.app) {
+                let fresh = runtimesChosen(row) ? row.runtimes.filter { seenRuntimes.insert($0.id).inserted } : []
+                runtimes.append(RuntimeStep(xcode: row.app, listed: row.runtimes, runtimes: fresh))
+            }
             breaksDeveloperTools = breaksDeveloperTools || pointsInside(row.app.url)
             var labels: [String] = []
             for label in plan.bundleLaunchdLabels + leftovers.compactMap(\.launchdLabel) where !labels.contains(label) { labels.append(label) }
@@ -353,16 +374,29 @@ public final class DebloatModel {
             if leftovers.contains(where: { $0.url.path.contains("/private/var/db/receipts/") }) {
                 notes.append("Removes the package receipts of \(plan.app.name), so macOS no longer lists it as installed.")
             }
-            notes += plan.notes
+            // What stays is shown in the list, not as something that happens (review 2, 10).
+            notes += plan.notes.filter { !$0.hasPrefix(AppleProfile.Kept.notePrefix) }
         }
         // In the order they happen (review 3).
         let names = chosenRows.map(\.app.name)
-        notes.insert("Asks \(Self.list(names)) to quit first, if \(names.count == 1 ? "it's" : "they're") open.", at: 0)
-        if !runtimes.isEmpty {
-            let all = runtimes.flatMap(\.runtimes)
+        var first = ["Asks \(Self.list(names)) to quit first, if \(names.count == 1 ? "it's" : "they're") open."]
+        let all = runtimes.flatMap(\.runtimes)
+        if !all.isEmpty {
             let bytes = all.reduce(0) { $0 + $1.bytes }
-            notes.insert("Then deletes \(all.count == 1 ? "1 simulator runtime" : "\(all.count) simulator runtimes") (\(all.map(\.name).joined(separator: ", ")), \(bytes.formattedBytes)) with Xcode's own tool, which shuts down any simulator still running. They can't go to the Trash.", at: 1)
+            first.append("Then deletes \(all.count == 1 ? "1 simulator runtime" : "\(all.count) simulator runtimes") (\(all.map(\.name).joined(separator: ", ")), \(bytes.formattedBytes)) with Xcode's own tool, which shuts down any simulator still running. They can't go to the Trash.")
         }
+        // Review 2, 4: the runtimes left unticked stay, and the sheet says so.
+        var staying: [String: UInt64] = [:]
+        for step in runtimes { for runtime in step.listed where !seenRuntimes.contains(runtime.id) { staying[runtime.id] = runtime.bytes } }
+        if !staying.isEmpty {
+            let xcodes = runtimes.map(\.xcode.url)
+            let others = allApps.filter { !xcodes.contains($0.url) && hasRuntimes($0) }.map(\.name)
+            let bytes = staying.values.reduce(0, +).formattedBytes
+            first.append(others.isEmpty
+                ? "The simulator runtimes left unticked (\(bytes)) stay on this Mac: once \(Self.list(runtimes.map(\.xcode.name))) \(runtimes.count == 1 ? "is" : "are") gone, nothing can delete them."
+                : "The simulator runtimes left unticked (\(bytes)) stay on this Mac for \(Self.list(others)).")
+        }
+        notes.insert(contentsOf: first, at: 0)
         if administratorItems > 0 && canUseAdministrator {
             notes.append("macOS asks for your administrator password for \(administratorItems == 1 ? "1 item" : "\(administratorItems) items") owned by the system.")
             if !hardcore.isOn {
@@ -387,28 +421,50 @@ public final class DebloatModel {
         var notMoved: [URL: String] = [:]
         var kept: [URL: String] = [:]
         var runtimesDeleted: [InstalledApp] = []
-        for (xcode, runtimes) in pending.runtimes {
+        var deleted = Set<String>()
+        for step in pending.runtimes {
+            let xcode = step.xcode
             // The uninstaller's cheap checks first, since deleted runtimes can't come back: an Xcode replaced since
             // the list (an App Store update) or still open keeps everything (review 3, 8). Quitting it first also
             // closes Simulator before the delete shuts down the simulators.
-            var skipped: UninstallError?
+            var skipped: String?
             if xcode.identity == nil || FileIdentity(url: xcode.url) != xcode.identity {
-                skipped = .changedSincePlan(xcode.url)
+                skipped = UninstallError.changedSincePlan(xcode.url).localizedDescription
             } else if await !runtimeTool.quit(xcode) {
-                skipped = .stillRunning(xcode.name)
+                skipped = UninstallError.stillRunning(xcode.name).localizedDescription
+            } else {
+                // Listed again now that Xcode is closed: a runtime that finished downloading since the sheet opened
+                // would stay for good (review 2, 2). What an earlier Xcode deleted in this run is gone from both lists.
+                let expected = Set(step.listed.map(\.id)).subtracting(deleted)
+                do {
+                    if Set(try await runtimeTool.list(xcode: xcode.url).map(\.id)).subtracting(deleted) != expected {
+                        skipped = "its simulator runtimes changed after the list was made. Scan Again, then try again."
+                    }
+                } catch {
+                    skipped = "its simulator runtimes couldn't be listed again. Scan Again, then try again."
+                }
             }
             if let skipped {
                 kept[xcode.url] = "\(xcode.name) was skipped."
-                messages.append("\(xcode.name) was skipped: \(skipped.localizedDescription)")
+                messages.append("\(xcode.name) was skipped: \(skipped)")
                 continue
             }
+            var done: [SimRuntime] = []
             do {
-                for runtime in runtimes { try await runtimeTool.delete(runtime, xcode: xcode.url) }
-                runtimesDeleted.append(xcode)
+                for runtime in step.runtimes {
+                    try await runtimeTool.delete(runtime, xcode: xcode.url)
+                    done.append(runtime)
+                    deleted.insert(runtime.id)
+                }
+                if !done.isEmpty { runtimesDeleted.append(xcode) }
             } catch {
                 // Without Xcode's CoreSimulator nothing could delete them later: they would stay in SIP-restricted AssetsV2.
-                kept[xcode.url] = "its simulator runtimes couldn't be deleted."
-                messages.append("Simulator runtimes couldn't be deleted, so \(xcode.name) was kept: without it, nothing can delete them.")
+                // What did go is gone for good, and the message says so (review 2, 3).
+                let left = step.runtimes.filter { !done.contains($0) }
+                kept[xcode.url] = done.isEmpty ? "its simulator runtimes couldn't be deleted." : "some of its simulator runtimes couldn't be deleted."
+                messages.append(done.isEmpty
+                    ? "Simulator runtimes couldn't be deleted, so \(xcode.name) was kept: without it, nothing can delete them."
+                    : "Deleted \(Self.describe(done)) for good, but \(Self.describe(left)) couldn't be deleted, so \(xcode.name) was kept: without it, nothing can delete \(left.count == 1 ? "it" : "them").")
             }
         }
         let jobs = pending.jobs.filter { kept[$0.plan.app.url] == nil }
@@ -435,6 +491,7 @@ public final class DebloatModel {
         }
         confirmation?.report = batch.report
         confirmation?.notMoved = notMoved
+        confirmation?.brokeDeveloperTools = jobs.contains { gone.contains($0.plan.app.url) && pointsInside($0.plan.app.url) }
         confirmation?.message = messages.isEmpty ? nil : messages.joined(separator: "\n")
         // Removed apps leave the list; the rest are planned again, since their content changed.
         ticked.subtract(gone)
@@ -442,6 +499,16 @@ public final class DebloatModel {
     }
 
     // MARK: Helpers
+
+    /// An app whose runtimes CoreSimulator lists: Xcode.
+    private func hasRuntimes(_ app: InstalledApp) -> Bool {
+        profiles.profile(for: app.bundleIdentifier)?.simulatorRuntimes == true
+    }
+
+    /// "iOS 26.5 and watchOS 26.5 (12.43 GB)".
+    private static func describe(_ runtimes: [SimRuntime]) -> String {
+        "\(list(runtimes.map(\.name))) (\(runtimes.reduce(0) { $0 + $1.bytes }.formattedBytes))"
+    }
 
     private func pointsInside(_ bundle: URL) -> Bool {
         // xcode-select writes an absolute path. No standardizing: NSString's drops /private from paths that exist.

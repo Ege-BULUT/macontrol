@@ -68,6 +68,11 @@ import Testing
         ("Contacts", catalog(item("~/Library/Application Support/AddressBook/Sources"))),
         ("Notes' group container", catalog(item("~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"))),
         ("the network configuration (D7)", catalog(item("/Library/Preferences/SystemConfiguration/preferences.plist"))),
+        // Review 2, 11.
+        ("Safari's container (D4)", catalog(item("~/Library/Containers/com.apple.Safari/Data"))),
+        ("a launch daemon", catalog(item("/Library/LaunchDaemons/com.apple.x.plist"))),
+        ("a launch agent", catalog(item("/Library/LaunchAgents/com.apple.x.plist"))),
+        ("the user's launch agents", catalog(item("~/Library/LaunchAgents/com.apple.x.plist"))),
     ]
 
     @Test(arguments: brokenRules.indices)
@@ -161,6 +166,11 @@ import Testing
         // Root-owned content is the helper's: selected by its evidence, admin-routed.
         let caches = try #require(plan.leftover("Library/Developer/CoreSimulator/Caches", in: fx.root))
         #expect(caches.needsAdministrator && caches.note == nil && caches.evidence.preselected)
+        // Review 2, 1: CoreSimulator holds the only tool that deletes simulator runtimes. The Uninstall screen has no
+        // runtime step, so the plan never preselects it, with or without the helper.
+        let frameworks = try #require(plan.leftover("Library/Developer/PrivateFrameworks", in: fx.root))
+        #expect(frameworks.note == SimRuntimeTool.heldNote && !frameworks.isPreselected)
+        #expect(plan.leftovers.filter { $0.note?.contains(SimRuntimeTool.heldNote) == true }.count == 1)
         // Restricted content has no checkbox: it is a note, and the receipts are leftovers, not notes.
         #expect(plan.notes.contains { $0.hasPrefix("Kept by macOS: MobileDeviceDevelopment") })
         #expect(!plan.notes.contains { $0.contains("com.apple.pkg.Xcode") })

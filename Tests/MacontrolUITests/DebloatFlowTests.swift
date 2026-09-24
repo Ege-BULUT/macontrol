@@ -27,7 +27,9 @@ nonisolated final class DebloatLog: @unchecked Sendable {
 /// quit, remove and CoreSimulator's tool. `remove` really moves items into the fixture's Trash folder, so tests assert
 /// on disk. Nothing outside the temporary folder is touched, and no app is registered with LaunchServices.
 final class DebloatFixture {
-    static let runtimes = [("9AC467AB-22DE-48A1-89DA-CB942B60CE83", 8_494_282_293), ("F8C76A0E-1793-436F-847B-57A0501E798E", 3_935_033_546)]
+    nonisolated static let runtimes = [
+        ("9AC467AB-22DE-48A1-89DA-CB942B60CE83", 8_494_282_293, "iOS"), ("F8C76A0E-1793-436F-847B-57A0501E798E", 3_935_033_546, "watchOS"),
+    ]
 
     let tmp: TemporaryDirectory
     let log = DebloatLog()
@@ -39,6 +41,8 @@ final class DebloatFixture {
     nonisolated(unsafe) var failingRuntime: String?
     /// `simctl runtime list` ends with this status.
     nonisolated(unsafe) var listStatus: Int32 = 0
+    /// What `simctl runtime list` shows, read at each call (a download can finish between two).
+    nonisolated(unsafe) var listed = DebloatFixture.runtimes
     /// These apps don't quit.
     nonisolated(unsafe) var stayRunning: Set<String> = []
     /// The administrator dialog was cancelled: every remove fails and nothing moves.
@@ -53,6 +57,7 @@ final class DebloatFixture {
             "root/Library/Developer/CoreSimulator/Caches/dyld/x", "root/Library/Developer/PrivateFrameworks/CoreSimulator.framework/x",
             "home/Library/Developer/Xcode/DerivedData/Project/x", "home/Library/Developer/CoreSimulator/Devices/UUID/x",
             "root/private/var/db/receipts/com.apple.pkg.Xcode.plist",
+            "root/Library/Apple/System/Library/Receipts/com.apple.pkg.MobileDeviceDevelopment.plist",
             "root/Library/Application Support/GarageBand/Instrument Library/a.caf", "root/Library/Audio/Apple Loops/Apple/loop.caf",
             "home/Library/Containers/com.apple.garageband10/Data/x", "home/Library/Caches/com.apple.garageband10/x",
         ] {
@@ -101,21 +106,19 @@ final class DebloatFixture {
         )
     }
 
-    /// CoreSimulator's tool: lists the two captured runtimes, records Xcode's quit and each delete.
+    /// CoreSimulator's tool: lists `listed` (the two captured runtimes), records Xcode's quit and each delete.
     var runtimeTool: SimRuntimeTool {
         let log = log
-        let failing = failingRuntime
-        let listStatus = listStatus
-        let json = "{" + Self.runtimes.map { id, bytes in
-            #""\#(id)": {"deletable": true, "identifier": "\#(id)", "sizeBytes": \#(bytes), "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-26-5", "version": "26.5"}"#
-        }.joined(separator: ",") + "}"
         return SimRuntimeTool(
             run: { _, arguments, _ in
                 guard arguments.first == "runtime", arguments.count == 3, arguments[1] == "delete" else {
-                    return (listStatus, listStatus == 0 ? Data(json.utf8) : Data())
+                    let json = "{" + self.listed.map { id, bytes, platform in
+                        #""\#(id)": {"deletable": true, "identifier": "\#(id)", "sizeBytes": \#(bytes), "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.\#(platform)-26-5", "version": "26.5"}"#
+                    }.joined(separator: ",") + "}"
+                    return (self.listStatus, self.listStatus == 0 ? Data(json.utf8) : Data())
                 }
                 log.record(.runtime(arguments[2]))
-                return (arguments[2] == failing ? 1 : 0, Data())
+                return (arguments[2] == self.failingRuntime ? 1 : 0, Data())
             },
             quit: { app in
                 log.record(.quit(app.name))
@@ -195,10 +198,13 @@ final class DebloatFixture {
         #expect(model.confirmation?.message == nil)
     }
 
-    @Test func aRuntimeFailureKeepsXcodeAndTheOthersGoOn() async throws {
+    /// Runtimes go largest first: iOS 26.5, then watchOS 26.5. Review 2, 3: what was deleted before the failure is
+    /// named, since it is gone for good.
+    @Test(arguments: [0, 1])
+    func aRuntimeFailureKeepsXcodeAndTheOthersGoOn(failing: Int) async throws {
         let fx = try DebloatFixture()
-        fx.failingRuntime = DebloatFixture.runtimes[1].0
-        let model = try await fx.model()
+        fx.failingRuntime = DebloatFixture.runtimes[failing].0
+        let model = try await fx.model(xcodeSelect: fx.xcode.path + "/Contents/Developer")
 
         try await fx.run(model)
 
@@ -207,8 +213,42 @@ final class DebloatFixture {
         #expect(!fx.exists(fx.garageBand))
         #expect(fx.uninstallCalls == 1)
         let confirmation = try #require(model.confirmation)
-        #expect(confirmation.message?.contains("Simulator runtimes couldn't be deleted, so Xcode was kept") == true)
-        #expect(confirmation.notMoved[fx.xcode] != nil)
+        let message = try #require(confirmation.message)
+        if failing == 0 {
+            #expect(message == "Simulator runtimes couldn't be deleted, so Xcode was kept: without it, nothing can delete them.")
+            #expect(confirmation.notMoved[fx.xcode] == "its simulator runtimes couldn't be deleted.")
+        } else {
+            #expect(message.hasPrefix("Deleted iOS 26.5 (") && message.contains(") for good, but watchOS 26.5 ("), "\(message)")
+            #expect(message.hasSuffix(") couldn't be deleted, so Xcode was kept: without it, nothing can delete it."), "\(message)")
+            #expect(confirmation.notMoved[fx.xcode] == "some of its simulator runtimes couldn't be deleted.")
+        }
+        // Xcode stayed, so git and clang still work: no reset line in the result (review 2, 9).
+        #expect(confirmation.breaksDeveloperTools && !confirmation.showsResetCommand)
+    }
+
+    /// Review 2, 2: CoreSimulator lists again after the quit. A runtime that finished downloading since the sheet
+    /// opened, or a list that fails now, keeps Xcode and deletes nothing, with runtimes ticked or not.
+    @Test(arguments: ["added", "added to none", "list fails"])
+    func runtimesThatChangedAfterTheListKeepXcode(change: String) async throws {
+        let fx = try DebloatFixture()
+        if change == "added to none" { fx.listed = [] }
+        // Without the helper: v1 skips an app whose root-owned items are chosen, which would keep Xcode for another reason.
+        let model = try await fx.model()
+        let row = try #require(model.row(fx.xcode))
+        model.setTicked(true, row)
+        if change != "added to none" { model.setRuntimesChosen(true, row) }
+        model.beginRemove()
+        if change == "list fails" { fx.listStatus = 1 } else { fx.listed.append(("0C0FFEE0-1111-2222-3333-444455556666", 7_000_000_000, "iOS")) }
+
+        await model.confirm()
+
+        #expect(fx.runtimeDeletes == 0 && fx.firstXcodeEvent() == nil, "\(fx.log.events)")
+        #expect(fx.exists(fx.xcode) && fx.exists("root/Library/Developer/PrivateFrameworks"))
+        let message = try #require(model.confirmation?.message)
+        #expect(message.hasPrefix(change == "list fails"
+            ? "Xcode was skipped: its simulator runtimes couldn't be listed again."
+            : "Xcode was skipped: its simulator runtimes changed after the list was made."), "\(message)")
+        #expect(model.confirmation?.notMoved[fx.xcode] == "Xcode was skipped.")
     }
 
     /// Security review 4: a cancelled administrator dialog touches no leftover, in both modes.
@@ -222,8 +262,10 @@ final class DebloatFixture {
 
         #expect(fx.exists(fx.xcode) && fx.exists(fx.garageBand))
         #expect(fx.exists("home/Library/Developer/Xcode/DerivedData") && fx.exists("home/Library/Containers/com.apple.garageband10"))
-        let removed = fx.log.events.compactMap { if case .remove(let paths) = $0 { paths } else { nil } }.flatMap { $0 }
-        #expect(Set(removed) == [fx.xcode.path, fx.garageBand.path], "a leftover was sent while its bundle stayed")
+        // The disk checks above are the rule. What was sent differs by design: v1 sends leftovers after their bundle
+        // is gone; with the helper (T-0075) one batch carries them, each waiting for its bundle (review 2, 5).
+        let removed = Set(fx.log.events.compactMap { if case .remove(let paths) = $0 { paths } else { nil } }.flatMap { $0 })
+        #expect(removed.isSuperset(of: [fx.xcode.path, fx.garageBand.path]), "\(removed)")
         #expect(model.confirmation?.message == "Simulator runtimes were deleted; Xcode is still installed.")
     }
 
@@ -258,6 +300,11 @@ final class DebloatFixture {
         let confirmation = try #require(model.confirmation)
         #expect(confirmation.breaksDeveloperTools == expected)
         #expect(confirmation.notes.contains(DebloatModel.developerToolsNote) == expected)
+        #expect(confirmation.showsResetCommand == expected)
+        // Review 2, 9: the Copy line stays in the result once Xcode is gone, when git and clang are broken.
+        await model.confirm()
+        #expect(model.confirmation?.report != nil && !fx.exists(fx.xcode))
+        #expect(model.confirmation?.showsResetCommand == expected)
     }
 
     /// Review 1: "couldn't list" is not "there are none". Xcode can't be ticked, and the others still go.
@@ -320,9 +367,36 @@ final class DebloatFixture {
         model.setRuntimesChosen(true, row)
         model.beginRemove()
         let notes = try #require(model.confirmation?.notes)
-        #expect(notes.count >= 2)
+        try #require(notes.count >= 2)
         #expect(notes[0].hasPrefix("Asks Xcode to quit first"))
         #expect(notes[1].hasPrefix("Then deletes 2 simulator runtimes") && notes[1].contains("shuts down any simulator still running"))
+    }
+
+    /// Review 2, 4: the runtimes left unticked (the Trash-mode default) stay, and the sheet says so. Review 2, 10:
+    /// "Kept by macOS" is shown in the list, not as something that happens.
+    @Test func theSheetSaysWhichRuntimesStay() async throws {
+        let fx = try DebloatFixture()
+        let model = try await fx.model()
+        let row = try #require(model.row(fx.xcode))
+        #expect(row.plan?.notes.contains { $0.hasPrefix(AppleProfile.Kept.notePrefix) } == true)
+        model.setTicked(true, row)
+        model.beginRemove()
+        let notes = try #require(model.confirmation?.notes)
+        // Right after the quit, in the order of the run.
+        let stay = notes.count >= 2 ? notes[1] : ""
+        #expect(stay.hasPrefix("The simulator runtimes left unticked (") && stay.hasSuffix(") stay on this Mac: once Xcode is gone, nothing can delete them."), "\(notes)")
+        #expect(!notes.contains { $0.hasPrefix(AppleProfile.Kept.notePrefix) })
+        model.confirmation = nil
+
+        model.setRuntimesChosen(true, row)
+        model.beginRemove()
+        #expect(model.confirmation?.notes.contains { $0.contains("left unticked") } == false)
+
+        try fx.app("Xcode-beta", "com.apple.dt.Xcode")
+        let withBeta = try await fx.model(appStore: ["Xcode", "Xcode-beta"])
+        withBeta.setTicked(true, try #require(withBeta.row(fx.xcode)))
+        withBeta.beginRemove()
+        #expect(withBeta.confirmation?.notes.contains { $0.hasSuffix(") stay on this Mac for Xcode-beta.") } == true)
     }
 
     /// Review 4 (D12): the Trash-mode message promises History only for what History can put back.

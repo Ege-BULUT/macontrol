@@ -76,17 +76,20 @@ import Testing
         #expect(runtimes.reduce(0) { $0 + $1.bytes } == 12_429_315_839)
     }
 
-    /// Only deletable images whose identifier is a UUID: nothing like `all` or an option can reach `delete`.
-    @Test func dropsWhatCantBeDeletedByUUID() throws {
-        let entries = [
-            #""a": {"deletable": false, "identifier": "9AC467AB-22DE-48A1-89DA-CB942B60CE83", "sizeBytes": 1}"#,
-            #""b": {"deletable": true, "identifier": "all", "sizeBytes": 1}"#,
-            #""c": {"deletable": true, "identifier": "--notUsedSinceDays", "sizeBytes": 1}"#,
-            #""d": {"deletable": true, "identifier": "F8C76A0E-1793-436F-847B-57A0501E798E"}"#,
-        ]
-        #expect(try SimRuntimeTool.parse(Data("{\(entries.joined(separator: ","))}".utf8)) == [])
-        #expect(throws: SimRuntimeError.unreadable) { try SimRuntimeTool.parse(Data("not json".utf8)) }
-        #expect(throws: SimRuntimeError.unreadable) { try SimRuntimeTool.parse(Data("[1, 2]".utf8)) }
+    /// A runtime that can't be deleted is left out. Nothing like `all` or an option can reach `delete`, and a
+    /// deletable entry this can't read fails the whole list (review 2, 2): skipped, it would stay once Xcode goes.
+    @Test(arguments: [
+        #""b": {"deletable": true, "identifier": "all", "sizeBytes": 1}"#,
+        #""c": {"deletable": true, "identifier": "--notUsedSinceDays", "sizeBytes": 1}"#,
+        #""d": {"deletable": true, "identifier": "F8C76A0E-1793-436F-847B-57A0501E798E"}"#,
+        #""e": {"identifier": "F8C76A0E-1793-436F-847B-57A0501E798E", "sizeBytes": 1}"#,
+        "not json", "[1, 2]",
+    ])
+    func whatItCantReadFailsTheList(entry: String) throws {
+        let fixed = #""a": {"deletable": false, "identifier": "9AC467AB-22DE-48A1-89DA-CB942B60CE83", "sizeBytes": 1}"#
+        #expect(try SimRuntimeTool.parse(Data("{\(fixed)}".utf8)) == [])
+        let output = entry.hasPrefix("\"") ? "{\(fixed),\(entry)}" : entry
+        #expect(throws: SimRuntimeError.unreadable) { try SimRuntimeTool.parse(Data(output.utf8)) }
     }
 
     @Test func listAndDeleteRunCoreSimulatorsBinaryWithAnArgumentArray() async throws {
@@ -138,11 +141,10 @@ import Testing
     }
 
     /// Review 7: a tool that hangs is stopped at the limit and counts as failed. Runs only /bin/sleep and /usr/bin/true.
+    /// No time bound: under load it failed a passing run, and `sleep 20` exits 0 without the limit (review 2, 7).
     @Test func aHungToolIsStoppedAndFails() async {
-        let started = ContinuousClock.now
         let hung = await SimRuntimeTool.runner(timeout: .milliseconds(300))(URL(fileURLWithPath: "/bin/sleep"), ["20"], [:])
         #expect(hung.status != 0)
-        #expect(ContinuousClock.now - started < .seconds(10))
         let quick = await SimRuntimeTool.runner(timeout: .seconds(10))(URL(fileURLWithPath: "/usr/bin/true"), [], [:])
         #expect(quick.status == 0)
     }

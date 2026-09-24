@@ -153,7 +153,7 @@ private struct AppBlock: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.app.name).font(.body.weight(.medium))
                 if let failure = row.failure {
-                    Label(failure, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Label(failure, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary).lineLimit(3)
                 } else if let blocker = row.plan?.blocker {
                     Label(blocker, systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if isUnverified {
@@ -208,7 +208,7 @@ private struct AppBlock: View {
             )
         }
         ForEach(plan.notes, id: \.self) { note in
-            let kept = note.hasPrefix("Kept by macOS")
+            let kept = note.hasPrefix(AppleProfile.Kept.notePrefix)
             Label(note, systemImage: kept ? "lock.fill" : "info.circle")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -326,7 +326,7 @@ struct DebloatSheet: View {
                     onConfirm: { Task { await model.confirm() } },
                     onClose: { model.confirmation = nil }
                 )
-                if confirmation.breaksDeveloperTools && confirmation.report == nil {
+                if confirmation.showsResetCommand {
                     Divider()
                     HStack(spacing: 10) {
                         Image(systemName: "terminal").foregroundStyle(.secondary)

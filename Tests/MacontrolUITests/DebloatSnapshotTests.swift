@@ -48,6 +48,12 @@ import Testing
             #expect(model.confirmation?.breaksDeveloperTools == true)
             try Self.writeSheet(DebloatSheet(model: model), "debloat-confirm-\(hardcore ? "hardcore" : "trash")")
         }
+        // The Trash-mode default: runtimes unticked, and the sheet says they stay (review 2, 4).
+        let model = DebloatModel.demo()
+        model.setTicked(true, model.row(DemoDebloat.xcode.url)!)
+        model.beginRemove()
+        #expect(model.confirmation?.notes.contains { $0.hasPrefix("The simulator runtimes left unticked") } == true)
+        try Self.writeSheet(DebloatSheet(model: model), "debloat-confirm-trash-default")
     }
 
     @Test func resultRenders() async throws {

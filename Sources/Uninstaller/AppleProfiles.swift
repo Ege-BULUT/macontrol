@@ -27,6 +27,8 @@ public struct AppleProfile: Decodable, Sendable {
 
     /// Something the app installed where even root can't change it (SIP), shown as "Kept by macOS" when it exists.
     public struct Kept: Decodable, Sendable {
+        /// How the plan's note for it starts.
+        public static let notePrefix = "Kept by macOS: "
         public var name: String
         public var path: String
     }
@@ -111,18 +113,18 @@ public struct AppleProfiles: Decodable, Sendable {
     // MARK: Validation (section 4.3)
 
     /// The `/Library` folders the privileged helper may act in (section 3.5).
-    static let systemFolders = [
-        "Application Support", "Audio", "Caches", "Developer", "LaunchAgents", "LaunchDaemons", "Logs", "Preferences",
-        "PrivilegedHelperTools",
-    ]
+    /// Not LaunchAgents or LaunchDaemons: a job plist is found and booted out by the launchd search, never trashed as
+    /// profile content while its job runs (review 2, 11).
+    static let systemFolders = ["Application Support", "Audio", "Caches", "Developer", "Logs", "Preferences", "PrivilegedHelperTools"]
 
     /// Never listed, whatever the file says: iCloud and cloud folders (section 4.5), the personal databases that
-    /// always go to the Trash (D4), and the live network configuration root must not touch (D7).
+    /// always go to the Trash (D4), the live network configuration root must not touch (D7), and the user's launchd
+    /// jobs (as above).
     static let refusedRoots = [
         "~/Library/Mobile Documents", "~/Library/CloudStorage", "~/Library/Application Support/MobileSync",
         "~/Library/Application Support/AddressBook", "~/Library/Calendars", "~/Library/Safari",
-        "~/Library/Containers/com.apple.Notes", "~/Library/Group Containers/group.com.apple.notes",
-        "/Library/Preferences/SystemConfiguration",
+        "~/Library/Containers/com.apple.Safari", "~/Library/Containers/com.apple.Notes",
+        "~/Library/Group Containers/group.com.apple.notes", "~/Library/LaunchAgents", "/Library/Preferences/SystemConfiguration",
     ]
 
     /// Every rule this catalog breaks, one line each. Empty means it may be used.

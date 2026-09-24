@@ -112,6 +112,14 @@ import Uninstaller
         let hardcore = try await fx.model(hardcore: true, administrator: true)
         let (xcode, framework) = try Self.leftover(hardcore, fx.xcode, "Developer/PrivateFrameworks")
         #expect(hardcore.runtimesChosen(xcode) && hardcore.isChosen(framework, of: xcode))
+
+        // Review 2, 1: the plan holds it back for every screen; Debloat lifts that when there are no runtimes.
+        #expect(frameworks.note == SimRuntimeTool.heldNote && !frameworks.isPreselected)
+        fx.listed = []
+        let none = try await fx.model(administrator: true)
+        let (bare, framework2) = try Self.leftover(none, fx.xcode, "Developer/PrivateFrameworks")
+        none.setTicked(true, bare)
+        #expect(bare.runtimes.isEmpty && none.note(for: framework2, of: bare) == nil && none.isChosen(framework2, of: bare))
     }
 
     /// Review 6: with Xcode-beta installed, what every Xcode shares is held back like the runtimes.

@@ -226,7 +226,9 @@ struct LeftoverFinder {
         let items = profile.items.compactMap { item -> LeftoverCandidate? in
             let url = url(of: item.path)
             guard FileSystem.exists(url), !isRestricted(url) else { return nil }
-            let note = [sharedNote(item.sharedWith), copiesNote, item.note, unverified].compactMap { $0 }.joined(separator: " ")
+            // First, so Debloat can take it off again (review 2, 1).
+            let held = AppleProfiles.overlaps(item.path, SimRuntimeTool.simctl.path) ? SimRuntimeTool.heldNote : nil
+            let note = [held, sharedNote(item.sharedWith), copiesNote, item.note, unverified].compactMap { $0 }.joined(separator: " ")
             return candidate(url, .appleProfile, note: note.isEmpty ? nil : note)
         }
         let receipts = systemRoot.appendingPathComponent("private/var/db/receipts")
@@ -239,7 +241,7 @@ struct LeftoverFinder {
     private func keptByMacOS(_ profile: AppleProfile) -> [String] {
         let restrictedItems = profile.items.map { url(of: $0.path) }.filter { FileSystem.exists($0) && isRestricted($0) }.map(\.lastPathComponent)
         let kept = profile.keptByMacOS.filter { FileSystem.exists(url(of: $0.path)) }.map(\.name)
-        return (restrictedItems + kept).map { "Kept by macOS: \($0). It sits where even an administrator can't change it." }
+        return (restrictedItems + kept).map { "\(AppleProfile.Kept.notePrefix)\($0). It sits where even an administrator can't change it." }
     }
 
     /// "Also used by Logic Pro, which is installed." or "Also used by Logic Pro and MainStage (not installed)."

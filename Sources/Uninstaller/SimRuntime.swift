@@ -29,6 +29,9 @@ public enum SimRuntimeError: Error, Hashable {
 /// script sets: `DEVELOPER_DIR` of the Xcode being removed. Runs as the user; tests inject the runner.
 public struct SimRuntimeTool: Sendable {
     public static let simctl = URL(fileURLWithPath: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl")
+    /// The plan's note on the profile item that holds this tool. Every screen that shows the plan holds the item back
+    /// with it, since only Debloat deletes the runtimes first; Debloat replaces it (review 2, 1).
+    public static let heldNote = "Holds the only tool that deletes simulator runtimes. To delete them too, remove Xcode in Debloat."
 
     /// Runs `tool` with an argument array and exactly `environment`; returns its exit status and standard output.
     public typealias Runner = @Sendable (_ tool: URL, _ arguments: [String], _ environment: [String: String]) async -> (status: Int32, output: Data)
@@ -63,15 +66,18 @@ public struct SimRuntimeTool: Sendable {
         guard result.status == 0 else { throw SimRuntimeError.failed(result.status) }
     }
 
-    /// The deletable runtimes in `simctl runtime list -j`, largest first. An entry whose identifier is not a UUID is
-    /// dropped, so nothing but a UUID reaches `delete`.
+    /// The deletable runtimes in `simctl runtime list -j`, largest first. An entry that doesn't say whether it is
+    /// deletable, or a deletable one without a UUID identifier and a size, fails the whole list: a runtime skipped
+    /// here would stay for good once Xcode goes (review 2, 2). Nothing but a UUID reaches `delete`.
     static func parse(_ output: Data) throws -> [SimRuntime] {
         guard let images = try? JSONSerialization.jsonObject(with: output) as? [String: [String: Any]] else {
             throw SimRuntimeError.unreadable
         }
-        return images.values.compactMap { image -> SimRuntime? in
-            guard image["deletable"] as? Bool == true, let id = image["identifier"] as? String, UUID(uuidString: id) != nil,
-                  let bytes = (image["sizeBytes"] as? NSNumber)?.uint64Value else { return nil }
+        return try images.values.compactMap { image -> SimRuntime? in
+            guard let deletable = image["deletable"] as? Bool else { throw SimRuntimeError.unreadable }
+            guard deletable else { return nil }
+            guard let id = image["identifier"] as? String, UUID(uuidString: id) != nil,
+                  let bytes = (image["sizeBytes"] as? NSNumber)?.uint64Value else { throw SimRuntimeError.unreadable }
             // com.apple.CoreSimulator.SimRuntime.iOS-26-5 → iOS
             let runtime = (image["runtimeIdentifier"] as? String)?.split(separator: ".").last?.split(separator: "-").first
             let name = [runtime.map(String.init), image["version"] as? String].compactMap { $0 }.joined(separator: " ")

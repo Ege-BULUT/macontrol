@@ -45,7 +45,7 @@ enum DemoDebloat {
         DebloatApp(app: xcode, plan: UninstallPlan(app: xcode, appMeasurement: size(3_760_000_000), leftovers: [
             leftover("/Library/Developer/CoreSimulator/Caches", .appleProfile, 6_050_000_000, admin: true),
             leftover("~/Library/Developer/Xcode/DerivedData", .appleProfile, 410_000_000),
-            leftover("/Library/Developer/PrivateFrameworks", .appleProfile, 121_000_000, admin: true),
+            leftover("/Library/Developer/PrivateFrameworks", .appleProfile, 121_000_000, admin: true, note: SimRuntimeTool.heldNote),
             leftover("/Library/Developer/DeviceKit", .appleProfile, 64_000_000, admin: true),
             leftover("/Library/Developer/CoreDevice", .appleProfile, 22_000_000, admin: true),
             leftover("/Library/Developer/DeveloperDiskImages", .appleProfile, 18_000_000, admin: true),
@@ -56,7 +56,7 @@ enum DemoDebloat {
             leftover("~/Library/Caches/com.apple.dt.Xcode", .bundleIdentifier, 182_000_000),
             leftover("~/Library/Preferences/com.apple.dt.Xcode.plist", .bundleIdentifier, 61_000),
         ], blocker: nil, notes: [
-            "Kept by macOS: MobileDeviceDevelopment. It sits where even an administrator can't change it.",
+            "\(AppleProfile.Kept.notePrefix)MobileDeviceDevelopment. It sits where even an administrator can't change it.",
         ]), runtimes: [
             SimRuntime(id: "9AC467AB-22DE-48A1-89DA-CB942B60CE83", name: "iOS 26.5", bytes: 8_494_282_293),
             SimRuntime(id: "F8C76A0E-1793-436F-847B-57A0501E798E", name: "watchOS 26.5", bytes: 3_935_033_546),
