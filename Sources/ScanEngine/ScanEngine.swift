@@ -79,14 +79,15 @@ public final class ScanEngine: Sendable {
         self.options = options
     }
 
-    /// Streams progress (at most about 10 events a second) and previews (about 4 a second, from the first
-    /// quarter second on), then exactly one `.completed` tree.
+    /// Streams progress (at most about 10 events a second), with `previews` also previews (about 4 a second,
+    /// from the first quarter second on), then exactly one `.completed` tree. The walk waits while a preview is
+    /// built, so only a consumer that draws them asks for them: `mcscan` times the walk without (T-0063).
     /// Ending the stream or cancelling the consumer stops the walk.
     ///
     /// Scanning "/" or /System/Volumes/Data scans the startup disk as the user sees it: the Data volume is
     /// walked once and its entries are shown at their firmlinked paths under a "/" root, plus the Data-only
     /// folders under /System/Volumes/Data (F-0031, F-0005).
-    public func scan(_ root: URL) -> AsyncThrowingStream<ScanEvent, any Error> {
+    public func scan(_ root: URL, previews: Bool = false) -> AsyncThrowingStream<ScanEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<ScanEvent, any Error>.makeStream()
         let cancellation = Cancellation()
         continuation.onTermination = { _ in cancellation.cancel() }
@@ -96,7 +97,7 @@ public final class ScanEngine: Sendable {
             do {
                 let tree = try Self.buildTree(
                     root, options: options, cancellation: cancellation,
-                    progress: { continuation.yield(.progress($0)) }, preview: { continuation.yield(.preview($0)) }
+                    progress: { continuation.yield(.progress($0)) }, preview: previews ? { continuation.yield(.preview($0)) } : nil
                 )
                 continuation.yield(.completed(tree))
                 continuation.finish()

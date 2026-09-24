@@ -20,19 +20,24 @@ nonisolated enum MapLayoutBuilder {
 
     /// Runs on the cooperative pool, never the main actor; cancelling the calling task stops it.
     @concurrent
-    static func layout(of tree: ScanTree, for key: LayoutKey, firstSeen: [String: Int] = [:]) async throws -> MapLayout {
-        try build(tree, key, firstSeen: firstSeen)
+    static func layout(of tree: ScanTree, for key: LayoutKey, colours: [String: Int] = [:]) async throws -> MapLayout {
+        try build(tree, key, colours: colours)
     }
 
-    /// `firstSeen` is when the scan first showed each name at its top. It fixes those folders' colours, so the
-    /// preview and the finished map keep each one's colour while sizes change rank (T-0063); names it lacks are
-    /// coloured by rank (`MapPalette.slots(firstSeen:)`). Ignored below the scan root.
-    static func build(_ tree: ScanTree, _ key: LayoutKey, firstSeen: [String: Int] = [:]) throws -> MapLayout {
-        let firstSeen = key.focus == ScanTree.root ? firstSeen : [:]
+    /// `colours` is the colour slot a scan gave each name at its top (`MapPalette.ScanColours`), so the preview and
+    /// the finished map keep each folder's colour while sizes change rank (T-0063). Names it lacks are coloured by
+    /// rank. Ignored below the scan root.
+    static func build(_ tree: ScanTree, _ key: LayoutKey, colours: [String: Int] = [:]) throws -> MapLayout {
+        let colours = key.focus == ScanTree.root ? colours : [:]
         return switch key.style {
-        case .sunburst: try sunburst(tree, key, firstSeen)
-        case .treemap: try treemap(tree, key, firstSeen)
+        case .sunburst: try sunburst(tree, key, colours)
+        case .treemap: try treemap(tree, key, colours)
         }
+    }
+
+    /// Colour slots of the scan root's drawn children, in size order.
+    private static func topSlots(_ named: ArraySlice<Int>, _ tree: ScanTree, _ colours: [String: Int]) -> [Int] {
+        named.enumerated().map { offset, child in colours[tree.name(of: child)] ?? MapPalette.slot(for: offset, of: named.count) }
     }
 
     private struct Pending {
@@ -50,7 +55,7 @@ nonisolated enum MapLayoutBuilder {
         return (children[..<cut], Array(children[cut...]))
     }
 
-    static func sunburst(_ tree: ScanTree, _ key: LayoutKey, _ firstSeen: [String: Int]) throws -> MapLayout {
+    static func sunburst(_ tree: ScanTree, _ key: LayoutKey, _ colours: [String: Int]) throws -> MapLayout {
         let radius = MapLayout.chartRadius(in: key.size)
         guard tree.allocatedSize(of: key.focus) > 0, radius > 0 else { return .empty(key) }
         let ringWidth = (1 - MapLayout.holeRadius) / Double(maxDepth)
@@ -78,7 +83,7 @@ nonisolated enum MapLayoutBuilder {
                 cumulative += bytes
                 return .wedge(start: start, end: pending.wedge.start + pending.wedge.span * Double(cumulative) / total)
             }
-            let top = pending.branch == nil ? MapPalette.slots(firstSeen: named.map { firstSeen[tree.name(of: $0)] }) : []
+            let top = pending.branch == nil ? topSlots(named, tree, colours) : []
             for (offset, child) in named.enumerated() {
                 let bytes = tree.allocatedSize(of: child)
                 let branch = pending.branch ?? top[offset]
@@ -101,7 +106,7 @@ nonisolated enum MapLayoutBuilder {
         return MapLayout(key: key, elements: elements, topLevel: topLevel, ringCount: elements.isEmpty ? 0 : deepest + 1)
     }
 
-    static func treemap(_ tree: ScanTree, _ key: LayoutKey, _ firstSeen: [String: Int]) throws -> MapLayout {
+    static func treemap(_ tree: ScanTree, _ key: LayoutKey, _ colours: [String: Int]) throws -> MapLayout {
         let bounds = CGRect(origin: .zero, size: key.size)
         guard tree.allocatedSize(of: key.focus) > 0, bounds.width > 0, bounds.height > 0 else { return .empty(key) }
         let minimumArea = minimumTilePixels / (key.scale * key.scale)
@@ -124,7 +129,7 @@ nonisolated enum MapLayoutBuilder {
             // Entries in squarify order. The folder's own bytes (its directory entries) take their share
             // of the area as an undrawn gap, so every drawn tile keeps exact proportions.
             enum Entry { case child(Int, branch: Int), smallerItems, gap }
-            let top = pending.branch == nil ? MapPalette.slots(firstSeen: named.map { firstSeen[tree.name(of: $0)] }) : []
+            let top = pending.branch == nil ? topSlots(named, tree, colours) : []
             var entries: [(entry: Entry, bytes: UInt64)] = named.enumerated().map { offset, child in
                 (.child(child, branch: pending.branch ?? top[offset]), tree.allocatedSize(of: child))
             }

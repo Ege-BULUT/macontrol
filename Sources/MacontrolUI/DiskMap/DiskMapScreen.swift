@@ -96,7 +96,7 @@ private struct ScanningView: View {
             header
             Divider()
             if let preview = model.preview {
-                ScanPreviewChart(tree: preview, version: model.previewVersion, style: model.style, firstSeen: model.previewFirstSeen)
+                ScanPreviewChart(tree: preview, version: model.previewVersion, style: model.style, colours: model.previewColours.slots)
                     .equatable()
                     .padding(Theme.spacing)
                 Text("Sizes grow as the scan finds more. The full map, with the folders inside, opens when it finishes.")
@@ -153,7 +153,7 @@ private struct ScanPreviewChart: View, Equatable {
     let version: Int
     let style: MapStyle
     /// Changes only with `version`.
-    let firstSeen: [String: Int]
+    let colours: [String: Int]
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
 
@@ -169,7 +169,7 @@ private struct ScanPreviewChart: View, Equatable {
                 treeVersion: version, focus: ScanTree.root, style: style,
                 width: Int(chart.width), height: Int(chart.height), scale: displayScale
             )
-            let layout = (try? MapLayoutBuilder.build(tree, key, firstSeen: firstSeen)) ?? .empty(key)
+            let layout = (try? MapLayoutBuilder.build(tree, key, colours: colours)) ?? .empty(key)
             HStack(spacing: 0) {
                 ZStack {
                     MapFillLayer(layout: layout, tree: tree).equatable()

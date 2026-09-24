@@ -18,11 +18,11 @@ public final class DiskMapModel {
     public private(set) var preview: ScanTree?
     /// Counts previews, so each one gets a layout of its own.
     private(set) var previewVersion = 0
-    /// When each top-level name first showed in this scan's previews, which fixes its colour for the whole scan.
-    /// Colour by size rank reshuffled most of the legend on every preview, as ranks change while sizes grow (T-0063).
-    private(set) var previewFirstSeen: [String: Int] = [:]
-    /// The same for the scan the map shows, so the finished map keeps the colours its previews had.
-    private(set) var treeFirstSeen: [String: Int] = [:]
+    /// The running scan's top-level colours, which each folder keeps while sizes change rank (T-0063).
+    private(set) var previewColours = MapPalette.ScanColours()
+    /// The same for the scan the map shows, so the finished map keeps the colours its previews had, and a scan of
+    /// the same folder starts from them.
+    private(set) var treeColours = MapPalette.ScanColours()
     /// What the running scan should reach, for its progress bar: the last scan's total when the same folder
     /// is scanned again, else the space in use when a whole volume is scanned.
     var expectedTotal: (bytes: UInt64, isLastScan: Bool)?
@@ -93,7 +93,7 @@ public final class DiskMapModel {
         let generation = beginScan(of: root)
         let task = Task {
             do {
-                for try await event in engine.scan(root) {
+                for try await event in engine.scan(root, previews: true) {
                     if Task.isCancelled { break }
                     receive(event, generation: generation)
                 }
@@ -120,7 +120,7 @@ public final class DiskMapModel {
         scanError = nil
         progress = nil
         preview = nil
-        previewFirstSeen = [:]
+        previewColours = lastTotal == nil ? MapPalette.ScanColours() : treeColours
         expectedTotal = lastTotal.map { ($0, true) }
         isScanning = true
         if let root, lastTotal == nil { readGoal(of: root, generation: scanGeneration) }
@@ -147,14 +147,15 @@ public final class DiskMapModel {
         switch event {
         case .progress(let update): progress = update
         case .preview(let tree):
-            for name in tree.sortedChildren(of: ScanTree.root).map(tree.name(of:)) where previewFirstSeen[name] == nil {
-                previewFirstSeen[name] = previewFirstSeen.count
-            }
+            previewColours.update(ranked: Self.ranked(tree.sortedChildren(of: ScanTree.root), in: tree))
             preview = tree
             previewVersion += 1
         case .completed(let result):
-            treeFirstSeen = previewFirstSeen
             replaceTree(result)
+            // Past the preview's 256, a name is too small to draw. The sort is the one the list shows next.
+            let ranked = Self.ranked(sortedChildren(of: ScanTree.root).prefix(256), in: result)
+            previewColours.finish(ranked: ranked)
+            treeColours = previewColours
         }
     }
 
@@ -163,8 +164,12 @@ public final class DiskMapModel {
         isScanning = false
         progress = nil
         preview = nil
-        previewFirstSeen = [:]
         expectedTotal = nil
+    }
+
+    /// Names of `nodes` that have bytes, in their order.
+    private static func ranked(_ nodes: some Sequence<Int>, in tree: ScanTree) -> [String] {
+        nodes.filter { tree.allocatedSize(of: $0) > 0 }.map(tree.name(of:))
     }
 
     /// Shows a new scan. Staged items found again at the same path, as the same file, stay staged.
@@ -307,7 +312,7 @@ public final class DiskMapModel {
             return
         }
         guard let tree, key.treeVersion == treeVersion else { return }
-        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key, firstSeen: treeFirstSeen), result.key.treeVersion == treeVersion else { return }
+        guard let result = try? await MapLayoutBuilder.layout(of: tree, for: key, colours: treeColours.slots), result.key.treeVersion == treeVersion else { return }
         layoutCache[key] = result
         cacheOrder.append(key)
         if cacheOrder.count > 12 { layoutCache[cacheOrder.removeFirst()] = nil }

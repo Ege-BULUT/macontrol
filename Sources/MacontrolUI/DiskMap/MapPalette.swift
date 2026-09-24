@@ -38,25 +38,60 @@ nonisolated enum MapPalette {
         return slot
     }
 
-    /// Slots for the top-level children in size order. `firstSeen[i]` is when a scan first showed the `i`-th child
-    /// (T-0063), or nil. A child keeps slot `firstSeen % branches.count` through the scan and on the finished map,
-    /// else its rank slot. Earlier-seen children choose first, so when two neighbours (the ring closes) want one
-    /// colour, the later-seen one takes a colour neither neighbour has. Without a scan order this is `slot(for:of:)`.
-    static func slots(firstSeen: [Int?]) -> [Int] {
-        let count = firstSeen.count
-        let wanted = firstSeen.indices.map { firstSeen[$0].map { $0 % branches.count } ?? slot(for: $0, of: count) }
-        var result = [Int?](repeating: nil, count: count)
-        for index in firstSeen.indices.sorted(by: { (firstSeen[$0] ?? .max, $0) < (firstSeen[$1] ?? .max, $1) }) {
-            let neighbours = [(index + count - 1) % count, (index + 1) % count].filter { $0 != index }
-            let held = neighbours.compactMap { result[$0] }
-            guard held.contains(wanted[index]) else {
-                result[index] = wanted[index]
-                continue
+    /// Colours of the folders at the top of a scan, carried from one preview to the next and onto the finished
+    /// map, so a folder keeps its colour while sizes change rank (T-0063). Colour by rank reshuffled most of the
+    /// legend on every preview. A scan of the same folder starts from the colours of its last finished map.
+    struct ScanColours: Equatable {
+        /// Each coloured name's slot in `branches`.
+        private(set) var slots: [String: Int] = [:]
+        /// The largest names at the last update.
+        private var largest: Set<String> = []
+        /// The largest names of the finished map these colours come from.
+        private var kept: Set<String> = []
+
+        /// `ranked` is the names with bytes, largest first; a name without bytes is not drawn and gets no colour.
+        /// The `branches.count` largest always have different colours. Each keeps its colour unless one of them
+        /// chose it first, and then takes the lowest free one. The last finished map's largest choose first, then
+        /// the ones that were largest last time, then the rest by size. A smaller name keeps the first colour it
+        /// gets: its rank slot, or the lowest one its neighbours lack.
+        mutating func update(ranked: [String]) {
+            let largest = Array(ranked.prefix(branches.count))
+            func turn(_ index: Int) -> (Int, Int) {
+                (kept.contains(largest[index]) ? 0 : self.largest.contains(largest[index]) ? 1 : 2, index)
             }
-            let avoid = held + neighbours.filter { result[$0] == nil }.map { wanted[$0] }
-            result[index] = branches.indices.first { !avoid.contains($0) }
+            var taken = Set<Int>()
+            for index in largest.indices.sorted(by: { turn($0) < turn($1) }) {
+                let slot = slots[largest[index]].flatMap { taken.contains($0) ? nil : $0 } ?? branches.indices.first { !taken.contains($0) } ?? 0
+                slots[largest[index]] = slot
+                taken.insert(slot)
+            }
+            for index in ranked.indices.dropFirst(branches.count) where slots[ranked[index]] == nil {
+                slots[ranked[index]] = slot(at: index, of: ranked)
+            }
+            self.largest = Set(largest)
         }
-        return result.map { $0 ?? 0 }
+
+        /// The last update, for the finished map. Smaller names that sit next to one of their colour get a new
+        /// one: doing that on every preview flipped colours back and forth while two folders of about one size
+        /// swapped places. A later scan of the folder keeps this map's largest colours.
+        mutating func finish(ranked: [String]) {
+            update(ranked: ranked)
+            for index in ranked.indices.dropFirst(branches.count) where neighbourSlots(at: index, of: ranked).contains(slots[ranked[index]] ?? -1) {
+                slots[ranked[index]] = slot(at: index, of: ranked)
+            }
+            kept = largest
+        }
+
+        private func neighbourSlots(at index: Int, of ranked: [String]) -> [Int] {
+            [index - 1, index + 1].filter(ranked.indices.contains).compactMap { slots[ranked[$0]] }
+        }
+
+        /// The rank slot, unless a neighbour has it.
+        private func slot(at index: Int, of ranked: [String]) -> Int {
+            let neighbours = neighbourSlots(at: index, of: ranked)
+            let rank = index % branches.count
+            return neighbours.contains(rank) ? branches.indices.first { !neighbours.contains($0) } ?? rank : rank
+        }
     }
 
     /// Share of the way to the background at `depth`.

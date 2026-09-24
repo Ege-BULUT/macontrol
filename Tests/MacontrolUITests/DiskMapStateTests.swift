@@ -70,7 +70,7 @@ import Testing
         func colours(_ sizes: [String: UInt64]) throws -> [String: Int] {
             let preview = Self.topLevel(sizes)
             model.receive(.preview(preview), generation: generation)
-            return try Self.colours(MapLayoutBuilder.build(preview, DiskMapFixtures.key(style, version: model.previewVersion), firstSeen: model.previewFirstSeen), preview)
+            return try Self.colours(MapLayoutBuilder.build(preview, DiskMapFixtures.key(style, version: model.previewVersion), colours: model.previewColours.slots), preview)
         }
         let first = try colours(["A": 300, "B": 200, "C": 100])
         let second = try colours(["A": 300, "B": 250, "C": 900, "D": 50])
@@ -88,13 +88,81 @@ import Testing
         model.receive(.preview(Self.topLevel(["C": 900, "A": 300, "B": 200])), generation: generation)
         let final = Self.topLevel(["A": 3_000, "B": 2_500, "C": 1_000, "D": 400])
         model.receive(.preview(final), generation: generation)
-        let lastPreview = try Self.colours(MapLayoutBuilder.build(final, DiskMapFixtures.key(style), firstSeen: model.previewFirstSeen), final)
+        let lastPreview = try Self.colours(MapLayoutBuilder.build(final, DiskMapFixtures.key(style), colours: model.previewColours.slots), final)
         model.receive(.completed(final), generation: generation)
         model.finishScan(generation)
         await model.prepareLayout(model.layoutKey(width: 800, height: 600, scale: 2))
         let map = try Self.colours(#require(model.layout), final)
         #expect(map == lastPreview)
         #expect(map == ["C": 0, "A": 1, "B": 2, "D": 3], "first seen C, A, B, then D; by rank it would be A, B, C, D")
+    }
+
+    /// T-0063 review 3: a home folder has more top-level items than there are colours, and its first preview
+    /// has bytes for a few of them only. The finished map's eight largest still get eight colours, the ones it
+    /// had in the last preview; a drawn folder changes colour only in the preview that brings it among the eight
+    /// largest; and a second scan of the folder, which finds things in another order, keeps those eight colours
+    /// all along (there, a smaller folder may give way to one of them once).
+    /// Colours fixed by first sight, zero-byte items included, gave Downloads and .docker one colour here.
+    @Test(arguments: MapStyle.allCases)
+    func aHomeFolderScanKeepsItsLargestFoldersApart(style: MapStyle) async throws {
+        let gb: UInt64 = 1 << 30
+        let final: [String: UInt64] = [
+            "Library": 60 * gb, "projects": 40 * gb, "Documents": 10 * gb, "Downloads": 8 * gb, "Movies": 5 * gb,
+            ".cache": 3 * gb, "Pictures": 3 * gb / 2, ".docker": 2 * gb, "Music": gb, "Desktop": gb / 2, ".npm": gb / 3,
+            ".vscode": gb / 5, ".Trash": gb / 8, "Applications": gb / 10, ".local": gb / 20, ".config": gb / 50,
+            ".zsh_history": 200_000, ".ssh": 16_384, ".gitconfig": 4096, "Public": 0,
+        ]
+        func partly(_ share: [String: UInt64]) -> [String: UInt64] { final.mapValues { _ in 0 }.merging(share) { $1 } }
+        func third(_ names: [String]) -> [String: UInt64] { partly(Dictionary(uniqueKeysWithValues: names.map { ($0, final[$0]! / 3) })) }
+        let model = DiskMapModel(engine: nil, trash: nil)
+        model.style = style
+        var changes = 0
+
+        /// Runs one scan through these previews and the final sizes, and returns the finished map's colours of the eight largest.
+        func scan(_ generation: Int, _ previews: [[String: UInt64]], kept: [String: Int] = [:]) async throws -> [String: Int] {
+            var last: [String: Int] = [:], largest: Set<String> = []
+            for sizes in previews + [final] {
+                let preview = Self.topLevel(sizes)
+                model.receive(.preview(preview), generation: generation)
+                let drawn = try Self.colours(MapLayoutBuilder.build(preview, DiskMapFixtures.key(style), colours: model.previewColours.slots), preview)
+                let top = Set(sizes.filter { $0.value > 0 }.sorted { ($1.value, $0.key) < ($0.value, $1.key) }.prefix(8).map(\.key))
+                for (name, colour) in drawn where last[name].map({ $0 != colour }) == true {
+                    changes += 1
+                    #expect(!kept.isEmpty || top.contains(name) && !largest.contains(name), "\(name) changed colour")
+                }
+                #expect(kept.allSatisfy { name, colour in drawn[name] ?? colour == colour }, "the last map's largest keep their colours")
+                last.merge(drawn) { $1 }
+                largest = top
+            }
+            model.receive(.completed(Self.topLevel(final)), generation: generation)
+            model.finishScan(generation)
+            await model.prepareLayout(model.layoutKey(width: 800, height: 600, scale: 2))
+            let tree = try #require(model.tree)
+            let map = try #require(model.layout)
+            let eight = map.topLevel.prefix(8).compactMap { index -> (String, Int)? in
+                guard case .node(let node) = map.elements[index].item, let branch = map.elements[index].branch else { return nil }
+                return (tree.name(of: node), branch)
+            }
+            #expect(eight.count == 8 && Set(eight.map(\.1)).count == 8, "\(eight)")
+            #expect(eight.allSatisfy { last[$0.0] == $0.1 }, "the finished map keeps the last preview's colours: \(eight) vs \(last)")
+            return Dictionary(uniqueKeysWithValues: eight)
+        }
+
+        let small = Dictionary(uniqueKeysWithValues: [".Trash", ".cache", ".config", ".local", ".npm", ".vscode", "Desktop", "Music"].map { ($0, UInt64(30 << 20)) })
+        let first = try await scan(model.beginScan(), [
+            partly([".zsh_history": 200_000, ".gitconfig": 4096, "Library": gb]),
+            // Music and Downloads are drawn past the eighth, then grow among the eight largest.
+            partly(small.merging(["Library": gb, "Downloads": 20 << 20, ".zsh_history": 200_000, ".gitconfig": 4096]) { $1 }),
+            third(final.keys.filter { $0 != "projects" }),
+        ])
+        #expect(changes > 0)
+        let again = try await scan(model.beginScan(of: URL(fileURLWithPath: "/x")), [
+            partly(["Music": gb / 4, ".vscode": gb / 5, ".Trash": gb / 8, ".npm": 1000, ".ssh": 16_384]),
+            third(["Music", ".vscode", ".Trash", ".npm", ".ssh", "Applications", ".local", "Movies"]),
+            third(Array(final.keys)),
+        ], kept: first)
+        #expect(again == first, "a second scan of the folder: \(again) vs \(first)")
+        print("home scan \(style): \(changes) colour changes")
     }
 
     /// T-0063: the bar's goal for a new folder is the volume's bytes in use, read off the main actor while the
