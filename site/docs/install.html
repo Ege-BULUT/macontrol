@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install: macontrol docs</title>
+<meta name="description" content="Install macontrol. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/install.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/install.html">
+<meta property="og:title" content="Install: macontrol docs">
+<meta property="og:description" content="Install macontrol. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html" aria-current="page">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Install macontrol</h1>
+<p class="lede">Four steps. One of them is only needed the first time, because macontrol is not notarized yet.</p>
+<p><strong>You need</strong> a Mac with Apple Silicon (M1 or later) and macOS 14 Sonoma or later. Intel Macs are not supported yet.</p>
+
+<h2 id="download">Download</h2>
+<p><a class="btn" href="/downloads/latest.zip"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/></svg> Download for Mac</a></p>
+<p>You get <code>{{file}}</code> ({{size}}). To check that it arrived intact, compare its SHA-256 with the one below:</p>
+<pre><code>shasum -a 256 ~/Downloads/Macontrol-*.zip</code></pre>
+<p>Expected: <code class="sha">{{sha256}}</code></p>
+
+<h2 id="unzip">Unzip and move to Applications</h2>
+<ol>
+  <li>Double-click the zip in Finder. You get <strong>Macontrol.app</strong>.</li>
+  <li>Drag <strong>Macontrol.app</strong> into your <strong>Applications</strong> folder.</li>
+</ol>
+<p>Safari unzips downloads by itself while <strong>Open “safe” files after downloading</strong> is on in its General settings, so you may find <strong>Macontrol.app</strong> in Downloads already unzipped. Move it to Applications. To check the SHA-256 first, turn that setting off and download again.</p>
+<div class="note warn">
+  <p>Unzip with Finder, or with <code>ditto -x -k</code> in Terminal, not with the <code>unzip</code> command. <code>unzip</code> leaves <code>._</code> files inside the app, which breaks its signature, and macOS then calls the app damaged.</p>
+</div>
+
+<h2 id="first-launch">Open it the first time</h2>
+<h3>macOS 15 Sequoia and later</h3>
+<ol>
+  <li>Double-click <strong>Macontrol</strong> in Applications. macOS says it could not verify that “Macontrol” is free of malware. Click <strong>Done</strong>.</li>
+  <li>Open <strong>System Settings › Privacy &amp; Security</strong>.</li>
+  <li>Scroll down to the <strong>Security</strong> section. Next to “Macontrol” was blocked to protect your Mac, click <strong>Open Anyway</strong>.</li>
+  <li>In the dialog that follows, click <strong>Open Anyway</strong> again and confirm with your password or Touch ID.</li>
+</ol>
+<p>macOS remembers the choice, so later launches open normally. The Open Anyway button stays for about an hour after the blocked attempt. If it is gone, open the app once more and go back to Privacy &amp; Security.</p>
+<h3>macOS 14 Sonoma</h3>
+<p>Control-click <strong>Macontrol</strong> in Applications, choose <strong>Open</strong>, then click <strong>Open</strong> in the dialog. The Open Anyway button in Privacy &amp; Security works here too.</p>
+<h3>Why this step is needed</h3>
+<p>macOS checks apps downloaded from the internet with Gatekeeper. Apps that Apple has notarized open straight away. Notarization needs a paid Apple Developer Program membership, which macontrol does not have, so each release is signed ad hoc instead. The step above tells macOS that you trust this download. If you would rather not, you can <a href="build.html">build it from source</a>.</p>
+
+<h2 id="access">Allow Full Disk Access</h2>
+<p>On first launch macontrol asks for Full Disk Access and walks you through it. It continues by itself once access is on. You can also skip it: the app still works, and the folders macOS keeps private show as “not scanned”. <a href="full-disk-access.html">More about Full Disk Access</a>.</p>
+
+<h2 id="update">Update to a new version</h2>
+<p>Quit macontrol, download the new zip, unzip it and replace <strong>Macontrol.app</strong> in Applications.</p>
+<p>Each release is signed ad hoc, so macOS treats the new version as a different app and Full Disk Access has to be granted again. If Macontrol is listed and switched on but the app still says Full Disk Access is off, select it in the list, remove it with the minus button, and add it again.</p>
+
+<h2 id="remove">Remove macontrol</h2>
+<p>Quit it and move <strong>Macontrol.app</strong> to the Trash. It keeps its undo journal in <code>~/Library/Application Support/Macontrol</code>, and any settings in <code>~/Library/Preferences/dev.macontrol.Macontrol.plist</code>. You can remove both, and take it out of the Full Disk Access list in System Settings.</p>
+<nav class="pager" aria-label="Pages"><a href="./" rel="prev">Previous: Overview</a><a href="full-disk-access.html" rel="next">Next: Full Disk Access</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
