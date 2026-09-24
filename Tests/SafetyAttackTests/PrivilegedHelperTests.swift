@@ -29,13 +29,15 @@ import Testing
     /// the parent has returned (the foreground check passed and the child detached); then the hold is released.
     static func launcher(
         _ fx: RootFixture, holdAt: Int? = nil, beforeCheck: @escaping @Sendable (URL) -> Void = { _ in },
-        afterCheck: @escaping @Sendable (URL) -> Void = { _ in }, release: Bool = true
+        afterCheck: @escaping @Sendable (URL) -> Void = { _ in }, release: Bool = true,
+        prompt: @escaping @Sendable (String) -> Void = { _ in }
     ) throws -> PrivilegedLauncher {
         let binary = try helperBinary()
         let root = fx.root.path
         let home = fx.home.path
         let hold = fx.url("hold").path
-        return PrivilegedLauncher(helperURL: binary) { helper, request, sha, _ in
+        return PrivilegedLauncher(helperURL: binary) { helper, request, sha, text in
+            prompt(text)
             beforeCheck(request)
             let process = Process()
             process.executableURL = helper
@@ -86,13 +88,16 @@ import Testing
         ]
         let bundle = fx.url("root/Applications/Tool.app").path
         let untouchedAtDetach = OSAllocatedUnfairLock(initialState: false)
+        let prompts = OSAllocatedUnfairLock<[String]>(initialState: [])
         let batch = UUID()
 
         let outcomes = await Self.run(fx, items, launcher: try Self.launcher(fx, holdAt: 0, afterCheck: { _ in
             untouchedAtDetach.withLock { $0 = FileManager.default.fileExists(atPath: bundle) }
-        }), batch: batch)
+        }, prompt: { text in prompts.withLock { $0.append(text) } }), batch: batch)
 
         #expect(untouchedAtDetach.withLock { $0 })
+        // The dialog counts only what the helper may act on: sudoers was refused in the app, before any dialog.
+        #expect(prompts.withLock { $0 } == ["macontrol needs your administrator password to move 2 items owned by the system to the Trash."])
         #expect(outcomes == [
             .trashed(original: items[0].url, trashedTo: fx.trash.appendingPathComponent("Tool.app")),
             .trashed(original: items[1].url, trashedTo: fx.trash.appendingPathComponent("com.vendor.tool")),

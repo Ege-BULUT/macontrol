@@ -17,12 +17,15 @@ VERSION="0.1.0"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
 swift build -c "$CONFIG" --product Macontrol
+swift build -c "$CONFIG" --product macontrol-priv
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 
 APP="build/Macontrol.app"
 /bin/rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN_DIR/Macontrol" "$APP/Contents/MacOS/Macontrol"
+# The administrator helper (docs/DESIGN-debloat.md section 3.2), started as root through the password dialog.
+cp "$BIN_DIR/macontrol-priv" "$APP/Contents/Helpers/macontrol-priv"
 # SwiftPM resource bundles go in Resources; code looks there first (CleanupCatalog.bundled()).
 for bundle in "$BIN_DIR"/*.bundle; do
     [ -e "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
@@ -54,6 +57,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# Inner code first. Hardened runtime makes dyld ignore DYLD_* for the process that runs as root.
+codesign --force --options runtime --identifier "${BUNDLE_ID}.priv" --sign "$SIGN_IDENTITY" "$APP/Contents/Helpers/macontrol-priv"
 codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
-codesign --verify --strict "$APP"
+codesign --verify --strict --deep "$APP"
 echo "$APP"
