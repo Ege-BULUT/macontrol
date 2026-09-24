@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Using macontrol: macontrol docs</title>
+<meta name="description" content="Using macontrol. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html" aria-current="page">Using macontrol</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Using macontrol</h1>
+<p class="lede">Five sections in the sidebar, each one key away. Nothing moves until you confirm it, and everything that moves can be put back from History.</p>
+<div class="table"><table>
+  <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>⌘1</kbd> to <kbd>⌘5</kbd></td><td>Overview, Disk Map, Clean, Uninstall, History</td></tr>
+    <tr><td><kbd>⌘R</kbd></td><td>Rescan</td></tr>
+    <tr><td><kbd>⌘O</kbd></td><td>Scan a folder you choose</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="overview">Overview</h2>
+<p>Capacity of the startup disk, the largest folders in your home and how much Clean would free. Purgeable space appears as a dated note and is never counted as free.</p>
+
+<h2 id="disk-map">Disk Map</h2>
+<p>Pick what to scan with the scan button in the toolbar: your home folder, the startup disk, or any folder with <kbd>⌘O</kbd>. The map switches between a <strong>Sunburst</strong> and a <strong>Treemap</strong> over the same scan.</p>
+<ul>
+  <li>Area and angle follow each item's size on disk. Items too small to draw are grouped into one “N smaller items” entry. Click it to list them.</li>
+  <li>The inspector shows size on disk, logical size, and share of the folder and of the scan, with Reveal in Finder and Quick Look.</li>
+  <li>A folder macontrol could not read says “not scanned”. Hard links count once.</li>
+</ul>
+<h3 id="keys">Keys</h3>
+<div class="table"><table>
+  <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>↑</kbd> <kbd>←</kbd> / <kbd>↓</kbd> <kbd>→</kbd></td><td>Select the previous or next item</td></tr>
+    <tr><td><kbd>Return</kbd></td><td>Open the selected folder</td></tr>
+    <tr><td><kbd>Esc</kbd> or <kbd>⌘↑</kbd></td><td>Go up one folder</td></tr>
+    <tr><td><kbd>⌘[</kbd> / <kbd>⌘]</kbd></td><td>Back and forward</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>Quick Look</td></tr>
+    <tr><td><kbd>⇧⌘R</kbd></td><td>Reveal in Finder</td></tr>
+    <tr><td><kbd>⌘⌫</kbd></td><td>Add the selected item to the Discard Pile</td></tr>
+  </tbody>
+</table></div>
+<h3 id="discard-pile">The Discard Pile</h3>
+<p>Add items to the Discard Pile as you explore. They turn hatched on the map and wait at the bottom of the window. Click <strong>Review…</strong> to see them together before anything moves. The review says how much emptying the Trash will free, and how much stays in use because clones, snapshots or other hard links share it.</p>
+<figure class="shot small">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/disk-map-review-dark.webp">
+    <img src="../assets/shots/disk-map-review-light.webp" width="1120" height="641" loading="lazy" decoding="async" alt="The review sheet: moving 2 items to the Trash frees about 22.3 GB once the Trash is emptied, while 3.6 GB stays in use by clones, snapshots or other hard links">
+  </picture>
+</figure>
+
+<h2 id="clean">Clean</h2>
+<p>Clean lists caches, logs and developer data found by a vetted catalog of 27 rules, grouped by category. Each item carries one of three labels:</p>
+<div class="table"><table>
+  <thead><tr><th>Label</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><span class="label safe">Safe</span></td><td>Data that apps rebuild when they need it, such as caches. Selected from the start.</td></tr>
+    <tr><td><span class="label review">Review</span></td><td>Usually fine to remove, but look first. Shown unselected, with a note.</td></tr>
+    <tr><td><span class="label manual">Manual</span></td><td>iPhone and iPad backups, Xcode archives, macOS installer leftovers. Shown with their size and Reveal in Finder, and never part of a bulk clean.</td></tr>
+  </tbody>
+</table></div>
+<p>Clean skips anything changed in the last 10 minutes and anything that belongs to an app that is running, and says why. While an iOS Simulator is running, it skips the caches it cannot inspect. <kbd>Space</kbd> ticks or unticks the highlighted rows, and <kbd>⌘F</kbd> searches.</p>
+<figure class="shot small">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/clean-results-dark.webp">
+    <img src="../assets/shots/clean-results-light.webp" width="1376" height="1099" loading="lazy" decoding="async" alt="Clean results: five items moved to the Trash, one not moved because it changed since the scan">
+  </picture>
+</figure>
+
+<h2 id="uninstall">Uninstall</h2>
+<p>Pick an app to see it with its leftovers, grouped by the evidence that ties each one to the app:</p>
+<ul>
+  <li>Files named with the app's bundle identifier in the places apps keep data: Application Support, Caches, Preferences, Saved Application State, Logs and more.</li>
+  <li>Sandbox containers that macOS records as the app's, and group containers from its entitlements.</li>
+  <li>Background jobs (launchd) that start a program inside the app.</li>
+</ul>
+<p>Folders that only share the app's name are shown but not selected. Data that another installed app also uses is never selected for you. Documents, Desktop, Downloads, Music, Pictures, Movies and iCloud are never searched.</p>
+<p>When you uninstall, macontrol asks the app to quit (it never forces it) and stops the app's own background jobs. The app goes to the Trash first, and the leftovers you chose follow once it is there. History shows the two batches, each with its own Undo.</p>
+<p>Apps that are part of macOS live on the sealed system volume and say why they cannot be removed. Root-owned apps and leftovers, which usually include Apple's App Store apps such as GarageBand, iMovie and Pages, are marked <strong>Needs admin</strong>, with Reveal in Finder.</p>
+<figure class="shot">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/uninstall-dark.webp">
+    <img src="../assets/shots/uninstall-light.webp" width="1800" height="1240" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
+  </picture>
+</figure>
+<h3 id="sort-filter">Sort and filter <span class="tag">0.1.1</span></h3>
+<p>The filter above the app list shows <strong>All</strong>, <strong>User</strong> or <strong>System</strong> apps, with a count for each. System means Apple's apps: those that are part of macOS, Apple's App Store apps, and any other Apple app such as Xcode. User is everything else. The sort menu orders each section by name, date added or size. Apps without a date or a size yet always go last.</p>
+<div class="table"><table>
+  <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>⌥⌘1</kbd> to <kbd>⌥⌘3</kbd></td><td>All, User, System</td></tr>
+    <tr><td><kbd>⌃⌥⌘1</kbd> to <kbd>⌃⌥⌘6</kbd></td><td>Name A to Z, Name Z to A, Date Added newest first, oldest first, Size largest first, smallest first</td></tr>
+    <tr><td><kbd>⌘F</kbd></td><td>Search. The filter and the search combine.</td></tr>
+  </tbody>
+</table></div>
+<p>macontrol remembers your choice. Sorting by size measures every app, not only the ones on screen.</p>
+
+<h2 id="history">History and Undo</h2>
+<p>History lists every batch macontrol moved to the Trash and what it frees once you empty the Trash. <strong>Undo</strong> puts a whole batch back where it was, as long as the items are still in the Trash and their original place is free. Anything it could not put back is listed with the reason.</p>
+<figure class="shot">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/history-dark.webp">
+    <img src="../assets/shots/history-light.webp" width="1800" height="1304" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
+  </picture>
+</figure>
+<nav class="pager" aria-label="Pages"><a href="full-disk-access.html" rel="prev">Previous: Full Disk Access</a><a href="safety.html" rel="next">Next: Safety model</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. MIT license. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

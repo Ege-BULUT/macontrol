@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Safety model: macontrol docs</title>
+<meta name="description" content="Safety model. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="safety.html" aria-current="page">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Safety model</h1>
+<p class="lede">macontrol is built to be boring about your files. In 0.1, nothing is deleted permanently, and every item passes the same checks before it moves.</p>
+
+<h2 id="path">What happens to one item</h2>
+<ol>
+  <li><strong>You choose it.</strong> In Clean only Safe items start selected. Every removal ends in a confirmation that lists exactly what will move.</li>
+  <li><strong>It is checked again.</strong> Right before the move, the item is compared with what the scan saw. A file that was replaced, or swapped for a link, since the scan stays where it is.</li>
+  <li><strong>Protected places are refused.</strong> The path is resolved first, so a different route to the same folder does not slip past.</li>
+  <li><strong>It goes to the Trash</strong> through macOS's own Move to Trash, which also records Finder's Put Back. macontrol never empties the Trash: the space comes back when you do.</li>
+  <li><strong>It is written to the journal,</strong> so History can put it back.</li>
+</ol>
+<p>If a check fails, that item stays where it is and the result says why.</p>
+
+<h2 id="protected">Protected places</h2>
+<p>These are never moved to the Trash, and neither is any folder that contains them: your home folder, Desktop, Documents, Downloads, Pictures, Movies and Music, your Library and its standard folders, <code>/Applications</code>, <code>/Library</code> and system folders. What is inside them can be removed, one item at a time, when you choose it.</p>
+<p>These are off limits entirely, contents included: Keychains, <code>~/.ssh</code>, <code>~/.gnupg</code>, Mail, Messages, photo libraries, privacy (TCC) data, cloud sync state and <code>/System</code>.</p>
+<p>A file you locked in Finder is refused, and so is a folder that holds one, because moving the folder would carry the locked file into the Trash. Anything macOS marks as restricted is refused too. macontrol never changes flags or ownership to force a removal.</p>
+
+<h2 id="cloud">Cloud folders need consent</h2>
+<p>Items in iCloud Drive or another cloud storage folder need an extra confirmation, because removing them removes them on every device.</p>
+
+<h2 id="journal">The undo journal</h2>
+<p>Every moved item gets a line in <code>~/Library/Application Support/Macontrol/trash-journal.jsonl</code>, readable only by you: its batch, original path, place in the Trash, identity and size. History uses it to put a batch back, as long as the items are still in the Trash and their original place is free. Items keep their names in the Trash, so a crash in the middle of a batch leaves nothing hidden.</p>
+
+<h2 id="clean-rules">Clean and Uninstall are cautious</h2>
+<ul>
+  <li>Every catalog rule is checked when the catalog loads. A pattern that reaches outside the folders it is meant for drops the whole rule.</li>
+  <li>Clean skips anything changed in the last 10 minutes and anything that belongs to a running app.</li>
+  <li>Uninstall only preselects leftovers that carry the app's bundle identifier. Name-only matches and data shared with another app wait for you.</li>
+  <li>Uninstall asks the app to quit and never forces it.</li>
+</ul>
+
+<h2 id="no-admin">No admin powers, no network</h2>
+<p>0.1 has no privileged helper and never asks for your password. Root-owned items are marked “Needs admin”, with Reveal in Finder. macontrol has no networking code: it does not phone home, check for updates or send what it scans anywhere.</p>
+
+<h2 id="tests">How this is tested</h2>
+<ul>
+  <li><strong>One door.</strong> Only the Safety module can move files. A test fails if any other source file deletes, moves or renames files, runs a script or launches a process. The one exception is the uninstaller's call to <code>launchctl</code>, which stops an app's own background jobs.</li>
+  <li><strong>Attack suite.</strong> Tests swap folders for links in the middle of a batch, use hostile file names, locked files and paths deeper than <code>PATH_MAX</code>, and compare whole folder trees before, after and after Undo.</li>
+  <li><strong>Only in temporary folders.</strong> Tests build their files in temporary folders and never touch real data or the real Trash.</li>
+</ul>
+
+<h2 id="next">What changes later</h2>
+<p>Permanent deletion and admin removals are planned for 0.2, as an opt-in <strong>hardcore mode</strong> that is off every time the app starts and asks you to confirm the risk before it turns on. The design keeps some items going to the Trash even then, such as anything in iCloud Drive. Until that release, everything on this page describes the app you can download.</p>
+<nav class="pager" aria-label="Pages"><a href="using.html" rel="prev">Previous: Using macontrol</a><a href="faq.html" rel="next">Next: FAQ</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. MIT license. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

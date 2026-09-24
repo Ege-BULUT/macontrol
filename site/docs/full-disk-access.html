@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Full Disk Access: macontrol docs</title>
+<meta name="description" content="Full Disk Access. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html" aria-current="page">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Full Disk Access</h1>
+<p class="lede">Full Disk Access is the one permission macontrol asks for. It lets the app measure the folders macOS keeps private.</p>
+
+<h2 id="why">Why it asks</h2>
+<p>macOS hides some folders from apps until you allow it: Mail, Messages, Safari, Cookies and the Trash, among others. Without access, a disk tool sees those folders as empty or smaller than they are. macontrol does not guess: it marks them “not scanned”, so a missing size never looks like a small one.</p>
+<p>Access is for reading names and sizes. It does not switch off macontrol's own protections: the <a href="safety.html#protected">protected places</a> stay protected. macontrol has no networking code, so nothing it reads leaves your Mac.</p>
+
+<h2 id="turn-on">Turn it on</h2>
+<p>On first launch macontrol shows three steps:</p>
+<ol>
+  <li><strong>Open System Settings.</strong> The button opens <strong>Privacy &amp; Security › Full Disk Access</strong>.</li>
+  <li><strong>Turn on Macontrol.</strong> If it is not in the list, drag the app icon from macontrol's sheet into the list, or click <strong>Reveal in Finder</strong> and drag the app from there.</li>
+  <li><strong>Come back.</strong> macontrol checks every second while the sheet is open and continues by itself once access is on.</li>
+</ol>
+<figure class="shot small">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/full-disk-access-dark.webp">
+    <img src="../assets/shots/full-disk-access-light.webp" width="1160" height="969" loading="lazy" decoding="async" alt="The Full Disk Access sheet: open System Settings, turn on Macontrol, come back">
+  </picture>
+</figure>
+<p>If you switched it on and macontrol still says it is off, macOS may apply the change only after a relaunch. The sheet then offers <strong>Relaunch Macontrol</strong>.</p>
+<p>To do it yourself later: <strong>System Settings › Privacy &amp; Security › Full Disk Access</strong>, then switch on <strong>Macontrol</strong>.</p>
+
+<h2 id="without">What works without it</h2>
+<p>Everything. Click <strong>Continue Without Access</strong> and use the app as usual. A “Limited mode: Full Disk Access is off” banner lists the folders that are not scanned. Their sizes are missing, not zero, and anything inside them is left out until access is on.</p>
+
+<h2 id="after-update">After an update</h2>
+<p>Each release is signed ad hoc, and macOS ties Full Disk Access to the app's signature, so a new version has to be allowed again. If the switch is already on but macontrol says it is off, remove Macontrol from the list with the minus button and add it again.</p>
+<nav class="pager" aria-label="Pages"><a href="install.html" rel="prev">Previous: Install</a><a href="using.html" rel="next">Next: Using macontrol</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. MIT license. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

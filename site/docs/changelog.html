@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog: macontrol docs</title>
+<meta name="description" content="Changelog. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html" aria-current="page">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Changelog</h1>
+<p class="lede">What changed in each release. Releases before 1.0 are previews.</p>
+<!-- CHANGELOG:START (scripts/deploy-site.sh replaces this block with CHANGELOG.md when the repository has one) -->
+<section class="release">
+<h2 id="v0.1.0">0.1.0 <small>23 September 2026, preview</small></h2>
+<p>The first preview: disk cleanup and disk space visualization in one native macOS app.</p>
+<h3>What works</h3>
+<ul>
+  <li><strong>Overview:</strong> disk usage at a glance, with a Full Disk Access onboarding that continues by itself once access is granted.</li>
+  <li><strong>Disk Map:</strong> sunburst and treemap, drill into any folder, breadcrumbs and back and forward, inspector, Reveal in Finder, Quick Look, and a Discard Pile to stage items before removing them.</li>
+  <li><strong>Clean:</strong> caches, logs and developer data from a validated catalog. Each item is labelled Safe, Review or Manual, and only Safe items are preselected. Anything changed in the last 10 minutes or held by a running app is skipped.</li>
+  <li><strong>Uninstall:</strong> apps with their leftovers, matched by bundle identifier with evidence. Data shared with another app is never preselected.</li>
+  <li><strong>History:</strong> every removal is journaled and can be put back.</li>
+  <li><strong>Scanning:</strong> a parallel <code>getattrlistbulk</code> engine. Hard links and clones count once, so totals match the ground truth exactly.</li>
+</ul>
+<h3>Safety</h3>
+<p>Everything goes to the Trash. Protected locations (your documents, keychains, cloud drives, system folders) are refused. Items are checked again right before they move, so a file swapped for a link after the scan is not touched.</p>
+<h3>Known limits</h3>
+<ul>
+  <li>Apple Silicon only. Requires macOS 14 or later.</li>
+  <li>Not notarized: the first launch needs <a href="install.html#first-launch">Open Anyway</a>.</li>
+  <li>Ad hoc signed, so Full Disk Access has to be granted again after installing a new version.</li>
+  <li>Root-owned items and Apple's App Store apps (GarageBand, iMovie, iWork) are marked “Needs admin” and cannot be removed yet.</li>
+  <li>While an iOS Simulator is running, Clean skips the caches it cannot inspect.</li>
+</ul>
+</section>
+<!-- CHANGELOG:END -->
+<nav class="pager" aria-label="Pages"><a href="build.html" rel="prev">Previous: Build from source</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. MIT license. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
