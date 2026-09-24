@@ -4,9 +4,9 @@ import Testing
 
 /// T-0060: status text is readable. WCAG AA asks 4.5:1 for text this size; system green and orange on white give 2.2:1.
 @Suite struct ThemeContrastTests {
-    @Test(arguments: ["success", "caution"])
+    @Test(arguments: ["success", "caution", "danger"])
     func statusTextReachesAA(name: String) {
-        let color = name == "success" ? Theme.successText : Theme.cautionText
+        let color = ["success": Theme.successText, "caution": Theme.cautionText, "danger": Theme.dangerText][name]!
         // White list rows down to a gray sheet or sidebar in light mode; window and control grays in dark mode.
         for (scheme, backgrounds) in [(ColorScheme.light, [1.0, 0.925, 0.898]), (.dark, [0.118, 0.196])] {
             var environment = EnvironmentValues()
