@@ -17,22 +17,22 @@ extension UninstallModel {
 }
 
 enum DemoApps {
-    static let editor = app("Editor", "com.example.Editor", "4.2.1", .thirdParty)
-    static let garageBand = app("GarageBand", "com.apple.garageband10", "10.4.12", .appleAppStore)
+    static let editor = app("Editor", "com.example.Editor", "4.2.1", .thirdParty, daysAgo: 12)
+    static let garageBand = app("GarageBand", "com.apple.garageband10", "10.4.12", .appleAppStore, daysAgo: 400)
     /// Root-owned, as App Store installs are: blocked, with leftovers still listed.
-    static let pages = app("Pages", "com.apple.iWork.Pages", "14.4", .appleAppStore)
-    static let chess = app("Chess", "com.apple.Chess", "3.18", .builtIn, folder: "/System/Applications")
+    static let pages = app("Pages", "com.apple.iWork.Pages", "14.4", .appleAppStore, daysAgo: 95)
+    static let chess = app("Chess", "com.apple.Chess", "3.18", .builtIn, daysAgo: 60, folder: "/System/Applications")
 
     static let apps: [InstalledApp] = [
         editor,
-        app("Pixel Studio", "com.example.PixelStudio", "2.0", .thirdParty),
-        app("Podcast Maker", "com.example.PodcastMaker", "1.8.3", .thirdParty),
-        app("Terminal Plus", "com.example.TerminalPlus", "0.9", .thirdParty),
+        app("Pixel Studio", "com.example.PixelStudio", "2.0", .thirdParty, daysAgo: 230),
+        app("Podcast Maker", "com.example.PodcastMaker", "1.8.3", .thirdParty, daysAgo: 3),
+        app("Terminal Plus", "com.example.TerminalPlus", "0.9", .thirdParty, daysAgo: 41),
         garageBand,
         pages,
-        app("Safari", "com.apple.Safari", "26.0", .builtIn),
+        app("Safari", "com.apple.Safari", "26.0", .builtIn, daysAgo: 60),
         chess,
-        app("Photo Booth", "com.apple.PhotoBooth", "13.1", .builtIn, folder: "/System/Applications"),
+        app("Photo Booth", "com.apple.PhotoBooth", "13.1", .builtIn, daysAgo: 60, folder: "/System/Applications"),
     ]
 
     static let sizes: [URL: UInt64] = Dictionary(uniqueKeysWithValues: zip(apps.map(\.url), [
@@ -65,8 +65,14 @@ enum DemoApps {
             "Chess is part of macOS. It lives on the sealed, read-only system volume, which macOS restores on every update, so no app can remove it."),
     ]
 
-    private static func app(_ name: String, _ id: String, _ version: String, _ kind: AppKind, folder: String = "/Applications") -> InstalledApp {
-        InstalledApp(url: URL(fileURLWithPath: "\(folder)/\(name).app"), name: name, bundleIdentifier: id, version: version, kind: kind, identity: nil)
+    /// Days before 1 September 2026, so snapshots stay the same from day to day.
+    private static func app(
+        _ name: String, _ id: String, _ version: String, _ kind: AppKind, daysAgo: Double, folder: String = "/Applications"
+    ) -> InstalledApp {
+        InstalledApp(
+            url: URL(fileURLWithPath: "\(folder)/\(name).app"), name: name, bundleIdentifier: id, version: version, kind: kind,
+            identity: nil, dateAdded: Date(timeIntervalSince1970: 1_788_220_800 - daysAgo * 86_400)
+        )
     }
 
     private static func size(_ bytes: UInt64) -> ItemMeasurement {
