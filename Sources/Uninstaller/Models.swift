@@ -55,7 +55,7 @@ public struct Leftover: Sendable, Identifiable, Hashable {
     public var identity: FileIdentity?
     public var evidence: LeftoverEvidence
     public var measurement: ItemMeasurement
-    /// Root-owned or in /Library; v1 offers Reveal in Finder instead of deleting it.
+    /// Root-owned or in /Library: removed through the administrator helper; without it, Reveal in Finder.
     public var needsAdministrator: Bool
     /// A reason to hold back, such as "Also used by BlockBlock". A note turns off preselection.
     public var note: String?
@@ -75,7 +75,8 @@ public struct Leftover: Sendable, Identifiable, Hashable {
         self.launchdLabel = launchdLabel
     }
 
-    public var isPreselected: Bool { evidence.preselected && note == nil && !needsAdministrator }
+    /// Items that need an administrator are preselected too: the UI disables them when there is no helper.
+    public var isPreselected: Bool { evidence.preselected && note == nil }
 }
 
 public struct UninstallPlan: Sendable {
@@ -129,7 +130,7 @@ public struct UninstallBatchReport: Sendable {
 public enum UninstallError: Error, Hashable {
     /// The plan's blocker: part of macOS, macontrol itself, or a root-owned bundle.
     case blocked(String)
-    /// A chosen leftover needs an administrator; v1 cannot remove it.
+    /// A chosen leftover needs an administrator, and there is no helper (`swift run`).
     case needsAdministrator(URL)
     /// Safety refuses the path.
     case refused(URL, RefusalReason)

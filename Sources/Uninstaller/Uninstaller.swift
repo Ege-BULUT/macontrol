@@ -70,32 +70,59 @@ public final class Uninstaller: Sendable {
             app: app,
             appMeasurement: await measure(app.url),
             leftovers: leftovers,
-            blocker: Self.blocker(for: app),
+            blocker: Self.blocker(for: app, administrator: canUseAdministrator),
             bundleLaunchdLabels: found.bundleLaunchdLabels,
             notes: found.notes
         )
     }
 
-    /// Checks every item, quits the app and boots out its launchd jobs by exact label. Then the bundle goes to the
-    /// Trash on its own, and the chosen leftovers follow only once it is there: Safety carries on past a refused item,
-    /// so one shared batch would take the data of an app that stays installed. Any failed step stops before the next
-    /// one (F-0030), and exactly what the plan listed is trashed (F-0069): URLs not in the plan are ignored.
-    /// The report carries the bundle's batch; the leftovers are a second batch in History.
+    /// One app: `uninstall(jobs)` with one job, whose skip reason is thrown. The report carries the one batch.
     public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>, mode: DeletionMode = .trash) async throws -> TrashReport {
+        let result = await uninstall([UninstallJob(plan: plan, leftovers: selected)], mode: mode)
+        if let error = result.skipped[plan.app.url] { throw error }
+        return result.report
+    }
+
+    /// Several apps in one user action (DESIGN-debloat section 3.6). Per app: every item checked, the app quit and its
+    /// launchd jobs booted out by exact label; an app that fails any step is skipped with its error, and the others go
+    /// on (F-0030). Then ONE Safety batch, so at most one administrator dialog: each bundle followed by its chosen
+    /// leftovers, every leftover with the bundle as `requiresGone`, so none is touched while its app is still there.
+    /// Exactly what each plan listed is removed (F-0069): URLs not in the plan are ignored.
+    public func uninstall(_ jobs: [UninstallJob], mode: DeletionMode = .trash) async -> UninstallBatchReport {
+        var items: [TrashItem] = []
+        var skipped: [URL: UninstallError] = [:]
+        for job in jobs {
+            do {
+                items += try await prepare(job)
+            } catch let error as UninstallError {
+                skipped[job.plan.app.url] = error
+            } catch {
+                skipped[job.plan.app.url] = .blocked(error.localizedDescription)
+            }
+        }
+        let report = items.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await actions.remove(items, mode)
+        return UninstallBatchReport(report: report, skipped: skipped)
+    }
+
+    /// The v1 steps for one app, up to the Trash: its bundle and chosen leftovers, in that order.
+    private func prepare(_ job: UninstallJob) async throws -> [TrashItem] {
+        let plan = job.plan
         if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
-        let chosen = plan.leftovers.filter { selected.contains($0.url) }
-        if let stray = chosen.first(where: { !isInsideLibraryFolder($0.url) }) {
+        let chosen = plan.leftovers.filter { job.leftovers.contains($0.url) }
+        if let stray = chosen.first(where: { !isInRemovableArea($0.url) }) {
             throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
         }
-        if let administrative = chosen.first(where: \.needsAdministrator) {
+        if !canUseAdministrator, let administrative = chosen.first(where: \.needsAdministrator) {
             throw UninstallError.needsAdministrator(administrative.url)
         }
         let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
         try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
+        // A LaunchDaemon runs in the system domain: the helper boots it out, only after launchd confirms the plist.
+        let userJobs = chosen.filter { !isSystemDaemon($0.url) }.compactMap(\.launchdLabel)
         var stopped = Set<String>()
-        for label in plan.bundleLaunchdLabels + chosen.compactMap(\.launchdLabel) where stopped.insert(label).inserted {
+        for label in plan.bundleLaunchdLabels + userJobs where stopped.insert(label).inserted {
             try await actions.bootout(label)
         }
         // Quitting first is politer than launchd's SIGTERM, but a KeepAlive job or login item can relaunch the app
@@ -103,40 +130,12 @@ public final class Uninstaller: Sendable {
         if !stopped.isEmpty {
             guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         }
-        let appReport = await actions.remove([bundle], mode)
-        // An updater still finishing after the quit can put a new copy at the path the Trash step just emptied.
-        let bundleGone = switch appReport.outcomes.first { case .trashed?, .deleted?: true; default: false }
-        guard bundleGone, !FileSystem.exists(plan.app.url) else {
-            let reason = "Not moved, because \(plan.app.name) is still installed."
-            let kept = chosen.map { TrashOutcome.failed($0.url, message: reason) }
-            return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + kept)
-        }
-        if chosen.isEmpty { return appReport }
         // Read again now: the app may have saved its settings while it quit.
-        let leftoverReport = await actions.remove(chosen.map(Self.itemToTrash(for:)), mode)
-        return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + leftoverReport.outcomes)
-    }
-
-    /// Several apps in one user action (DESIGN-debloat section 3.6): an app that fails its checks, quit or bootout
-    /// is skipped with its error, and the others go on.
-    /// Stub (T-0072): each job runs through the single-app uninstall in turn; the report carries the first batch.
-    /// privileged-helper replaces it with one `remove` call ordered by `requiresGone`.
-    public func uninstall(_ jobs: [UninstallJob], mode: DeletionMode = .trash) async -> UninstallBatchReport {
-        var batch: UUID?
-        var outcomes: [TrashOutcome] = []
-        var skipped: [URL: UninstallError] = [:]
-        for job in jobs {
-            do {
-                let report = try await uninstall(job.plan, leftovers: job.leftovers, mode: mode)
-                batch = batch ?? report.batch
-                outcomes += report.outcomes
-            } catch let error as UninstallError {
-                skipped[job.plan.app.url] = error
-            } catch {
-                skipped[job.plan.app.url] = .blocked(error.localizedDescription)
-            }
+        return [bundle] + chosen.map { leftover in
+            var item = Self.itemToTrash(for: leftover)
+            item.requiresGone = plan.app.url
+            return item
         }
-        return UninstallBatchReport(report: TrashReport(batch: batch ?? UUID(), outcomes: outcomes), skipped: skipped)
     }
 
     // MARK: Helpers
@@ -164,7 +163,8 @@ public final class Uninstaller: Sendable {
         }
     }
 
-    static func blocker(for app: InstalledApp) -> String? {
+    /// With the administrator helper, a root-owned bundle is no blocker: it goes through the helper.
+    static func blocker(for app: InstalledApp, administrator: Bool = false) -> String? {
         if app.kind == .builtIn {
             return "Part of macOS. It lives on the sealed system volume and can't be removed."
         }
@@ -175,20 +175,30 @@ public final class Uninstaller: Sendable {
         if let flags = FileSystem.status(of: app.url)?.st_flags, flags & UInt32(UF_IMMUTABLE) != 0 {
             return "Locked in Finder. Clear Locked in its Get Info window, then try again."
         }
-        if !FileSystem.isRemovableByUser(app.url) {
+        if !administrator && !FileSystem.isRemovableByUser(app.url) {
             return "Owned by the system, so removing it needs an administrator. Reveal it in Finder and drag it to the Trash."
         }
         return nil
     }
 
-    /// Every leftover the finder can produce lies in a folder of a Library (`Library/Caches/<item>`). Checked on the
-    /// standardized path, so a name carrying `..` cannot reach past it.
-    private func isInsideLibraryFolder(_ url: URL) -> Bool {
+    /// Every leftover the finder can produce lies in a folder of a Library (`Library/Caches/<item>`), or is a package
+    /// receipt (`/private/var/db/receipts/<id>.plist`). Checked on the standardized path, so a name carrying `..` cannot
+    /// reach past it.
+    private func isInRemovableArea(_ url: URL) -> Bool {
         let path = url.standardizedFileURL.path
-        return !path.contains("\0") && [home, systemRoot].contains { base in
-            let library = base.appendingPathComponent("Library").standardizedFileURL.path + "/"
-            return path.hasPrefix(library) && path.dropFirst(library.count).split(separator: "/").count >= 2
+        guard !path.contains("\0") else { return false }
+        func depth(below folder: URL) -> Int? {
+            let base = folder.standardizedFileURL.path + "/"
+            return path.hasPrefix(base) ? path.dropFirst(base.count).split(separator: "/").count : nil
         }
+        let receipts = systemRoot.appendingPathComponent("private/var/db/receipts")
+        return [home, systemRoot].contains { (depth(below: $0.appendingPathComponent("Library")) ?? 0) >= 2 }
+            || depth(below: receipts) == 1
+    }
+
+    private func isSystemDaemon(_ url: URL) -> Bool {
+        url.deletingLastPathComponent().standardizedFileURL.path
+            == systemRoot.appendingPathComponent("Library/LaunchDaemons").standardizedFileURL.path
     }
 
     /// The last look before anything happens: each path still names what the plan saw, and Safety accepts it.
@@ -198,7 +208,8 @@ public final class Uninstaller: Sendable {
             guard let expected = item.expectedIdentity, FileIdentity(url: item.url) == expected else {
                 throw UninstallError.changedSincePlan(item.url)
             }
-            if let reason = ProtectedPaths.refusal(for: item.url, home: home) {
+            // Root-owned is fine when the helper can take it: Safety routes it there.
+            if let reason = ProtectedPaths.refusal(for: item.url, home: home), !(reason == .needsAdministrator && canUseAdministrator) {
                 throw UninstallError.refused(item.url, reason)
             }
         }
