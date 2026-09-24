@@ -13,7 +13,6 @@ What changed in each release. Releases before 1.0 are previews.
 ### Changed
 
 - Each filter has its own empty state, with a Show All Apps button. Empty states now fill the pane, so the search field stays at the top.
-- The sidebar has a Debloat section. It is not built yet and only says so; it arrives in 0.2.0. History moved from ⌘5 to ⌘6.
 
 ### Fixed
 
