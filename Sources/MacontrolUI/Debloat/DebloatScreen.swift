@@ -152,7 +152,9 @@ private struct AppBlock: View {
             FileIcon(url: row.app.url, size: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.app.name).font(.body.weight(.medium))
-                if let blocker = row.plan?.blocker {
+                if let failure = row.failure {
+                    Label("Couldn't look at it: \(failure)", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                } else if let blocker = row.plan?.blocker {
                     Label(blocker, systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if isUnverified {
                     Text("Its content isn't checked on a real install yet").font(.caption).foregroundStyle(.secondary)
@@ -171,7 +173,7 @@ private struct AppBlock: View {
     }
 
     private var sizeText: String {
-        guard row.plan != nil else { return "Measuring…" }
+        guard row.plan != nil else { return row.failure == nil ? "Measuring…" : "–" }
         return isTicked ? "\(model.selectedBytes(row).formattedBytes) selected of \(row.total.formattedBytes)" : "\(row.total.formattedBytes) on disk"
     }
 

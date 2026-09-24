@@ -11,6 +11,8 @@ struct DebloatApp: Identifiable {
     let app: InstalledApp
     var plan: UninstallPlan?
     var runtimes: [SimRuntime] = []
+    /// Why the plan could not be found; the row stays, unselectable.
+    var failure: String?
     var id: URL { app.url }
 
     var runtimeBytes: UInt64 { runtimes.reduce(0) { $0 + $1.bytes } }
@@ -161,9 +163,16 @@ public final class DebloatModel {
 
     private func findPlans() async {
         guard let uninstaller else { return }
-        for app in (apps + installers).filter({ $0.plan == nil }).map(\.app) {
+        for app in (apps + installers).filter({ $0.plan == nil && $0.failure == nil }).map(\.app) {
             guard !Task.isCancelled else { return }
-            guard let plan = try? await uninstaller.plan(for: app) else { continue }
+            let plan: UninstallPlan
+            do {
+                plan = try await uninstaller.plan(for: app)
+            } catch {
+                // A cancelled visit finds it next time.
+                if !(error is CancellationError) { update(app.url) { $0.failure = error.localizedDescription } }
+                continue
+            }
             let runtimes = profiles.profile(for: app.bundleIdentifier)?.simulatorRuntimes == true
                 ? (try? await runtimeTool.list(xcode: app.url)) ?? [] : []
             update(app.url) { $0.plan = plan; $0.runtimes = runtimes }
@@ -257,12 +266,12 @@ public final class DebloatModel {
 
     /// What exists: every removable app with everything it installed.
     var totalBytes: UInt64 { rows.reduce(0) { $0 + $1.total } }
-    var isMeasuring: Bool { !hasLoadedApps || rows.contains { $0.plan == nil } }
+    var isMeasuring: Bool { !hasLoadedApps || rows.contains { $0.plan == nil && $0.failure == nil } }
 
     /// The footer: what goes where (section 4.2).
     var footerText: String {
         let count = tickedRows.count
-        guard count > 0 else { return rows.isEmpty ? "Nothing to remove." : "Tick the apps you want to remove." }
+        guard count > 0 else { return rows.isEmpty && !isMeasuring ? "Nothing to remove." : "Tick the apps you want to remove." }
         let apps = count == 1 ? "1 app" : "\(count) apps"
         if hardcore.isOn { return "\(apps), frees up to \((bytesToRemove + runtimeBytesToDelete).formattedBytes)" }
         let runtimes = runtimeBytesToDelete > 0 ? " · \(runtimeBytesToDelete.formattedBytes) deleted now" : ""
