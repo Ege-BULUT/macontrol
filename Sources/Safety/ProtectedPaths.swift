@@ -13,17 +13,28 @@ public enum ProtectedPaths {
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
         cloudConfirmed: Bool = false
     ) -> RefusalReason? {
-        let policy = home.path == defaultHome.path ? defaultPolicy : ProtectionPolicy(home: home)
         do {
-            return policy.refusal(canonical: try canonicalPath(of: url), cloudConfirmed: cloudConfirmed)
+            return policy(home).refusal(canonical: try canonicalPath(of: url), cloudConfirmed: cloudConfirmed)
         } catch {
             return error
         }
     }
 
+    /// Why this item goes to the Trash even when the batch deletes permanently (DESIGN-debloat D4), for the
+    /// confirmation sheet: "stored in iCloud", "holds your notes"... Nil when it can be deleted. A folder that turns
+    /// out to hold an evicted iCloud folder goes to the Trash too, which only the delete itself can see.
+    public static func trashOnlyReason(for url: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String? {
+        guard let path = try? canonicalPath(of: url) else { return nil }
+        return policy(home).trashOnlyReason(canonical: path)
+    }
+
+    private static func policy(_ home: URL) -> ProtectionPolicy {
+        home.path == defaultHome.path ? defaultPolicy : ProtectionPolicy(home: home, journal: TrashService.defaultJournalURL)
+    }
+
     // Built once: callers check every row, and building reads /usr/share/firmlinks.
     private static let defaultHome = FileManager.default.homeDirectoryForCurrentUser
-    private static let defaultPolicy = ProtectionPolicy(home: defaultHome)
+    private static let defaultPolicy = ProtectionPolicy(home: defaultHome, journal: TrashService.defaultJournalURL)
 
     /// Permission errors and paths past PATH_MAX mean the item may well exist, just out of reach.
     static func unreachable(_ code: Int32) -> RefusalReason {
@@ -70,6 +81,13 @@ public enum ProtectedPaths {
     }
 }
 
+/// Why a folder cannot go whole (`ProtectionPolicy.removalBlocker(inside:forErase:)`).
+enum RemovalBlocker: Equatable {
+    case refused(RefusalReason)
+    /// It holds an evicted iCloud file or folder: it may go to the Trash, but is never emptied (DESIGN-debloat D4).
+    case dataless
+}
+
 /// The protected-path rules for one home folder, built once per batch. The undo journal's folder is
 /// protected too: trashing it would take Undo away from every earlier batch.
 struct ProtectionPolicy: Sendable {
@@ -77,8 +95,10 @@ struct ProtectionPolicy: Sendable {
     private let rootsAndTheirAncestors: Set<String>
     private let neverTouch: Set<String>
     private let cloud: [String]
+    private let trashOnly: [(path: String, reason: String)]
 
-    init(home: URL, journal: URL = TrashService.defaultJournalURL) {
+    /// No defaults: the administrator helper builds this for the requesting user, never for root (r2: sec 6).
+    init(home: URL, journal: URL) {
         let home = (try? ProtectedPaths.canonicalPath(of: home)) ?? home.path
         let journalFolder = journal.deletingLastPathComponent()
         let ownState = (try? ProtectedPaths.canonicalPath(of: journalFolder)) ?? journalFolder.path
@@ -98,6 +118,7 @@ struct ProtectionPolicy: Sendable {
         let neverTouchPaths = ProtectedLocations.systemNeverTouch + ProtectedLocations.homeNeverTouch.map(inHome) + [ownState]
         neverTouch = Set(neverTouchPaths.map { $0.lowercased() })
         cloud = ProtectedLocations.homeCloud.map { inHome($0).lowercased() }
+        trashOnly = ProtectedLocations.trashOnly.map { (inHome($0.path).lowercased(), $0.reason) }
     }
 
     func refusal(canonical path: String, cloudConfirmed: Bool) -> RefusalReason? {
@@ -142,6 +163,17 @@ struct ProtectionPolicy: Sendable {
         return nil
     }
 
+    /// Why a permanent delete moves this item to the Trash instead: it is in the cloud, or it equals, holds or lies
+    /// inside one of the personal databases of `ProtectedLocations.trashOnly`.
+    func trashOnlyReason(canonical path: String) -> String? {
+        let lowered = path.lowercased()
+        if isInCloud(path) {
+            return lowered.contains("com~apple~") || lowered.contains("/library/mobile documents") ? "stored in iCloud" : "stored in a cloud folder"
+        }
+        let related = trashOnly.first { lowered == $0.path || lowered.hasPrefix($0.path + "/") || $0.path.hasPrefix(lowered + "/") }
+        return related?.reason
+    }
+
     private func isInCloud(_ path: String) -> Bool {
         let lowered = path.lowercased()
         // Provider folders like `com~apple~CloudDocs` mark iCloud wherever they surface.
@@ -154,6 +186,8 @@ struct ProtectionPolicy: Sendable {
 
     /// Finder's Locked checkbox, and the append-only flag a user can set the same way.
     private static let userLock = UInt32(UF_IMMUTABLE) | UInt32(UF_APPEND)
+    /// Anything inside a folder with one of these stops the folder: SIP, or flags only root can set.
+    private static let systemFlags = restricted | noUnlink | UInt32(SF_IMMUTABLE) | UInt32(SF_APPEND)
 
     /// `sunlnk` protects only the item itself: /Applications has it, and its apps can still go.
     private static func flagRefusal(item: UInt32, parent: UInt32) -> RefusalReason? {
@@ -163,51 +197,72 @@ struct ProtectionPolicy: Sendable {
         return nil
     }
 
-    /// The first item inside the folder at `path` that the user locked, as a path relative to the folder; nil when
-    /// there is none or `path` is not a folder. Only checked right before a move, never while staging: it walks the
-    /// whole folder.
-    static func lockedItem(inside path: String) -> String? {
+    /// What stops the folder at `path` from going whole, found by one walk of everything inside it, or nil. A locked
+    /// entry (`holdsLocked`, with its path relative to the folder), a system-protected one, a folder on another volume
+    /// stop it in both modes. With `forErase` (a permanent delete empties every folder inside), a folder this process
+    /// cannot write needs the administrator. An evicted iCloud folder is never listed (listing downloads it, F-0019):
+    /// it makes the item go to the Trash instead. Only checked right before the sink, never while staging.
+    static func removalBlocker(inside path: String, forErase: Bool) -> RemovalBlocker? {
         let folder = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         guard folder >= 0 else { return nil }
         var info = stat()
-        guard fstat(folder, &info) == 0, info.st_flags & UInt32(SF_DATALESS) == 0 else {
+        guard fstat(folder, &info) == 0 else {
             close(folder)
             return nil
         }
-        return lockedItem(inside: folder, device: info.st_dev)
+        if info.st_flags & UInt32(SF_DATALESS) != 0 {
+            close(folder)
+            return .dataless
+        }
+        var walk = BlockerWalk(base: path, device: info.st_dev, forErase: forErase)
+        if let reason = walk.check(folder, prefix: "") { return .refused(reason) }
+        if walk.sawDataless { return .dataless }
+        return walk.sawUnwritable ? .refused(.needsAdministrator) : nil
     }
 
-    /// Walks fd-relative without following links, so a tree deeper than PATH_MAX is covered too. It stays on the
-    /// folder's volume, skips folders it cannot open (the user cannot have locked anything in them), and never
-    /// lists an evicted iCloud folder, since listing one downloads it (F-0019). Takes ownership of `fd`.
+    /// Fd-relative, no link followed, so a tree deeper than PATH_MAX is covered too; it never leaves the folder's volume.
     // ponytail: one fstatat per entry; getattrlistbulk (as ScanEngine's BulkReader) if big folders make it slow.
-    private static func lockedItem(inside fd: Int32, device: dev_t) -> String? {
-        guard let listing = fdopendir(fd) else {
-            close(fd)
+    private struct BlockerWalk {
+        let base: String
+        let device: dev_t
+        let forErase: Bool
+        var sawDataless = false
+        var sawUnwritable = false
+
+        /// The first refusal inside `fd`, which it takes ownership of.
+        mutating func check(_ fd: Int32, prefix: String) -> RefusalReason? {
+            if forErase && faccessat(fd, ".", W_OK, AT_EACCESS) != 0 { sawUnwritable = true }
+            guard let listing = fdopendir(fd) else {
+                close(fd)
+                return nil
+            }
+            defer { closedir(listing) }
+            let folder = dirfd(listing)
+            while let entry = readdir(listing) {
+                let name = RemovalEngine.name(of: entry)
+                if RemovalEngine.isDotOrDotDot(name) { continue }
+                let relative = prefix + RemovalEngine.string(name)
+                var info = stat()
+                guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { continue }
+                if info.st_flags & ProtectionPolicy.userLock != 0 { return .holdsLocked(relative) }
+                if info.st_flags & ProtectionPolicy.systemFlags != 0 { return .systemProtected }
+                let isDataless = info.st_flags & UInt32(SF_DATALESS) != 0
+                guard info.st_mode & S_IFMT == S_IFDIR, !isDataless else {
+                    sawDataless = sawDataless || isDataless
+                    continue
+                }
+                if info.st_dev != device { return .protectedLocation(base + "/" + relative) }
+                let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                guard child >= 0 else {
+                    // An unreadable folder cannot be emptied. A folder swapped for a link since the fstatat is left to
+                    // the sink's own checks.
+                    if forErase && (errno == EACCES || errno == EPERM) { sawUnwritable = true }
+                    continue
+                }
+                if let reason = check(child, prefix: relative + "/") { return reason }
+            }
             return nil
         }
-        defer { closedir(listing) }
-        let folder = dirfd(listing)
-        while let entry = readdir(listing) {
-            var name = entry.pointee.d_name
-            let capacity = MemoryLayout.size(ofValue: name)
-            let found = withUnsafePointer(to: &name) {
-                $0.withMemoryRebound(to: CChar.self, capacity: capacity) { name -> String? in
-                    if strcmp(name, ".") == 0 || strcmp(name, "..") == 0 { return nil }
-                    var info = stat()
-                    guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return nil }
-                    if info.st_flags & userLock != 0 { return String(cString: name) }
-                    let isWalkable = info.st_mode & S_IFMT == S_IFDIR && info.st_dev == device
-                        && info.st_flags & UInt32(SF_DATALESS) == 0
-                    guard isWalkable else { return nil }
-                    let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-                    guard child >= 0, let inside = lockedItem(inside: child, device: device) else { return nil }
-                    return String(cString: name) + "/" + inside
-                }
-            }
-            if let found { return found }
-        }
-        return nil
     }
 
     /// A volume mounted below `path` (a disk image, an SMB or sshfs mount): moving the folder would

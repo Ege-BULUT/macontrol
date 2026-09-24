@@ -266,9 +266,24 @@ enum ProtectedLocations {
         """)
 
     /// Nothing at or inside these is ever trashed. `/usr/local` is carved out of `/usr` in `ProtectedPaths`.
+    /// The live macOS configuration folders in the second row are root-owned and mostly not `restricted`, so only
+    /// this list stops a root caller there (DESIGN-debloat section 2.2, r2: sec 3b).
     static let systemNeverTouch = [
         "/System", "/usr", "/bin", "/sbin", "/dev", "/private/var/vm", "/.vol",
         "/Library/Keychains", "/Library/Application Support/com.apple.TCC",
+        "/Library/Preferences/SystemConfiguration", "/Library/Preferences/OpenDirectory",
+        "/Library/Application Support/Apple", "/Library/Apple", "/Library/Developer/CommandLineTools",
+    ]
+
+    /// Relative to home. Personal databases that go to the Trash even in permanent mode, so the Trash stays their
+    /// safety net (DESIGN-debloat D4, r2: sec 5). Each comes with the reason the confirmation sheet shows.
+    static let trashOnly: [(path: String, reason: String)] = [
+        ("Library/Group Containers/group.com.apple.notes", "holds your notes"),
+        ("Library/Containers/com.apple.Notes", "holds your notes"),
+        ("Library/Application Support/AddressBook", "holds your contacts"),
+        ("Library/Calendars", "holds your calendars"),
+        ("Library/Safari", "holds your Safari data"),
+        ("Library/Application Support/MobileSync/Backup", "holds iPhone and iPad backups"),
     ]
 
     static let homeNeverTouch = [
