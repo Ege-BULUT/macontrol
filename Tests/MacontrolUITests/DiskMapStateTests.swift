@@ -133,17 +133,43 @@ import Testing
         let folder = try TemporaryDirectory()
         try folder.file("a/one.bin", size: 8192)
         let model = DiskMapModel(engine: ScanEngine(), trash: nil)
-        let hung = DispatchSemaphore(value: 0)
-        defer { hung.signal() }
-        model.readBytesInUse = { _ in
-            _ = hung.wait(timeout: .now() + 10)
-            return 1
-        }
-        let started = ContinuousClock.now
+        let hung = Self.hungVolumeRead()
+        defer { hung.release() }
+        model.readBytesInUse = hung.read
         await model.scan(folder.url)
-        #expect(started.duration(to: .now) < .seconds(5), "the scan waited for statfs")
+        #expect(!hung.hasReturned(), "the scan waited for statfs")
         #expect(model.tree?.allocatedSize(of: ScanTree.root) ?? 0 >= 8192)
         #expect(!model.isScanning)
+    }
+
+    /// T-0063 review 2: Stop ends the scan while the volume read hangs, and keeps the map it had.
+    /// With the goal awaited in front of the walk, Stop did nothing until statfs returned.
+    @Test func stopEndsTheScanWhileTheVolumeReadHangs() async throws {
+        let folder = try TemporaryDirectory()
+        try folder.file("a/one.bin", size: 8192)
+        let old = DiskMapFixtures.mixed()
+        let model = DiskMapModel(engine: ScanEngine(), trash: nil, tree: old)
+        let hung = Self.hungVolumeRead()
+        defer { hung.release() }
+        model.readBytesInUse = hung.read
+        let scan = Task { await model.scan(folder.url) }
+        scan.cancel()
+        await scan.value
+        #expect(!hung.hasReturned(), "Stop waited for statfs")
+        #expect(model.tree?.count == old.count, "Stop keeps the map it had")
+        #expect(!model.isScanning && model.preview == nil && model.progress == nil && model.expectedTotal == nil)
+    }
+
+    /// A volume read that hangs like statfs on a dead network mount, until `release` or two minutes pass.
+    /// Tests ask `hasReturned` instead of timing the scan: in the full suite, main-actor work queues for 50 s.
+    static func hungVolumeRead() -> (read: @Sendable (URL) -> UInt64?, release: () -> Void, hasReturned: () -> Bool) {
+        let hung = DispatchSemaphore(value: 0), returned = DispatchSemaphore(value: 0)
+        let read: @Sendable (URL) -> UInt64? = { _ in
+            _ = hung.wait(timeout: .now() + 120)
+            returned.signal()
+            return 1
+        }
+        return (read, { hung.signal() }, { returned.wait(timeout: .now()) == .success })
     }
 
     /// One level of folders with these sizes, like a preview.

@@ -31,8 +31,9 @@ import Testing
     }
 
     /// T-0063: a scan shows the top of the map as it fills in, with a bar against the space it should reach.
+    /// "disk-map-scanned-*" is the finished map right after that scan, to put next to the preview's colours.
     @Test(arguments: MapStyle.allCases)
-    func scanningStateRenders(style: MapStyle) throws {
+    func scanningStateRenders(style: MapStyle) async throws {
         SnapshotRenderer.runHeadless()
         let demo = ScanTree.demo()
         var preview = ScanTree(rootURL: demo.rootURL, rootIdentity: demo.identity(of: ScanTree.root))
@@ -55,6 +56,11 @@ import Testing
                 app.diskMap.receive(.preview(preview), generation: generation)
                 let data = try SnapshotRenderer.png(of: RootView(model: app), dark: dark, size: size)
                 try write(data, "disk-map-scanning-\(style.rawValue)\(suffix)-\(dark ? "dark" : "light")")
+                guard suffix.isEmpty else { continue }
+                app.diskMap.receive(.completed(demo), generation: generation)
+                app.diskMap.finishScan(generation)
+                await app.diskMap.prepareLayout(app.diskMap.layoutKey(width: 510, height: 470, scale: 2))
+                try write(SnapshotRenderer.png(of: RootView(model: app), dark: dark), "disk-map-scanned-\(style.rawValue)-\(dark ? "dark" : "light")")
             }
         }
     }
