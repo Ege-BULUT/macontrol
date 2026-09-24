@@ -1,0 +1,100 @@
+# Builds, signs and publishes Macontrol when a v* tag is pushed (docs/RELEASING.md).
+# Tags only: the repo is private and macOS minutes count 10x against the free 2,000 a month.
+# Tests run locally before tagging; CI tests come once the repo is public.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26          # arm64, GA
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0       # bundle-app.sh numbers the build with `git rev-list --count HEAD`
+
+      - name: Select Xcode 26.6 (the maintainer's Xcode, Swift 6.3)
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          swift --version
+
+      # GitHub restores a cache only for the same tag (or the default branch), so this speeds up
+      # "Re-run failed jobs" on a tag, not the next release. Saved even when a later step fails.
+      - uses: actions/cache/restore@v5
+        with:
+          path: .build
+          key: spm-${{ runner.arch }}-xcode26.6-${{ github.sha }}
+          restore-keys: spm-${{ runner.arch }}-xcode26.6-
+
+      - name: Import the signing identity into a temporary keychain
+        env:
+          P12: ${{ secrets.MACONTROL_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.MACONTROL_SIGNING_PASSWORD }}
+        run: |
+          : "${P12:?secret MACONTROL_SIGNING_P12 is not set, see docs/RELEASING.md}"
+          : "${P12_PASSWORD:?secret MACONTROL_SIGNING_PASSWORD is not set, see docs/RELEASING.md}"
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KC_PASS="$(openssl rand -hex 24)"
+          printf %s "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KEYCHAIN" -f pkcs12 -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/signing.p12"
+          security find-identity -p codesigning "$KEYCHAIN" | grep -F '"macontrol Self-Signed"'
+
+      - name: Build and sign
+        id: build
+        env:
+          SIGN_IDENTITY: macontrol Self-Signed
+        run: |
+          scripts/bundle-app.sh release
+          VERSION="${GITHUB_REF_NAME#v}"
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Macontrol.app/Contents/Info.plist)"
+          if [ "$APP_VERSION" != "${VERSION%%-*}" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, but the app is $APP_VERSION: bump VERSION in scripts/bundle-app.sh"
+            exit 1
+          fi
+          codesign -d -r- build/Macontrol.app 2>&1 | grep -F 'certificate leaf = H"' \
+            || { echo "::error::the app is not signed with the macontrol certificate"; exit 1; }
+
+      - uses: actions/cache/save@v5
+        if: always() && steps.build.outcome != 'skipped'
+        with:
+          path: .build
+          key: spm-${{ runner.arch }}-xcode26.6-${{ github.sha }}
+
+      - name: Zip and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP="Macontrol-$VERSION.zip"
+          mkdir -p dist
+          ditto -c -k --keepParent build/Macontrol.app "dist/$ZIP"
+          (cd dist && shasum -a 256 "$ZIP" > "$ZIP.sha256" && cat "$ZIP.sha256")
+          # Notes: this version's section of CHANGELOG.md ("## 0.2.0, <date>, preview").
+          awk -v v="$VERSION" 'index($0, "## " v ",") == 1 || $0 == "## " v { f = 1; next } /^## / { f = 0 } f' \
+            CHANGELOG.md > dist/notes.md
+          [ -s dist/notes.md ] || echo "See CHANGELOG.md." > dist/notes.md
+          PRE=""
+          case "$VERSION" in *-*) PRE="--prerelease" ;; esac
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "dist/$ZIP" "dist/$ZIP.sha256" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "dist/$ZIP" "dist/$ZIP.sha256" --verify-tag \
+              --title "Macontrol $VERSION" --notes-file dist/notes.md $PRE
+          fi
+
+      - name: Remove the temporary keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
