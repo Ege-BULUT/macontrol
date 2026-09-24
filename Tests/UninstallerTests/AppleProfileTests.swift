@@ -172,6 +172,18 @@ import Testing
         #expect(result.candidates.contains { $0.url.lastPathComponent == "com.apple.pkg.Xcode.plist" })
     }
 
+    /// neverTouch also holds back what the generic search finds, not only profile items.
+    @Test func neverTouchHoldsBackGenericLeftoversToo() async throws {
+        let fx = try Fixture()
+        try Self.xcodeTree(fx)
+        let json = #"{"version": 1, "profiles": [{"bundleIdentifier": "com.apple.dt.Xcode", "name": "Xcode", "verified": true, "evidence": "test", "items": [], "neverTouch": ["~/Library/Caches/com.apple.dt.Xcode"]}]}"#
+        let profiles = try JSONDecoder().decode(AppleProfiles.self, from: Data(json.utf8))
+        let finder = LeftoverFinder(app: try await Self.appleApp(fx, "Xcode"), others: [], home: fx.home, systemRoot: fx.root, profiles: profiles)
+        #expect(!finder.run().candidates.contains { $0.url.path.contains("Caches/com.apple.dt.Xcode") })
+        let generic = LeftoverFinder(app: try await Self.appleApp(fx, "Xcode"), others: [], home: fx.home, systemRoot: fx.root, profiles: AppleProfiles())
+        #expect(generic.run().candidates.contains { $0.url.path.contains("Caches/com.apple.dt.Xcode") })
+    }
+
     /// A bundle that only claims Xcode's identifier is not Apple's: no profile, no Apple content offered.
     @Test func onlyApplesOwnAppGetsTheProfile() async throws {
         let fx = try Fixture()
