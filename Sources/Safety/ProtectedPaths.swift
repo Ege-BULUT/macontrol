@@ -163,15 +163,19 @@ struct ProtectionPolicy: Sendable {
         return nil
     }
 
-    /// Why a permanent delete moves this item to the Trash instead: it is in the cloud, or it equals, holds or lies
-    /// inside one of the personal databases of `ProtectedLocations.trashOnly`.
+    /// Why a permanent delete moves this item to the Trash instead: it is in the cloud (by its path, or by its own
+    /// metadata), or it equals, holds or lies inside one of the personal databases of `ProtectedLocations.trashOnly`.
     func trashOnlyReason(canonical path: String) -> String? {
         let lowered = path.lowercased()
         if isInCloud(path) {
             return lowered.contains("com~apple~") || lowered.contains("/library/mobile documents") ? "stored in iCloud" : "stored in a cloud folder"
         }
         let related = trashOnly.first { lowered == $0.path || lowered.hasPrefix($0.path + "/") || $0.path.hasPrefix(lowered + "/") }
-        return related?.reason
+        if let reason = related?.reason { return reason }
+        // iCloud's Desktop & Documents Folders keeps its files at their home paths: only the item's metadata tells.
+        // Untested: the feature is off on the build Mac, and no test can make an item ubiquitous (T-0074 review 3).
+        let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isUbiquitousItemKey])
+        return values?.isUbiquitousItem == true ? "stored in iCloud" : nil
     }
 
     private func isInCloud(_ path: String) -> Bool {
@@ -209,7 +213,7 @@ struct ProtectionPolicy: Sendable {
         var info = stat()
         guard fstat(folder, &info) == 0 else {
             close(folder)
-            return nil
+            return forErase ? .refused(.needsAdministrator) : nil
         }
         if info.st_flags & UInt32(SF_DATALESS) != 0 {
             close(folder)
@@ -226,7 +230,7 @@ struct ProtectionPolicy: Sendable {
         var sawUnwritable = forErase && faccessat(fd, ".", W_OK, AT_EACCESS) != 0
         guard let top = fdopendir(fd) else {
             close(fd)
-            return nil
+            return forErase ? .refused(.needsAdministrator) : nil
         }
         var levels: [(listing: UnsafeMutablePointer<DIR>, prefix: String)] = [(top, "")]
         defer { levels.forEach { closedir($0.listing) } }
@@ -272,7 +276,7 @@ struct ProtectionPolicy: Sendable {
 
     /// Why a folder could not be opened for listing, apart from a link or a file swapped in for it, or it being gone:
     /// no permission, too many open files, and the like. A walk that must reach everything counts these as blocking.
-    private static func unreadable(_ code: Int32) -> Bool {
+    static func unreadable(_ code: Int32) -> Bool {
         code != ELOOP && code != ENOTDIR && code != ENOENT
     }
 

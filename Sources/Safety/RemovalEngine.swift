@@ -23,8 +23,10 @@ struct RemovalEngine: Sendable {
         case removed
         /// A link on the way, or the object at the path is not the one checked: nothing was removed.
         case changed
-        /// These entries stayed. For `deleteFile`, nothing was removed.
+        /// Nothing was removed; these are why.
         case failed([Failure])
+        /// Some entries were removed; these stayed. Only `erase` returns it.
+        case partly([Failure])
     }
 
     /// Tests only: called with the item's path and "" before the item is opened, then with each entry's path inside
@@ -41,11 +43,11 @@ struct RemovalEngine: Sendable {
         let (folder, name) = Self.split(path)
         beforeEntry?(path, "")
         let parent = open(folder, O_RDONLY | O_DIRECTORY | O_NOFOLLOW_ANY | O_CLOEXEC)
-        guard parent >= 0 else { return .changed }
+        guard parent >= 0 else { return Self.notOpened(errno) }
         defer { close(parent) }
         var info = stat()
-        guard fstatat(parent, name, &info, AT_SYMLINK_NOFOLLOW) == 0, Self.identity(info) == identity,
-              info.st_mode & S_IFMT != S_IFDIR else { return .changed }
+        guard fstatat(parent, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return Self.notOpened(errno) }
+        guard Self.identity(info) == identity, info.st_mode & S_IFMT != S_IFDIR else { return .changed }
         var flags: Int32 = 0
         // macOS 26 refuses a file some process holds open; 14 and 15 reject the flag (feasibility-permanent fact 9).
         if #available(macOS 26, *) { flags |= AT_NODELETEBUSY }
@@ -61,22 +63,30 @@ struct RemovalEngine: Sendable {
         let (folder, name) = Self.split(path)
         beforeEntry?(path, "")
         let parent = open(folder, O_RDONLY | O_DIRECTORY | O_NOFOLLOW_ANY | O_CLOEXEC)
-        guard parent >= 0 else { return .changed }
+        guard parent >= 0 else { return Self.notOpened(errno) }
         defer { close(parent) }
         var info = stat()
-        guard fstatat(parent, name, &info, AT_SYMLINK_NOFOLLOW) == 0, Self.identity(info) == identity else { return .changed }
+        guard fstatat(parent, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return Self.notOpened(errno) }
+        guard Self.identity(info) == identity else { return .changed }
         let fd = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard fd >= 0 else { return .changed }
+        guard fd >= 0 else { return Self.notOpened(errno) }
         var opened = stat()
         guard fstat(fd, &opened) == 0, Self.identity(opened) == identity else {
             close(fd)
             return .changed
         }
-        var failures = empty(fd, device: opened.st_dev, item: path)
+        var (failures, removed) = empty(fd, device: opened.st_dev, item: path)
         if unlinkat(parent, name, AT_REMOVEDIR) != 0, failures.isEmpty {
             failures.append(Failure(path: "", reason: Self.describe(errno)))
         }
-        return failures.isEmpty ? .removed : .failed(failures)
+        if failures.isEmpty { return .removed }
+        return removed ? .partly(failures) : .failed(failures)
+    }
+
+    /// Why a folder on the way or the item could not be opened: a link or a missing entry means it changed; anything
+    /// else (no permission, TCC, too many open files) is a failure with nothing removed.
+    private static func notOpened(_ code: Int32) -> Result {
+        ProtectionPolicy.unreadable(code) ? .failed([Failure(path: "", reason: describe(code))]) : .changed
     }
 
     /// One folder being emptied: its descriptor, every name it held when opened, and how far the walk got.
@@ -91,22 +101,29 @@ struct RemovalEngine: Sendable {
         let failuresBefore: Int
     }
 
-    /// Removes everything inside the folder `fd`, which it closes. A loop over an explicit stack, not recursion: the
-    /// actor's queue thread has a 512 KB stack, which a 300-level tree overflowed.
-    private func empty(_ fd: Int32, device: dev_t, item: String) -> [Failure] {
+    /// Removes everything inside the folder `fd`, which it closes, and says whether it removed anything. A loop over an
+    /// explicit stack, not recursion: the actor's queue thread has a 512 KB stack, which a 300-level tree overflowed.
+    private func empty(_ fd: Int32, device: dev_t, item: String) -> (failures: [Failure], removed: Bool) {
         // Every name first: whether a listing still returns every entry once some are removed is unspecified.
         guard let names = Self.names(in: fd) else {
             close(fd)
-            return [Failure(path: "", reason: Self.describe(errno))]
+            return ([Failure(path: "", reason: Self.describe(errno))], false)
         }
         var failures: [Failure] = []
+        var removed = false
+        /// `unlinkat`, noting a success.
+        func remove(_ folder: Int32, _ name: [CChar], _ flags: Int32) -> Bool {
+            let done = unlinkat(folder, name, flags) == 0
+            removed = removed || done
+            return done
+        }
         var levels = [Level(fd: fd, names: names, prefix: "", name: nil, failuresBefore: 0)]
         while let level = levels.last {
             guard level.next < level.names.count else {
                 // Emptied, as far as it goes: close it and remove it from the level above.
                 levels.removeLast()
                 close(level.fd)
-                if let name = level.name, let above = levels.last, unlinkat(above.fd, name, AT_REMOVEDIR) != 0,
+                if let name = level.name, let above = levels.last, !remove(above.fd, name, AT_REMOVEDIR),
                    failures.count == level.failuresBefore {
                     failures.append(Failure(path: String(level.prefix.dropLast()), reason: Self.describe(errno)))
                 }
@@ -123,7 +140,7 @@ struct RemovalEngine: Sendable {
             }
             beforeEntry?(item, relative)
             guard info.st_mode & S_IFMT == S_IFDIR else {
-                if unlinkat(level.fd, name, 0) != 0, errno != ENOENT { fail(Self.describe(errno)) }
+                if !remove(level.fd, name, 0), errno != ENOENT { fail(Self.describe(errno)) }
                 continue
             }
             if info.st_dev != device {
@@ -140,7 +157,7 @@ struct RemovalEngine: Sendable {
                 // Swapped for a link or a file since the fstatat: that entry goes, never what a link points to.
                 if code != ELOOP && code != ENOTDIR {
                     fail(Self.describe(code))
-                } else if unlinkat(level.fd, name, 0) != 0 {
+                } else if !remove(level.fd, name, 0) {
                     fail(Self.describe(errno))
                 }
                 continue
@@ -158,7 +175,7 @@ struct RemovalEngine: Sendable {
             }
             levels.append(Level(fd: child, names: names, prefix: relative + "/", name: name, failuresBefore: failures.count))
         }
-        return failures
+        return (failures, removed)
     }
 
     // MARK: Names

@@ -421,6 +421,61 @@ import Testing
         #expect(await box.service().history().map(\.isPermanent) == [true], "bytes were removed, so History shows it")
     }
 
+    /// Every entry refuses to go (the folder turns read-only before the first, as App Management would): nothing was
+    /// deleted, so the outcome must not say so, and the folder, whole in the Trash, keeps its Undo (T-0074 review 2).
+    @Test func anEraseThatRemovesNothingKeepsItsUndo() async throws {
+        let whole = "\(caches)/com.example.whole"
+        for index in 0..<5 { try box.file("\(whole)/f\(index)", size: 10) }
+        let seen = Counter()
+        let service = await service(hook: { item, relative in
+            if !relative.isEmpty, seen.next() == 1 { chmod(item, 0o555) }
+        })
+        let before = box.tree()
+
+        let report = await service.remove([item(whole)], mode: .permanent)
+
+        #expect(inTrash() == ["com.example.whole"] + (0..<5).map { "com.example.whole/f\($0)" })
+        guard case .failed(_, let message)? = report.outcomes.first, report.outcomes.count == 1 else { Issue.record("\(report.outcomes)"); return }
+        // The first entry named depends on the listing's order.
+        #expect(message.hasPrefix("Moved to the Trash as \"com.example.whole\", but nothing in it could be deleted (f"), "\(message)")
+        #expect(message.hasSuffix(": Permission denied). Undo it from History, or empty the Trash to finish."), "\(message)")
+        let history = await box.service().history()
+        let trashed = try #require(history.first?.trashedPath, "journaled as trashed, not as deleted")
+        chmod(trashed, 0o755)
+        let undone = await box.service().undo(batch: report.batch)
+        #expect(undone.count == 1 && undone.allSatisfy { if case .restored = $0 { true } else { false } }, "\(undone)")
+        #expect(Sandbox.difference(box.tree(), before) == [])
+    }
+
+    /// The Trash folder (for a folder) or the item's own folder (for a file) cannot be opened when the delete starts,
+    /// as with TCC or a permission change: that is a failure with its reason, not "it changed" (T-0074 review 4).
+    @Test(arguments: [false, true])
+    func aFolderThatCannotBeOpenedIsAFailureNotAChange(isFile: Bool) async throws {
+        let relative = isFile ? "\(caches)/com.example.tcc/blob" : "\(caches)/com.example.tcc"
+        try box.file("\(caches)/com.example.tcc/blob", size: 10)
+        let blocked = Calls()
+        let service = await service(hook: { item, relative in
+            guard relative.isEmpty else { return }
+            let folder = (item as NSString).deletingLastPathComponent
+            blocked.record([folder])
+            chmod(folder, 0o000)
+        })
+        let before = box.tree()
+
+        let report = await service.remove([item(relative)], mode: .permanent)
+
+        for call in blocked.all { chmod(call[0], 0o755) }
+        guard case .failed(_, let message)? = report.outcomes.first else { Issue.record("\(report.outcomes)"); return }
+        if isFile {
+            #expect(message == "It could not be deleted: Permission denied.")
+            #expect(box.tree() == before)
+        } else {
+            #expect(message.hasPrefix("Moved to the Trash as \"com.example.tcc\", but nothing in it could be deleted (com.example.tcc: Permission denied)."), "\(message)")
+            #expect(await box.service().undo(batch: report.batch).count == 1)
+            #expect(Sandbox.difference(box.tree(), before) == [])
+        }
+    }
+
     // MARK: r2: the three passes of remove (section 3.6, ux 9, sec 4)
 
     /// A root-owned app (a 0555 bundle stands in) with two leftovers that wait for it, and an ordinary cache between
@@ -460,6 +515,49 @@ import Testing
         #expect(report.outcomes.dropFirst().allSatisfy { $0.isDone }, "\(report.outcomes)")
         let gone = ["root/Applications/Example.app", "\(caches)/com.example.app", "\(caches)/com.other", "home/Library/Preferences/com.example.app.plist"]
         #expect(Sandbox.difference(box.tree(), Sandbox.expected(before, without: gone)) == [])
+    }
+
+    /// GarageBand's shape (T-0074 review 1): a root-owned app and root-owned content that waits for it (0555 parents
+    /// stand in for root), the content listed first. The content goes in the one helper request, after the app, in
+    /// both modes; if the user cancels, neither moves.
+    @Test(arguments: [DeletionMode.trash, .permanent], [false, true])
+    func rootOwnedContentOfARootOwnedAppGoesInTheSameHelperRequest(mode: DeletionMode, cancelled: Bool) async throws {
+        let bundle = try box.tmp.directory("root/Applications/GarageBand.app")
+        try box.file("root/Applications/GarageBand.app/Contents/Info.plist")
+        try box.file("root/Library/Application Support/GarageBand/Instrument Library/loops.caf")
+        let parents = [box.url("root/Applications"), box.url("root/Library/Application Support")]
+        #expect(parents.allSatisfy { chmod($0.path, 0o555) == 0 })
+        defer { for parent in parents { chmod(parent.path, 0o755) } }
+        let items = [item("root/Library/Application Support/GarageBand", requiresGone: bundle), item("root/Applications/GarageBand.app")]
+        let calls = Calls()
+        let box = box
+        let route: TrashService.Route = { routed, _, _, _, _, _, _ in
+            calls.record(routed.map(\.url.lastPathComponent))
+            // What root does, item by item: one that waits for another goes only once that one is gone.
+            return routed.map { item in
+                if cancelled { return .failed(item.url, message: "cancelled") }
+                if let required = item.requiresGone, FileIdentity(url: required) != nil { return .failed(item.url, message: "still there") }
+                let parent = item.url.deletingLastPathComponent().path
+                chmod(parent, 0o755)
+                try? FileManager.default.moveItem(at: item.url, to: box.trashFolder.appendingPathComponent(UUID().uuidString))
+                chmod(parent, 0o555)
+                return .deleted(original: item.url)
+            }
+        }
+        let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent")) { _, _, _, _ in }
+        let before = box.tree()
+
+        let report = await service(route: route).remove(items, mode: mode, administrator: launcher)
+
+        #expect(calls.all == [["GarageBand.app", "GarageBand"]])
+        if cancelled {
+            #expect(report.outcomes == items.map { .failed($0.url, message: "cancelled") })
+            #expect(Sandbox.difference(box.tree(), before) == [])
+        } else {
+            #expect(report.outcomes == items.map { .deleted(original: $0.url) })
+            let gone = ["root/Library/Application Support/GarageBand", "root/Applications/GarageBand.app"]
+            #expect(Sandbox.difference(box.tree(), Sandbox.expected(before, without: gone)) == [])
+        }
     }
 
     /// The user cancels the administrator dialog for the root-owned bundle: every leftover that waits for it stays

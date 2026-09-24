@@ -13,13 +13,20 @@ public struct TrashItem: Sendable, Hashable {
     /// Remove this item only if nothing exists at this path when its turn comes. An app's leftovers name the
     /// app's bundle here, so no leftover is touched while the app is installed (DESIGN-debloat section 2.1).
     public var requiresGone: URL?
+    /// The app this item belongs to, if any: the administrator helper lets an Apple-named item in /Library go only
+    /// when its name starts with this identifier (T-0075).
+    public var bundleIdentifier: String?
 
-    public init(url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0, requiresGone: URL? = nil) {
+    public init(
+        url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0, requiresGone: URL? = nil,
+        bundleIdentifier: String? = nil
+    ) {
         self.url = url
         self.expectedIdentity = expectedIdentity
         self.keep = keep
         self.allocated = allocated
         self.requiresGone = requiresGone
+        self.bundleIdentifier = bundleIdentifier
     }
 }
 
@@ -151,8 +158,9 @@ public actor TrashService {
 
     /// One batch in either mode, outcomes in the order of `items` (DESIGN-debloat sections 2.1 and 3.6), in three
     /// passes: every item in-process, setting aside those refused with `.needsAdministrator` and deferring those whose
-    /// `requiresGone` names a set-aside one; then one helper request for the set-aside items when `administrator` is
-    /// given (without it they stay refused, as in v1); then the deferred items. So one call shows at most one dialog.
+    /// `requiresGone` names a set-aside one (unless their own checks need the administrator too: those are set aside
+    /// after it); then one helper request for the set-aside items when `administrator` is given (without it they stay
+    /// refused, as in v1); then the deferred items. So one call shows at most one dialog.
     /// `restorePoint` is recorded on every journal line.
     public func remove(
         _ items: [TrashItem], mode: DeletionMode, cloudConfirmed: Bool = false,

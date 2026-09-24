@@ -36,7 +36,8 @@ struct TrashBatch {
     struct Passes {
         /// Per item, in the order of the items; an item pieced out by `keep` reports each piece.
         var outcomes: [[TrashOutcome]]
-        /// Refused with `.needsAdministrator` and nothing else: for the administrator helper, in item order.
+        /// Refused with `.needsAdministrator` and nothing else: for the administrator helper, each after any item it
+        /// waits for (the helper checks `requiresGone` again, in this order).
         var setAside: [Int] = []
         /// Their `requiresGone` names a set-aside item: they run after the helper, in pass 3.
         var deferred: [Int] = []
@@ -70,7 +71,14 @@ struct TrashBatch {
         for index in Self.order(items, canonical) {
             let item = items[index]
             if let required = item.requiresGone, waiting.contains(Self.key(required)) {
-                passes.deferred.append(index)
+                // A root-owned leftover of a root-owned app goes in the same helper request, after its app: pass 3
+                // runs in-process and could only refuse it (T-0074 review 1).
+                if needsAdministrator(item, canonical: canonical[index]) {
+                    passes.outcomes[index] = [.refused(item.url, .needsAdministrator)]
+                    passes.setAside.append(index)
+                } else {
+                    passes.deferred.append(index)
+                }
                 waiting.insert(Self.key(item.url))
                 continue
             }
@@ -80,7 +88,6 @@ struct TrashBatch {
                 waiting.insert(Self.key(item.url))
             }
         }
-        passes.setAside.sort()
         return passes
     }
 
@@ -126,12 +133,11 @@ struct TrashBatch {
         let lowered = path.lowercased()
         if isKept(lowered) { return [.failed(item.url, message: "You chose to keep this, so it was not moved.")] }
         if let outcome = coveredOutcome(of: path, shownAs: item.url) { return [outcome] }
-        if let reason = policy.refusal(canonical: path, cloudConfirmed: cloudConfirmed) { return [.refused(item.url, reason)] }
-        // A folder on the way that became a link since the scan leads somewhere else, even where the object there
-        // passes the identity check below, as a hard link of the scanned file does (T-0054).
-        guard Self.samePlace(item.url.path, path) else { return [.refused(item.url, .identityChanged)] }
-        guard let identity = FileIdentity(url: URL(fileURLWithPath: path)) else { return [.refused(item.url, .missing)] }
-        if let expected = item.expectedIdentity, expected != identity { return [.refused(item.url, .identityChanged)] }
+        let identity: FileIdentity
+        switch check(item, canonical: path) {
+        case .success(let checked): identity = checked
+        case .failure(let reason): return [.refused(item.url, reason)]
+        }
 
         let inside = keep.filter { $0.hasPrefix(lowered + "/") }
         if inside.isEmpty { return [sink(item.url, canonical: path, identity: identity, allocated: item.allocated)] }
@@ -144,6 +150,34 @@ struct TrashBatch {
             }
         }
         return accounted ? pieces : pieces + [.failed(item.url, message: "Nothing in it was moved: everything left in it is kept or refused.")]
+    }
+
+    /// The policy, no link on the way, and the identity the scan saw; the identity found.
+    private func check(_ item: TrashItem, canonical path: String) -> Result<FileIdentity, RefusalReason> {
+        if let reason = policy.refusal(canonical: path, cloudConfirmed: cloudConfirmed) { return .failure(reason) }
+        // A folder on the way that became a link since the scan leads somewhere else, even where the object there
+        // passes the identity check below, as a hard link of the scanned file does (T-0054).
+        guard Self.samePlace(item.url.path, path) else { return .failure(.identityChanged) }
+        guard let identity = FileIdentity(url: URL(fileURLWithPath: path)) else { return .failure(.missing) }
+        if let expected = item.expectedIdentity, expected != identity { return .failure(.identityChanged) }
+        return .success(identity)
+    }
+
+    /// Pass 1 for an item that waits for a set-aside one: would its checks and the sink's, run now, refuse it with
+    /// `.needsAdministrator`? Nothing moves. An item with kept descendants is pieced out in-process, so it waits.
+    private func needsAdministrator(_ item: TrashItem, canonical: Result<String, RefusalReason>) -> Bool {
+        let path: String
+        switch canonical {
+        case .success(let found): path = found
+        case .failure(let reason): return reason == .needsAdministrator
+        }
+        let lowered = path.lowercased()
+        guard !isKept(lowered), coveredOutcome(of: path, shownAs: item.url) == nil,
+              !keep.contains(where: { $0.hasPrefix(lowered + "/") }) else { return false }
+        switch check(item, canonical: path) {
+        case .failure(let reason): return reason == .needsAdministrator
+        case .success: return plan(canonical: path) == .failure(.needsAdministrator)
+        }
     }
 
     /// Removes everything in `folder` except the kept paths, descending only into folders that hold one (F-0026).
@@ -171,19 +205,35 @@ struct TrashBatch {
         return outcomes
     }
 
-    private mutating func sink(_ shown: URL, canonical path: String, identity: FileIdentity, allocated: UInt64) -> TrashOutcome {
-        if let journalError { return .failed(shown, message: journalError) }
+    /// What the sink does with the item at `path`, or why it refuses it, decided before anything moves.
+    private struct Plan: Equatable {
+        var isFolder: Bool
+        var erase: Bool
+    }
+
+    private func plan(canonical path: String) -> Result<Plan, RefusalReason> {
         var info = stat()
-        guard lstat(path, &info) == 0 else { return .refused(shown, .missing) }
+        guard lstat(path, &info) == 0 else { return .failure(.missing) }
         let isFolder = info.st_mode & S_IFMT == S_IFDIR
         // D4: in the cloud, a personal database, or evicted: to the Trash even when the batch deletes permanently.
         var erase = mode == .permanent && policy.trashOnlyReason(canonical: path) == nil && info.st_flags & UInt32(SF_DATALESS) == 0
         if isFolder {
             switch ProtectionPolicy.removalBlocker(inside: path, forErase: erase) {
-            case .refused(let reason)?: return .refused(shown, reason)
+            case .refused(let reason)?: return .failure(reason)
             case .dataless?: erase = false
             case nil: break
             }
+        }
+        return .success(Plan(isFolder: isFolder, erase: erase))
+    }
+
+    private mutating func sink(_ shown: URL, canonical path: String, identity: FileIdentity, allocated: UInt64) -> TrashOutcome {
+        if let journalError { return .failed(shown, message: journalError) }
+        let isFolder: Bool
+        let erase: Bool
+        switch plan(canonical: path) {
+        case .success(let plan): (isFolder, erase) = (plan.isFolder, plan.erase)
+        case .failure(let reason): return .refused(shown, reason)
         }
         // The backend moves by path, and a path follows any link swapped in for one of its folders. So check the
         // way just before the move, and after it check that what left is what was checked (T-0053).
@@ -218,6 +268,11 @@ struct TrashBatch {
             record(original: path, trashedTo: destination, identity: identity, allocated: allocated)
             return .failed(shown, message: "Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.")
         case .failed(let failures):
+            // Nothing was removed: it is whole in the Trash, so it keeps its Undo.
+            gone[key] = .trashed(destination)
+            record(original: path, trashedTo: destination, identity: identity, allocated: allocated)
+            return .failed(shown, message: Self.notDeleted(failures, trashName: destination.lastPathComponent))
+        case .partly(let failures):
             // Bytes were removed, so History must show it; a half-deleted folder is not worth an Undo.
             gone[key] = .erased(destination)
             record(original: path, trashedTo: nil, identity: identity, allocated: allocated)
@@ -234,16 +289,24 @@ struct TrashBatch {
             return .deleted(original: shown)
         case .changed:
             return .refused(shown, .identityChanged)
-        case .failed(let failures):
+        case .failed(let failures), .partly(let failures):
             return .failed(shown, message: "It could not be deleted: \(failures.first?.reason ?? "unknown error").")
         }
     }
 
     static func partlyDeleted(_ failures: [RemovalEngine.Failure], trashName: String) -> String {
         let count = failures.count == 1 ? "1 item" : "\(failures.count) items"
-        let first = failures.first.map { ($0.path.isEmpty ? trashName : $0.path) + ": " + $0.reason } ?? ""
         return "Partly deleted. \(count) inside could not be removed; the rest is in the Trash as \"\(trashName)\". "
-            + "Empty the Trash to finish. First: \(first)"
+            + "Empty the Trash to finish. First: \(first(failures, trashName))"
+    }
+
+    static func notDeleted(_ failures: [RemovalEngine.Failure], trashName: String) -> String {
+        "Moved to the Trash as \"\(trashName)\", but nothing in it could be deleted (\(first(failures, trashName))). "
+            + "Undo it from History, or empty the Trash to finish."
+    }
+
+    private static func first(_ failures: [RemovalEngine.Failure], _ trashName: String) -> String {
+        failures.first.map { ($0.path.isEmpty ? trashName : $0.path) + ": " + $0.reason } ?? ""
     }
 
     /// App Management (macOS 13+) answers EPERM when an app bundle it guards is moved. Unverified which error

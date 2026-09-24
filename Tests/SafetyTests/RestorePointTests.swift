@@ -23,6 +23,20 @@ import Testing
         #expect(RestorePoint.snapshotName(in: output) == nil)
     }
 
+    /// A tool that hangs (sleep stands in for tmutil) is stopped at the timeout, and the error says so; one that
+    /// finishes gives its status and output.
+    @Test func aHungToolIsStoppedAtTheTimeout() async throws {
+        let started = Date()
+        await #expect {
+            _ = try await RestorePoint.run(URL(fileURLWithPath: "/bin/sleep"), ["30"], timeout: 0.3)
+        } throws: { error in
+            (error as NSError).localizedDescription == "sleep did not finish in 0 seconds, so it was stopped."
+        }
+        #expect(Date().timeIntervalSince(started) < 10)
+        let finished = try await RestorePoint.run(URL(fileURLWithPath: "/bin/echo"), ["done"], timeout: 30)
+        #expect(finished.status == 0 && finished.text == "done\n")
+    }
+
     /// Makes a real local snapshot of this Mac's Data volume (about a minute), so only on request. Delete it
     /// afterwards with `tmutil deletelocalsnapshots <date>`.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["MACONTROL_TMUTIL"] == "1"))
