@@ -1,0 +1,75 @@
+name: Safety report
+description: macontrol offered to remove, or removed, something it should not have.
+labels: [safety, bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security vulnerabilities do not belong here.** If someone could exploit the problem, for example with a crafted file tree or a link swap, report it privately as described in [SECURITY.md](https://github.com/Ege-BULUT/macontrol/blob/main/SECURITY.md).
+
+        Everything macontrol removes goes to the Trash first. If an item is still there, History can usually put it back.
+  - type: textarea
+    id: item
+    attributes:
+      label: Item
+      description: The path, or its pattern. Replace your user name with `~` and anything private with `*`.
+      placeholder: ~/Library/Application Support/SomeApp/*.sqlite
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it was offered
+      options:
+        - Clean rule
+        - Uninstall leftover
+        - Disk Map
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: Rule, app or group
+      description: The Clean rule or category, the app being uninstalled and the leftover group, or the folder scanned in the Disk Map.
+  - type: dropdown
+    id: trashed
+    attributes:
+      label: Was it moved to the Trash?
+      options:
+        - "Yes"
+        - No, it was only offered
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: restored
+    attributes:
+      label: Could it be put back from History?
+      options:
+        - Yes, fully
+        - Partly
+        - "No"
+        - Did not try
+        - Not applicable, it was not moved
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: Was it preselected (Safe) or did you select it? Why should it have been left alone?
+  - type: input
+    id: version
+    attributes:
+      label: macontrol version
+      description: From Macontrol › About Macontrol, or the name of the zip you downloaded.
+      placeholder: 0.1.1
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.6
+    validations:
+      required: true

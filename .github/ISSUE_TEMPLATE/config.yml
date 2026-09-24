@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://macontrol.vercel.app/docs/
+    about: Install, Full Disk Access, each screen and the safety model.
+  - name: FAQ
+    url: https://macontrol.vercel.app/docs/faq.html
+    about: Free space that did not change, "not scanned" folders, skipped items, apps it cannot remove.
