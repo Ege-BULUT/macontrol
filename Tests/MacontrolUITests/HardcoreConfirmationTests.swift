@@ -115,7 +115,7 @@ import Uninstaller
         )
         let window = AppListOrderTests.host(sheet, size: Snapshot.sheetSize)
         defer { window.orderOut(nil) }
-        AppListOrderTests.press("\r", keyCode: 36, [], in: window)
+        #expect(HardcoreModeTests.press("\r", keyCode: 36, in: window))
         #expect(closed && !deleted)
     }
 
@@ -499,11 +499,11 @@ final class RemovalFixture {
         #expect(inTrash.isEmpty, "fixture Trash: \(inTrash)")
     }
 
-    /// Return, then a wait long enough for a confirm to start, then Esc.
+    /// Return, which nothing may take, then a wait long enough for a confirm to start, then Esc, which Cancel takes.
     func pressReturnThenEsc(in window: NSWindow, stillAsking: () -> Bool) async throws {
-        AppListOrderTests.press("\r", keyCode: 36, [], in: window)
+        #expect(!HardcoreModeTests.press("\r", keyCode: 36, in: window), "a button took Return")
         try await Task.sleep(for: .milliseconds(300))
         #expect(stillAsking(), "Return confirmed the sheet")
-        AppListOrderTests.press("\u{1b}", keyCode: 53, [], in: window)
+        #expect(HardcoreModeTests.press("\u{1b}", keyCode: 53, in: window), "nothing took Esc")
     }
 }

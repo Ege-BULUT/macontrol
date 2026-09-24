@@ -76,7 +76,7 @@ import Testing
         #expect(hardcore.isAsking)
         let content = try #require(window.contentView)
         #expect(Self.checkboxes(in: content).isEmpty, "the modal has a checkbox")
-        AppListOrderTests.press(key, keyCode: keyCode, [], in: window)
+        #expect(Self.press(key, keyCode: keyCode, in: window), "nothing took the key")
         #expect(!hardcore.isAsking, "the key did not cancel")
         #expect(!hardcore.isOn)
     }
@@ -221,6 +221,19 @@ import Testing
         window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         return window
+    }
+
+    /// A key press offered the way AppKit offers it to buttons with a keyboard shortcut. Returns whether anything
+    /// took it. Unlike `sendEvent`, a key nobody takes does not travel on to NSBeep, which the user would hear.
+    @discardableResult
+    static func press(_ key: String, keyCode: UInt16, in window: NSWindow) -> Bool {
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: keyCode
+        )!
+        let handled = window.performKeyEquivalent(with: event)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        return handled
     }
 
     static func buttons(in view: NSView) -> [NSButton] {
