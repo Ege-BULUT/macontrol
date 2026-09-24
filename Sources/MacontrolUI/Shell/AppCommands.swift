@@ -21,6 +21,10 @@ public struct AppCommands: Commands {
             Divider()
             Button("Rescan") { model.rescan() }
                 .keyboardShortcut("r")
+            // Off only: nothing in a menu or on the keyboard turns hardcore mode on (DESIGN-debloat section 1.2).
+            if model.hardcore.isOn {
+                Button(HardcoreText.menuTurnOff) { model.hardcore.isOn = false }
+            }
             Divider()
         }
     }

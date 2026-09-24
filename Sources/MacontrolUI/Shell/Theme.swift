@@ -23,6 +23,13 @@ enum Theme {
     static let successText = statusText(light: 0x1A7431, dark: .systemGreen)
     static let cautionText = statusText(light: 0xA04500, dark: .systemOrange)
 
+    /// Hardcore mode: permanent deletion. For icons and fills; text takes `dangerText`. System red measures 3.8:1 on
+    /// dark gray, so dark mode takes a lighter red too (DESIGN-debloat section 1.4, checked from pixels).
+    static let danger = Color.red
+    static let dangerText = statusText(light: 0xB3261E, dark: NSColor(srgbRed: 1, green: 0.478, blue: 0.451, alpha: 1))
+    /// The banner's and the permanent strip's background: light enough that `dangerText` keeps 4.5:1 on it.
+    static let dangerWash = Color.red.opacity(0.08)
+
     private static func statusText(light: UInt32, dark: NSColor) -> Color {
         let shade = NSColor(
             srgbRed: CGFloat(light >> 16 & 0xFF) / 255, green: CGFloat(light >> 8 & 0xFF) / 255, blue: CGFloat(light & 0xFF) / 255, alpha: 1

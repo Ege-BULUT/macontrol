@@ -25,7 +25,17 @@ public struct RootView: View {
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .toolbar { ScanToolbar(model: model) }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if model.hardcore.isOn { HardcoreBanner(hardcore: model.hardcore) }
+                }
+                .toolbar {
+                    ScanToolbar(model: model)
+                    // Last, so it never moves (DESIGN-debloat section 1.2).
+                    HardcoreToolbar(hardcore: model.hardcore)
+                }
+                .sheet(isPresented: Bindable(model.hardcore).isAsking) {
+                    HardcoreModal(hardcore: model.hardcore)
+                }
         }
         .sheet(isPresented: Bindable(model.access).isOnboardingPresented) {
             OnboardingSheet(access: model.access)
