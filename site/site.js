@@ -32,3 +32,11 @@ document.querySelectorAll('pre > code').forEach((code) => {
   code.parentElement.before(wrap);
   wrap.append(code.parentElement, b);
 });
+
+// Collapsed FAQ questions and changelog releases open when a link points at them.
+function openTarget() {
+  const el = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView(); }
+}
+addEventListener('hashchange', openTarget);
+openTarget();

@@ -55,7 +55,7 @@ def inline(t):
     t = re.sub(r'`([^`]+)`', r'<code>\1</code>', t)
     t = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
     return re.sub(r'\[([^\]]+)\]\(([^)\s"]+)\)', r'<a href="\2">\1</a>', t)
-out, para, items = [], [], []
+out, para, items, releases = [], [], [], []
 def flush():
     if para: out.append('<p>' + inline(' '.join(para)) + '</p>'); para.clear()
     if items: out.append('<ul>' + ''.join('<li>' + inline(i) + '</li>' for i in items) + '</ul>'); items.clear()
@@ -64,15 +64,29 @@ for line in open(sys.argv[1], encoding='utf-8').read().splitlines():
     m = re.match(r'(#{1,3})\s+(.*)', s)
     if m:
         flush()
-        if len(m.group(1)) > 1: out.append(f'<h{len(m.group(1))}>{inline(m.group(2))}</h{len(m.group(1))}>')
+        level, text = len(m.group(1)), m.group(2)
+        if level == 2:
+            # One collapsible release per "## <version>, <date>" heading; the newest starts open.
+            version, _, date = text.partition(', ')
+            if releases: out.append('</div></details>')
+            releases.append(version)
+            small = f' <small>{inline(date)}</small>' if date else ''
+            out.append(f'<details class="acc release" id="v{html.escape(version)}"{" open" if len(releases) == 1 else ""}>'
+                       f'<summary><h2>{inline(version)}{small}</h2></summary><div class="acc-body">')
+        elif level == 3: out.append(f'<h3>{inline(text)}</h3>')
     elif re.match(r'[-*]\s+', s): (para and flush()); items.append(s[2:].strip())
     elif not s: flush()
     elif items and line.startswith(' '): items[-1] += ' ' + s
     else: (items and flush()); para.append(s)
 flush()
+if releases: out.append('</div></details>')
+# The page has its own intro, so drop CHANGELOG.md's text before the first release.
+out = out[next((i for i, o in enumerate(out) if o.startswith('<details')), 0):]
+# The page has its own intro, so drop CHANGELOG.md's text before the first release.
+out = out[next((i for i, o in enumerate(out) if o.startswith('<details')), 0):]
 page = open(sys.argv[2], encoding='utf-8').read()
 start, end = page.index('<!-- CHANGELOG:START'), page.index('<!-- CHANGELOG:END -->')
-open(sys.argv[2], 'w', encoding='utf-8').write(page[:start] + '<section class="release">\n' + '\n'.join(out) + '\n</section>\n' + page[end:])
+open(sys.argv[2], 'w', encoding='utf-8').write(page[:start] + '\n'.join(out) + '\n' + page[end:])
 PY
     echo "changelog: rendered from CHANGELOG.md"
 else
