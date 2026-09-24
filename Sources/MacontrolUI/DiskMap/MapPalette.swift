@@ -71,9 +71,10 @@ nonisolated enum MapPalette {
             self.largest = Set(largest)
         }
 
-        /// The last update, for the finished map. Smaller names that sit next to one of their colour get a new
-        /// one: doing that on every preview flipped colours back and forth while two folders of about one size
-        /// swapped places. A later scan of the folder keeps this map's largest colours.
+        /// The last update, for the finished map, and again whenever its tree changes. Smaller names that sit next
+        /// to one of their colour get a new one. Previews skip this: doing it on every preview flipped colours back
+        /// and forth while two folders of about one size swapped places, so while a scan runs two touching wedges
+        /// below the largest can share a colour. A later scan of the folder keeps this map's largest colours.
         mutating func finish(ranked: [String]) {
             update(ranked: ranked)
             for index in ranked.indices.dropFirst(branches.count) where neighbourSlots(at: index, of: ranked).contains(slots[ranked[index]] ?? -1) {
@@ -82,8 +83,9 @@ nonisolated enum MapPalette {
             kept = largest
         }
 
+        /// The sunburst's ring closes, so the last name's other neighbour is the first.
         private func neighbourSlots(at index: Int, of ranked: [String]) -> [Int] {
-            [index - 1, index + 1].filter(ranked.indices.contains).compactMap { slots[ranked[$0]] }
+            [index - 1, index + 1].map { ($0 + ranked.count) % ranked.count }.filter { $0 != index }.compactMap { slots[ranked[$0]] }
         }
 
         /// The rank slot, unless a neighbour has it.

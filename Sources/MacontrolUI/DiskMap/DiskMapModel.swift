@@ -151,11 +151,8 @@ public final class DiskMapModel {
             preview = tree
             previewVersion += 1
         case .completed(let result):
-            replaceTree(result)
-            // Past the preview's 256, a name is too small to draw. The sort is the one the list shows next.
-            let ranked = Self.ranked(sortedChildren(of: ScanTree.root).prefix(256), in: result)
-            previewColours.finish(ranked: ranked)
             treeColours = previewColours
+            replaceTree(result)
         }
     }
 
@@ -193,12 +190,16 @@ public final class DiskMapModel {
         }
     }
 
-    /// Call after `tree` changed in place: layouts of the old tree are dropped, the on-screen one
-    /// stays until its replacement is ready.
+    /// Call after `tree` changed: layouts of the old tree are dropped, the on-screen one stays until its
+    /// replacement is ready, and the top folders' colours are settled on the new sizes: after a Move to Trash, the
+    /// folder that moves up among the largest must not keep a colour one of them has.
     func treeDidChange() {
         treeVersion += 1
         layoutCache = [:]
         cacheOrder = []
+        guard let tree else { return }
+        // Past the preview's 256, a name is too small to draw. The side list reuses this sort at the root.
+        treeColours.finish(ranked: Self.ranked(sortedChildren(of: ScanTree.root).prefix(256), in: tree))
     }
 
     // MARK: Navigation

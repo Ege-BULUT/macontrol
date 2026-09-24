@@ -9,6 +9,9 @@ public struct ScanOptions: Sendable {
     /// so the cleaner's parallel measures and a scan fit together. Any value gives the same result; a
     /// small one only costs reopening folders by name.
     public var descriptorBudget: Int?
+    /// How often progress comes, and how soon the first preview. Tests shorten them to see a small tree's preview.
+    var progressInterval: TimeInterval = 0.1
+    var firstPreview: Duration = .milliseconds(250)
 
     public init(workerCount: Int? = nil, descriptorBudget: Int? = nil) {
         self.workerCount = workerCount
@@ -183,7 +186,7 @@ public final class ScanEngine: Sendable {
         let tree = layout.map { ScanTree(rootURL: URL(fileURLWithPath: "/"), rootIdentity: $0.rootIdentity) }
             ?? ScanTree(rootURL: root, rootIdentity: identity)
         let sink = TreeSink(tree: tree, dataVolume: layout)
-        var nextPreview = ContinuousClock.now + .milliseconds(250)
+        var nextPreview = ContinuousClock.now + options.firstPreview
         try walk([walkRoot], sink: sink, options: options, cancellation: cancellation) { sink in
             progress(sink.progress)
             guard let preview, ContinuousClock.now >= nextPreview else { return }
@@ -207,7 +210,7 @@ public final class ScanEngine: Sendable {
             workers: options.resolvedWorkerCount, descriptorBudget: options.resolvedDescriptorBudget
         )
         cancellation.onCancel { walk.cancel() }
-        walk.run(progress: progress)
+        walk.run(progressInterval: options.progressInterval, progress: progress)
         if cancellation.isCancelled { throw CancellationError() }
     }
 

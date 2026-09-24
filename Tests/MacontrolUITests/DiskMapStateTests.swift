@@ -1,7 +1,8 @@
 import Foundation
 import MacontrolCore
 @testable import MacontrolUI
-import ScanEngine
+import Safety
+@testable import ScanEngine
 import TestSupport
 import Testing
 
@@ -165,6 +166,59 @@ import Testing
         print("home scan \(style): \(changes) colour changes")
     }
 
+    /// T-0063 review 4: Move to Trash of one of the eight largest folders. The eight largest after it still have
+    /// eight colours, the seven that stay keep theirs, and no two neighbours in the ring share one, the last and
+    /// the first included. The splice did not recolour, so the folder that moved up kept a colour one of the
+    /// eight had; and the ring's last folder was never checked against its first.
+    @Test(arguments: MapStyle.allCases)
+    func trashingOneOfTheLargestKeepsTheMapApart(style: MapStyle) async throws {
+        let sizes = Dictionary(uniqueKeysWithValues: (0..<10).map { ("f\($0)", UInt64(1_000 - $0 * 60)) })
+        for gone in (0..<8).map({ "f\($0)" }) {
+            let model = DiskMapModel(engine: nil, trash: nil)
+            model.pile = DiscardPile { _ in nil }
+            model.style = style
+            let generation = model.beginScan()
+            model.receive(.preview(Self.topLevel(sizes)), generation: generation)
+            model.receive(.completed(Self.topLevel(sizes)), generation: generation)
+            model.finishScan(generation)
+            let before = try await Self.ring(model)
+            let tree = try #require(model.tree)
+            let node = try #require(tree.children(of: ScanTree.root).first { tree.name(of: $0) == gone })
+            model.stage(node)
+            model.apply(TrashReport(batch: UUID(), outcomes: [.trashed(original: tree.url(of: node), trashedTo: URL(fileURLWithPath: "/.Trash/\(gone)"))]))
+            let after = try await Self.ring(model)
+            #expect(after.count == 9 && after.allSatisfy { $0.colour != nil }, "every folder is drawn, so the ring closes on two of them: \(after)")
+            #expect(Set(after.prefix(8).map(\.colour)).count == 8, "\(gone) trashed: \(after)")
+            #expect(before.prefix(8).allSatisfy { kept in kept.name == gone || after.contains { $0 == kept } }, "\(gone) trashed: \(before) -> \(after)")
+            for index in after.indices {
+                #expect(after[index].colour != after[(index + 1) % after.count].colour, "\(gone) trashed, neighbours \(index): \(after)")
+            }
+        }
+    }
+
+    /// T-0063 review 4: the app asks the engine for previews, and a scan that does not ask gets none. Dropping
+    /// `previews: true` from DiskMapModel.scan took the live map out of the app with every test green.
+    @Test func theAppAsksForPreviewsAndAPlainScanGetsNone() async throws {
+        let folder = try TemporaryDirectory()
+        for index in 0..<40 { try folder.file("d\(index)/f.bin", size: 4096) }
+        var options = ScanOptions(workerCount: 1)
+        options.progressInterval = 0.001
+        options.firstPreview = .zero
+        let model = DiskMapModel(engine: ScanEngine(options: options), trash: nil)
+        model.readBytesInUse = { _ in nil }
+        // A small tree can be walked before the first progress tick, so each side scans until a tick came.
+        for _ in 0..<20 where model.previewVersion == 0 { await model.scan(folder.url) }
+        #expect(model.previewVersion > 0)
+        var progress = 0, previews = 0
+        for _ in 0..<20 where progress == 0 {
+            for try await event in ScanEngine(options: options).scan(folder.url) {
+                if case .progress = event { progress += 1 }
+                if case .preview = event { previews += 1 }
+            }
+        }
+        #expect(progress > 0 && previews == 0, "\(progress) progress events, \(previews) previews")
+    }
+
     /// T-0063: the bar's goal for a new folder is the volume's bytes in use, read off the main actor while the
     /// scan runs. An older scan's goal, or one that arrives after its scan ended, is dropped.
     @Test func volumeGoalIsReadOffTheMainActorForTheRunningScanOnly() async {
@@ -251,6 +305,21 @@ import Testing
         }
         tree.finalizeTotals()
         return tree
+    }
+
+    /// The map's top-level wedges or tiles in drawing order, each with its folder's name and colour slot.
+    static func ring(_ model: DiskMapModel) async throws -> [Slice] {
+        await model.prepareLayout(model.layoutKey(width: 800, height: 600, scale: 2))
+        let layout = try #require(model.layout), tree = try #require(model.tree)
+        return layout.topLevel.map { index in
+            guard case .node(let node) = layout.elements[index].item else { return Slice(name: "smaller items", colour: nil) }
+            return Slice(name: tree.name(of: node), colour: layout.elements[index].branch)
+        }
+    }
+
+    struct Slice: Equatable, CustomStringConvertible {
+        let name: String, colour: Int?
+        var description: String { "\(name)=\(colour.map(String.init) ?? "-")" }
     }
 
     /// Each top-level folder's colour slot in `layout`.

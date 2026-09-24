@@ -41,7 +41,7 @@ import Testing
 
     /// T-0063 review 3: through a scan's previews the eight largest names always have eight colours, and a name
     /// changes colour only in the update that brings it among them. The finished map puts no colour on two
-    /// neighbours, and a later scan of the folder keeps its eight largest colours whatever order the walk finds
+    /// neighbours, the ring's last and first included (review 4: 45 of 500 maps did), and a later scan of the folder keeps its eight largest colours whatever order the walk finds
     /// things in. Colours fixed by first sight, zero-byte names included, gave two of the finished map's eight
     /// largest one colour in 409 of 500 such scans.
     @Test func scanColoursKeepTheLargestApartAndEachNameSteady() {
@@ -78,8 +78,9 @@ import Testing
             let ranked = first(60)
             colours.finish(ranked: ranked)
             #expect(Set(ranked.prefix(count).compactMap { colours.slots[$0] }).count == min(count, ranked.count))
-            for index in ranked.indices.dropFirst() {
-                #expect(colours.slots[ranked[index]] != colours.slots[ranked[index - 1]], "neighbours \(index - 1), \(index): \(ranked)")
+            // The sunburst's ring closes: the last name also touches the first.
+            for index in ranked.indices where ranked.count > 1 {
+                #expect(colours.slots[ranked[index]] != colours.slots[ranked[(index + 1) % ranked.count]], "neighbours \(index), \((index + 1) % ranked.count): \(ranked)")
             }
 
             let kept = ranked.prefix(count).map { ($0, colours.slots[$0]) }
