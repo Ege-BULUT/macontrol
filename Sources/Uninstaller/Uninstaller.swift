@@ -77,8 +77,10 @@ public final class Uninstaller: Sendable {
     }
 
     /// One app: `uninstall(jobs)` with one job, whose skip reason is thrown. The report carries the one batch.
-    public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>, mode: DeletionMode = .trash) async throws -> TrashReport {
-        let result = await uninstall([UninstallJob(plan: plan, leftovers: selected)], mode: mode)
+    public func uninstall(
+        _ plan: UninstallPlan, leftovers selected: Set<URL>, mode: DeletionMode = .trash, restorePoint: String? = nil
+    ) async throws -> TrashReport {
+        let result = await uninstall([UninstallJob(plan: plan, leftovers: selected)], mode: mode, restorePoint: restorePoint)
         if let error = result.skipped[plan.app.url] { throw error }
         return result.report
     }
@@ -87,8 +89,9 @@ public final class Uninstaller: Sendable {
     /// launchd jobs booted out by exact label; an app that fails any step is skipped with its error, and the others go
     /// on (F-0030). Then ONE Safety batch, so at most one administrator dialog: each bundle followed by its chosen
     /// leftovers, every leftover with the bundle as `requiresGone`, so none is touched while its app is still there.
-    /// Exactly what each plan listed is removed (F-0069): URLs not in the plan are ignored.
-    public func uninstall(_ jobs: [UninstallJob], mode: DeletionMode = .trash) async -> UninstallBatchReport {
+    /// Exactly what each plan listed is removed (F-0069): URLs not in the plan are ignored. `restorePoint` is the
+    /// snapshot made before, recorded on the batch's journal lines.
+    public func uninstall(_ jobs: [UninstallJob], mode: DeletionMode = .trash, restorePoint: String? = nil) async -> UninstallBatchReport {
         var items: [TrashItem] = []
         var skipped: [URL: UninstallError] = [:]
         for job in jobs {
@@ -100,7 +103,7 @@ public final class Uninstaller: Sendable {
                 skipped[job.plan.app.url] = .blocked(error.localizedDescription)
             }
         }
-        let report = items.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await actions.remove(items, mode)
+        let report = items.isEmpty ? TrashReport(batch: UUID(), outcomes: []) : await actions.remove(items, mode, restorePoint)
         return UninstallBatchReport(report: report, skipped: skipped)
     }
 

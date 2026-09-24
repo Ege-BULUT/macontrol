@@ -155,6 +155,25 @@ import Testing
         #expect(Self.items(fx.recorder.events.last).map(\.url) == [plan.app.url] + plan.leftovers.map(\.url))
     }
 
+    /// The restore point made before the uninstall reaches the one Safety batch, for its journal lines (section 2.6).
+    @Test func theRestorePointReachesTheBatch() async throws {
+        let fx = try Fixture()
+        try fx.app("Demo", id: "com.example.Demo")
+        let plan = try await Self.plan(fx, "Demo")
+        let points = Points()
+        let actions = UninstallActions(quit: { _ in true }, bootout: { _ in }, remove: { items, _, point in
+            points.append(point)
+            return TrashReport(batch: UUID(), outcomes: items.map { .refused($0.url, .notImplemented) })
+        })
+        let uninstaller = Uninstaller(home: fx.home, systemRoot: fx.root, trash: TrashService(journalURL: fx.tmp.url.appendingPathComponent("j.jsonl")),
+                                      actions: actions, administrator: Self.launcher)
+
+        _ = try await uninstaller.uninstall(plan, leftovers: [], mode: .permanent, restorePoint: "com.apple.TimeMachine.2026-09-24-101500.local")
+        _ = await uninstaller.uninstall([UninstallJob(plan: plan, leftovers: [])])
+
+        #expect(points.all == ["com.apple.TimeMachine.2026-09-24-101500.local", nil])
+    }
+
     /// Without the helper, v1 unchanged: a chosen admin leftover stops everything before any step.
     @Test func withoutTheHelperAdminLeftoversStillStop() async throws {
         let fx = try Fixture()
@@ -168,4 +187,11 @@ import Testing
         #expect(fx.recorder.events.isEmpty)
         #expect(!Self.uninstaller(fx, administrator: nil).canUseAdministrator && Self.uninstaller(fx).canUseAdministrator)
     }
+}
+
+private final class Points: @unchecked Sendable {
+    private let lock = NSLock()
+    private var points: [String?] = []
+    var all: [String?] { lock.withLock { points } }
+    func append(_ point: String?) { lock.withLock { points.append(point) } }
 }
