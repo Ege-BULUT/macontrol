@@ -1,7 +1,8 @@
 #!/bin/bash
 # Creates the self-signed code-signing identity "macontrol Self-Signed" once, on the maintainer's Mac.
 #
-#   scripts/make-signing-cert.sh
+#   scripts/make-signing-cert.sh                  create it, or check an existing one
+#   scripts/make-signing-cert.sh --remove-export  delete the .p12 copies and their password (below)
 #
 # An ad-hoc signature changes on every build, and macOS ties Full Disk Access to the signature, so
 # every rebuild and every update loses the grant. A certificate that never changes gives the app the
@@ -10,8 +11,12 @@
 # Everything lives outside the repo and outside the login keychain, and nothing opens a dialog:
 #   ~/Library/Keychains/macontrol-signing.keychain-db   the identity; added to the user search list
 #   ~/.config/macontrol/signing.env                     keychain and .p12 passwords (0600)
-#   ~/.config/macontrol/macontrol-signing.p12           password-protected backup of the identity (0600)
+#   ~/.config/macontrol/macontrol-signing.p12           the identity as a .p12, for the offline backup (0600)
 #   ~/.config/macontrol/macontrol-signing.p12.b64       the same, base64, for the GitHub secret (0600)
+#
+# The .p12, its .b64 and the .p12 password hand the private key to anything that reads them. Once
+# the GitHub secrets are set and the .p12 and its password are backed up offline, --remove-export
+# deletes all three. The keychain and its password stay, so local builds still sign.
 #
 # Run it again at any time: an existing setup is kept, the keychain is unlocked, put back on the
 # search list and codesign's key access is set again. Half-made setups are refused, never deleted.
@@ -39,8 +44,21 @@ add_to_search_list() {
     security list-keychains -d user -s ${list[@]+"${list[@]}"} "$KEYCHAIN"
 }
 
+if [ "${1:-}" = --remove-export ]; then
+    [ -f "$KEYCHAIN" ] && [ -f "$ENV_FILE" ] || die "no setup here, nothing removed"
+    /bin/rm -f "$P12" "$P12.b64"
+    grep -v '^MACONTROL_SIGNING_PASSWORD=' "$ENV_FILE" > "$ENV_FILE.new" || true
+    mv "$ENV_FILE.new" "$ENV_FILE"
+    echo "removed $P12, $P12.b64 and MACONTROL_SIGNING_PASSWORD; the keychain stays"
+    exit 0
+fi
+[ $# -eq 0 ] || die "usage: $0 [--remove-export]"
+
+# The keychain and signing.env are the setup; the two .p12 files are an optional pair.
 present=()
 for f in "$KEYCHAIN" "$ENV_FILE" "$P12" "$P12.b64"; do [ -e "$f" ] && present+=("$f"); done
+has() { [ -e "$1" ] && echo 1 || echo 0; }
+SETUP="$(has "$KEYCHAIN")$(has "$ENV_FILE")" EXPORT="$(has "$P12")$(has "$P12.b64")"
 
 if [ ${#present[@]} -eq 0 ]; then
     mkdir -p "$CONF"
@@ -95,7 +113,7 @@ EOF
     mv "$WORK/signing.env" "$ENV_FILE"
     DONE=1
     echo "created $NAME"
-elif [ ${#present[@]} -eq 4 ]; then
+elif [ "$SETUP" = 11 ] && { [ "$EXPORT" = 00 ] || [ "$EXPORT" = 11 ]; }; then
     # shellcheck source=/dev/null
     . "$ENV_FILE"
     security unlock-keychain -p "${MACONTROL_KEYCHAIN_PASSWORD:?missing in $ENV_FILE}" "$KEYCHAIN"
@@ -121,12 +139,15 @@ REQ="$(codesign -d -r- "$CHECK/probe" 2>&1 | grep '^designated' || true)"
 case "$REQ" in *'certificate leaf = H"'* | *'certificate root = H"'*) echo "codesign ok: $REQ" ;;
     *) die "unexpected requirement: $REQ" ;; esac
 
+echo
+echo "Files: $KEYCHAIN"
+echo "       $ENV_FILE"
+[ -e "$P12" ] || exit 0
 cat <<EOF
-
-Files: $KEYCHAIN
-       $ENV_FILE
        $P12(.b64)
 GitHub secrets (docs/RELEASING.md), run them yourself:
   gh secret set MACONTROL_SIGNING_P12 --repo Ege-BULUT/macontrol < "$P12.b64"
   (. "$ENV_FILE" && printf %s "\$MACONTROL_SIGNING_PASSWORD" | gh secret set MACONTROL_SIGNING_PASSWORD --repo Ege-BULUT/macontrol)
+Then back up the .p12 and MACONTROL_SIGNING_PASSWORD offline, and remove them from this Mac:
+  $0 --remove-export
 EOF

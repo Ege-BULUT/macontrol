@@ -10,27 +10,30 @@ on:
 permissions:
   contents: write
 
+# Without this GitHub runs steps as `bash -e {0}`; with it, `bash --noprofile --norc -eo pipefail {0}`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release:
     runs-on: macos-26          # arm64, GA
-    timeout-minutes: 30
+    timeout-minutes: 15        # a hang (codesign waiting on a prompt) bills 10x
+    env:
+      # The designated requirement macOS stores with each user's Full Disk Access grant. A release
+      # signed with any other certificate fails the check below. A new certificate needs a commit here
+      # (docs/RELEASING.md, "If the key leaks").
+      RELEASE_REQUIREMENT: 'identifier "dev.macontrol.Macontrol" and certificate leaf = H"2b40c1b6e6a9e1c2f8c7f8a4aa582ed22010cbaf"'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0       # bundle-app.sh numbers the build with `git rev-list --count HEAD`
+          persist-credentials: false   # the release step uses GH_TOKEN; keep the token out of .git/config
 
       - name: Select Xcode 26.6 (the maintainer's Xcode, Swift 6.3)
         run: |
           sudo xcode-select -s /Applications/Xcode_26.6.app
           swift --version
-
-      # GitHub restores a cache only for the same tag (or the default branch), so this speeds up
-      # "Re-run failed jobs" on a tag, not the next release. Saved even when a later step fails.
-      - uses: actions/cache/restore@v5
-        with:
-          path: .build
-          key: spm-${{ runner.arch }}-xcode26.6-${{ github.sha }}
-          restore-keys: spm-${{ runner.arch }}-xcode26.6-
 
       - name: Import the signing identity into a temporary keychain
         env:
@@ -52,7 +55,6 @@ jobs:
           security find-identity -p codesigning "$KEYCHAIN" | grep -F '"macontrol Self-Signed"'
 
       - name: Build and sign
-        id: build
         env:
           SIGN_IDENTITY: macontrol Self-Signed
         run: |
@@ -63,14 +65,8 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME, but the app is $APP_VERSION: bump VERSION in scripts/bundle-app.sh"
             exit 1
           fi
-          codesign -d -r- build/Macontrol.app 2>&1 | grep -F 'certificate leaf = H"' \
-            || { echo "::error::the app is not signed with the macontrol certificate"; exit 1; }
-
-      - uses: actions/cache/save@v5
-        if: always() && steps.build.outcome != 'skipped'
-        with:
-          path: .build
-          key: spm-${{ runner.arch }}-xcode26.6-${{ github.sha }}
+          codesign --verify --strict --test-requirement="=$RELEASE_REQUIREMENT" build/Macontrol.app \
+            || { echo "::error::the app does not satisfy $RELEASE_REQUIREMENT: wrong MACONTROL_SIGNING_P12?"; exit 1; }
 
       - name: Zip and publish the release
         env:
