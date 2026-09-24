@@ -44,25 +44,24 @@ import Testing
         }
     }
 
-    /// Ticking only asks: the modal opens over the window and the mode stays off. Unticking turns it off at once.
-    /// The toolbar Toggle is bound to `checkbox` (SwiftUI's checkbox answers neither `performClick` nor synthetic
-    /// mouse events in an inactive window, so the binding is set the way the Toggle sets it).
-    @Test func tickingTheCheckboxAsksAndUntickingTurnsItOff() throws {
-        let model = AppModel.demo(selection: .clean)
-        let window = Self.window(RootView(model: model), size: RootView.minimumSize)
-        defer { window.orderOut(nil) }
-
-        model.hardcore.checkbox = true
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-        #expect(model.hardcore.isAsking && !model.hardcore.isOn)
-        #expect(window.attachedSheet != nil, "the modal did not open")
-        model.hardcore.isAsking = false
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-
-        model.hardcore.confirmTurnOn()
-        #expect(model.hardcore.isOn && model.hardcore.mode == .permanent)
-        model.hardcore.checkbox = false
-        #expect(!model.hardcore.isOn && !model.hardcore.isAsking && model.hardcore.mode == .trash)
+    /// Ticking only asks: the modal's flag goes up and the mode stays off. Unticking turns it off at once. The toolbar
+    /// Toggle is bound to `checkbox` (SwiftUI's checkbox answers neither `performClick` nor synthetic mouse events in an
+    /// inactive window, so the binding is set the way the Toggle sets it). The modal is not presented as a real sheet
+    /// here: dismissing a real sheet in the test process ended the whole `swift test` run early, with exit status 0,
+    /// in 4 of 8 full runs (M-0001, T-0073).
+    @Test func tickingTheCheckboxAsksAndUntickingTurnsItOff() {
+        let hardcore = HardcoreMode()
+        hardcore.checkbox = true
+        #expect(hardcore.isAsking && !hardcore.isOn && hardcore.mode == .trash)
+        hardcore.isAsking = false
+        #expect(!hardcore.isOn, "closing the modal turned it on")
+        hardcore.checkbox = true
+        hardcore.confirmTurnOn()
+        #expect(hardcore.isOn && !hardcore.isAsking && hardcore.mode == .permanent)
+        hardcore.checkbox = true
+        #expect(!hardcore.isAsking, "ticking while on asked again")
+        hardcore.checkbox = false
+        #expect(!hardcore.isOn && !hardcore.isAsking && hardcore.mode == .trash)
     }
 
     // MARK: Criterion 4: the modal's keys
