@@ -42,7 +42,7 @@ import Uninstaller
         await model.confirmUninstall()
         let modes = fixture.modes.withLock { $0 }
         #expect(!modes.isEmpty && Set(modes) == [opened], "the uninstaller was asked for \(modes)")
-        try fixture.expectRemoved(in: opened, report: try #require(model.confirmation?.report), paths: ["Applications/Probe.app"])
+        try fixture.expectRemoved(in: opened, report: try #require(model.confirmation?.report), paths: ["Applications/Probe"])
     }
 
     @Test(arguments: modes)
@@ -86,7 +86,7 @@ import Uninstaller
         try await fixture.pressReturnThenEsc(in: window) { model.confirmation?.report == nil && model.confirmation?.isWorking == false }
         #expect(model.confirmation == nil, "Esc did not close the sheet")
         #expect(fixture.modes.withLock { $0 }.isEmpty, "the uninstaller ran")
-        try fixture.expectUntouched(["Applications/Probe.app/Contents/Info.plist", "home/Library/Caches/com.example.macontrol-probe/data"])
+        try fixture.expectUntouched(["Applications/Probe/Contents/Info.plist", "home/Library/Caches/com.example.macontrol-probe/data"])
     }
 
     @Test(arguments: modes)
@@ -213,7 +213,7 @@ import Uninstaller
         let free = OSAllocatedUnfairLock(initialState: UInt64(5_000_000))
         let (model, _) = try await fixture.uninstallModel(outcome: { item in
             try? FileManager.default.removeItem(at: item.url)
-            if item.url.pathExtension == "app" { free.withLock { $0 += freed } }
+            if item.url.lastPathComponent == "Probe" { free.withLock { $0 += freed } }
             return .deleted(original: item.url)
         })
         model.support.available = { _ in free.withLock { $0 } }
@@ -318,7 +318,7 @@ import Uninstaller
         await model.confirmUninstall()
         #expect(model.confirmation?.run.restorePointProblem != nil)
         #expect(model.confirmation?.report == nil && fixture.modes.withLock { $0 }.isEmpty, "it deleted without asking")
-        try fixture.expectUntouched(["Applications/Probe.app/Contents/Info.plist"])
+        try fixture.expectUntouched(["Applications/Probe/Contents/Info.plist"])
 
         // A second confirm while the question is open does nothing either.
         await model.confirmUninstall()
@@ -431,8 +431,10 @@ final class RemovalFixture {
         return model
     }
 
-    /// The sample app with its cache. Quit and bootout are stand-ins; the remove step records its mode and then either
-    /// runs the fixture's TrashService for real or answers `outcome` for every item.
+    /// An app and its cache, planned by hand: nothing lists the fixture, and the bundle folder has no `.app`
+    /// extension, so LaunchServices never registers it (listing fixture apps left fake apps in the user's
+    /// LaunchServices database, T-0076). Quit and bootout are stand-ins; the remove step records its mode and then
+    /// either runs the fixture's TrashService for real or answers `outcome` for every item.
     func uninstallModel(outcome: (@Sendable (TrashItem) -> TrashOutcome)? = nil) async throws -> (UninstallModel, UninstallPlan) {
         let service = service()
         let modes = modes
@@ -441,15 +443,22 @@ final class RemovalFixture {
             if let outcome { return TrashReport(batch: UUID(), outcomes: items.map(outcome)) }
             return await service.remove(items, mode: mode)
         })
-        let uninstaller = Uninstaller(
-            home: home, applicationFolders: [temp.url.appendingPathComponent("Applications")],
-            systemRoot: try temp.directory("root"), trash: service, actions: actions
-        )
-        try UninstallModelTests.bundle(temp, "Probe", "com.example.macontrol-probe")
+        let uninstaller = Uninstaller(home: home, applicationFolders: [], systemRoot: try temp.directory("root"), trash: service, actions: actions)
+        try temp.file("Applications/Probe/Contents/Info.plist", size: 100)
         try temp.file("home/Library/Caches/com.example.macontrol-probe/data", size: 2_000)
-        let model = UninstallModel(uninstaller: uninstaller, engine: nil)
+        let bundle = temp.url.appendingPathComponent("Applications/Probe")
+        let cache = home.appendingPathComponent("Library/Caches/com.example.macontrol-probe")
+        let size = ItemMeasurement(allocated: 4_096, logical: 2_000, fileCount: 1, newestModification: nil, isIncomplete: false)
+        let app = InstalledApp(
+            url: bundle, name: "Probe", bundleIdentifier: "com.example.macontrol-probe", version: "1.0", kind: .thirdParty,
+            identity: FileIdentity(url: bundle)
+        )
+        let plan = UninstallPlan(app: app, appMeasurement: size, leftovers: [
+            Leftover(url: cache, identity: FileIdentity(url: cache), evidence: .bundleIdentifier, measurement: size, needsAdministrator: false, note: nil),
+        ], blocker: nil)
+        let model = UninstallModel(uninstaller: uninstaller, apps: [app], plan: plan, engine: nil)
         model.support.available = { _ in nil }
-        let plan = try await UninstallModelTests.selectSample(model)
+        #expect(model.canUninstall && model.chosenLeftovers.count == 1)
         return (model, plan)
     }
 
