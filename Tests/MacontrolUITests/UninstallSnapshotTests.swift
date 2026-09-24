@@ -26,6 +26,26 @@ import Uninstaller
         try Snapshot.write(RootView(model: app), "uninstall-blocked")
     }
 
+    /// The filter and sort controls: every app largest first, Apple's apps newest first (the rows show the date),
+    /// and a filter with nothing to show for the search.
+    @Test(arguments: [
+        ("uninstall-all-largest", "all", "largestFirst", ""),
+        ("uninstall-system-newest", "system", "newestFirst", ""),
+        ("uninstall-system-empty", "system", "nameAscending", "Editor"),
+    ])
+    func filteredAndSortedListRenders(name: String, filter: String, sort: String, query: String) throws {
+        try AppListOrderTests.withScratchDefaults(["uninstallFilter": filter, "uninstallSort": sort]) { defaults in
+            let uninstall = UninstallModel.demo()
+            uninstall.query = query
+            let app = AppModel(
+                selection: .uninstall, fullDiskAccess: .granted, volume: nil, diskMap: .demo(),
+                clean: .demo(), uninstall: uninstall, history: .demo()
+            )
+            try Snapshot.write(RootView(model: app).defaultAppStorage(defaults), name)
+            #expect(uninstall.filter.rawValue == filter && uninstall.sort.rawValue == sort)
+        }
+    }
+
     @Test func confirmationSheetRenders() throws {
         let model = UninstallModel.demo()
         model.beginUninstall()
