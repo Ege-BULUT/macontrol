@@ -25,11 +25,14 @@ import Testing
         plan.leftovers.filter { $0.isPreselected && !$0.needsAdministrator }
     }
 
-    /// The one batch: the bundle, then each leftover with the bundle as `requiresGone` (DESIGN-debloat section 3.6).
+    /// The one batch: the bundle, then each leftover with the bundle as `requiresGone` (DESIGN-debloat section 3.6),
+    /// every item naming the app it belongs to.
     private func batch(_ plan: UninstallPlan, _ leftovers: [TrashItem]) -> Recorder.Event {
-        .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)] + leftovers.map { item in
+        let id = plan.app.bundleIdentifier
+        return .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: id)] + leftovers.map { item in
             var item = item
             item.requiresGone = plan.app.url
+            item.bundleIdentifier = id
             return item
         })
     }

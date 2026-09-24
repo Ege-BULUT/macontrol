@@ -115,6 +115,7 @@ import Testing
         let sent = Self.items(fx.recorder.events.last)
         #expect(sent.map(\.url) == [plan.app.url, chosen.url])
         #expect(sent.last?.requiresGone == plan.app.url)
+        #expect(sent.allSatisfy { $0.bundleIdentifier == "com.example.Suite" })
     }
 
     /// Package receipts (`pkgutil --forget`'s two files) are a removable area with the helper; anything deeper is not.

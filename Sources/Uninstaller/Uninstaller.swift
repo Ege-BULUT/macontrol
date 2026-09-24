@@ -118,7 +118,7 @@ public final class Uninstaller: Sendable {
         if !canUseAdministrator, let administrative = chosen.first(where: \.needsAdministrator) {
             throw UninstallError.needsAdministrator(administrative.url)
         }
-        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: plan.app.bundleIdentifier)
         try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
@@ -137,6 +137,8 @@ public final class Uninstaller: Sendable {
         return [bundle] + chosen.map { leftover in
             var item = Self.itemToTrash(for: leftover)
             item.requiresGone = plan.app.url
+            // The helper's first-component rule lets `com.apple.dt.Xcode.plist` go only for the app it belongs to.
+            item.bundleIdentifier = plan.app.bundleIdentifier
             return item
         }
     }

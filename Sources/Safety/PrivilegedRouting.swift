@@ -28,7 +28,7 @@ public enum PrivilegedRouting {
             let item = items[index]
             return PrivilegedRequest.Item(
                 path: item.url.path, identity: item.expectedIdentity!, allocated: item.allocated,
-                requiresGone: item.requiresGone?.path
+                bundleIdentifier: item.bundleIdentifier, requiresGone: item.requiresGone?.path
             )
         })
         func fail(_ message: String) -> [TrashOutcome] {
@@ -100,8 +100,7 @@ public enum PrivilegedRouting {
         }
         // The helper acts only on the canonical spelling: any other one may lead through a link.
         guard canonical == item.url.path else { return .refused(item.url, .identityChanged) }
-        // ponytail: TrashItem carries no bundle identifier yet (T-0072 comment), so Apple-named items pass only as appleContent.
-        return PrivilegedScope.refusal(canonical: canonical, home: home, bundleIdentifier: nil, systemRoot: systemRoot)
+        return PrivilegedScope.refusal(canonical: canonical, home: home, bundleIdentifier: item.bundleIdentifier, systemRoot: systemRoot)
             .map { .refused(item.url, $0) }
     }
 

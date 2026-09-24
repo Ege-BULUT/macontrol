@@ -225,6 +225,27 @@ import Testing
         #expect(fx.trashNames.count == 40)
     }
 
+    /// sec 3c: an Apple-named preference in /Library goes only for the app it belongs to, both in the app's own check
+    /// (no dialog for it otherwise) and in the helper's.
+    @Test func anAppleNamedItemGoesOnlyWithItsAppsIdentifier() async throws {
+        let fx = try RootFixture()
+        try fx.file("root/Library/Preferences/com.apple.dt.Xcode.plist")
+        try fx.file("root/Library/Preferences/com.apple.loginwindow.plist")
+        var xcode = try Self.item(fx, "root/Library/Preferences/com.apple.dt.Xcode.plist")
+        xcode.bundleIdentifier = "com.apple.dt.Xcode"
+        var loginwindow = try Self.item(fx, "root/Library/Preferences/com.apple.loginwindow.plist")
+        loginwindow.bundleIdentifier = "com.apple.dt.Xcode"
+        let prompts = OSAllocatedUnfairLock<[String]>(initialState: [])
+
+        let outcomes = await Self.run(fx, [xcode, loginwindow], launcher: try Self.launcher(fx, prompt: { text in prompts.withLock { $0.append(text) } }))
+
+        #expect(outcomes == [
+            .trashed(original: xcode.url, trashedTo: fx.trash.appendingPathComponent("com.apple.dt.Xcode.plist")),
+            .refused(loginwindow.url, .protectedLocation(loginwindow.url.path)),
+        ])
+        #expect(prompts.withLock { $0 } == ["macontrol needs your administrator password to move 1 item owned by the system to the Trash."])
+    }
+
     /// A cancelled dialog, a helper that never started: every item keeps a clear failure, nothing moves.
     @Test func aCancelledDialogMovesNothing() async throws {
         let fx = try RootFixture()
