@@ -93,4 +93,37 @@ import Uninstaller
         model.hardcore.isOn = true
         #expect(model.footerText.hasPrefix("1 app, frees up to "))
     }
+
+    /// Review 2: CoreSimulator holds the only tool that deletes runtimes, so it waits for them in either mode.
+    @Test func coreSimulatorWaitsForTheRuntimes() async throws {
+        let fx = try DebloatFixture()
+        let model = try await fx.model(administrator: true)
+        let (row, frameworks) = try Self.leftover(model, fx.xcode, "Developer/PrivateFrameworks")
+        model.setTicked(true, row)
+        #expect(!model.runtimesChosen(row) && !model.isChosen(frameworks, of: row))
+        #expect(model.note(for: frameworks, of: row)?.hasPrefix("Holds the only tool that deletes simulator runtimes.") == true)
+        model.setRuntimesChosen(true, row)
+        #expect(model.isChosen(frameworks, of: row) && model.note(for: frameworks, of: row) == nil)
+        // Unticked again: back to held, not the tick it had while the runtimes went too.
+        model.setChosen(true, frameworks, of: row)
+        model.setRuntimesChosen(false, row)
+        #expect(!model.isChosen(frameworks, of: row))
+
+        let hardcore = try await fx.model(hardcore: true, administrator: true)
+        let (xcode, framework) = try Self.leftover(hardcore, fx.xcode, "Developer/PrivateFrameworks")
+        #expect(hardcore.runtimesChosen(xcode) && hardcore.isChosen(framework, of: xcode))
+    }
+
+    /// Review 6: with Xcode-beta installed, what every Xcode shares is held back like the runtimes.
+    @Test func aSecondXcodeKeepsItsSharedDeveloperContent() async throws {
+        let fx = try DebloatFixture()
+        try fx.app("Xcode-beta", "com.apple.dt.Xcode")
+        let model = try await fx.model(hardcore: true, administrator: true)
+        let xcode = try #require(model.row(fx.xcode))
+        model.setTicked(true, xcode)
+        let chosen = model.chosenLeftovers(xcode).map(\.url.lastPathComponent)
+        #expect(!chosen.contains("PrivateFrameworks") && !chosen.contains("Caches") && !chosen.contains("DerivedData"), "\(chosen)")
+        let (row, caches) = try Self.leftover(model, fx.xcode, "CoreSimulator/Caches")
+        #expect(model.note(for: caches, of: row) == "Also used by Xcode-beta, which is installed.")
+    }
 }

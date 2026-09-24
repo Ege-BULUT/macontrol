@@ -220,10 +220,13 @@ struct LeftoverFinder {
     /// "Kept by macOS" note, since even root can't remove it.
     private func profileItems(_ profile: AppleProfile) -> [LeftoverCandidate] {
         let unverified = profile.verified ? nil : AppleProfile.unverifiedNote
+        // Another copy of the app (Xcode-beta) uses all of it too: CoreSimulator, its caches, DerivedData (review 6).
+        let copies = others.filter { $0.bundleIdentifier == profile.bundleIdentifier }.map(\.name)
+        let copiesNote = copies.isEmpty ? nil : "Also used by \(Self.list(copies)), which \(copies.count == 1 ? "is" : "are") installed."
         let items = profile.items.compactMap { item -> LeftoverCandidate? in
             let url = url(of: item.path)
             guard FileSystem.exists(url), !isRestricted(url) else { return nil }
-            let note = [sharedNote(item.sharedWith), item.note, unverified].compactMap { $0 }.joined(separator: " ")
+            let note = [sharedNote(item.sharedWith), copiesNote, item.note, unverified].compactMap { $0 }.joined(separator: " ")
             return candidate(url, .appleProfile, note: note.isEmpty ? nil : note)
         }
         let receipts = systemRoot.appendingPathComponent("private/var/db/receipts")

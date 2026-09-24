@@ -129,6 +129,24 @@ import Testing
         #expect(calls.all.isEmpty)
     }
 
+    /// An Xcode never opened has no CoreSimulator: no runtimes, and nothing is run.
+    @Test func noToolMeansNoRuntimes() async throws {
+        let calls = Calls()
+        let missing = SimRuntimeTool(run: calls.tool().run, isInstalled: { false })
+        #expect(try await missing.list(xcode: Self.xcode) == [])
+        #expect(calls.all.isEmpty)
+    }
+
+    /// Review 7: a tool that hangs is stopped at the limit and counts as failed. Runs only /bin/sleep and /usr/bin/true.
+    @Test func aHungToolIsStoppedAndFails() async {
+        let started = ContinuousClock.now
+        let hung = await SimRuntimeTool.runner(timeout: .milliseconds(300))(URL(fileURLWithPath: "/bin/sleep"), ["20"], [:])
+        #expect(hung.status != 0)
+        #expect(ContinuousClock.now - started < .seconds(10))
+        let quick = await SimRuntimeTool.runner(timeout: .seconds(10))(URL(fileURLWithPath: "/usr/bin/true"), [], [:])
+        #expect(quick.status == 0)
+    }
+
     /// Lists this Mac's runtimes with the real binary (read-only). Never deletes.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["MACONTROL_SIMCTL"] == "1"))
     func liveListReadsThisMac() async throws {

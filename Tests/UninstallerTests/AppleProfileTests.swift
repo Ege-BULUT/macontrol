@@ -61,6 +61,13 @@ import Testing
         ("version 2", catalog().merging(["version": 2]) { $1 }),
         ("a profile listed twice", catalog().merging(["profiles": (catalog()["profiles"] as! [Any]) + (catalog()["profiles"] as! [Any])]) { $1 }),
         ("a missing field", catalog { $0["evidence"] = nil }),
+        // Review 9: never listed, whatever the file says.
+        ("iCloud Drive", catalog(item("~/Library/Mobile Documents/com~apple~CloudDocs"))),
+        ("a cloud provider folder", catalog(item("~/Library/CloudStorage/Dropbox"))),
+        ("iPhone backups", catalog(item("~/Library/Application Support/MobileSync/Backup"))),
+        ("Contacts", catalog(item("~/Library/Application Support/AddressBook/Sources"))),
+        ("Notes' group container", catalog(item("~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"))),
+        ("the network configuration (D7)", catalog(item("/Library/Preferences/SystemConfiguration/preferences.plist"))),
     ]
 
     @Test(arguments: brokenRules.indices)

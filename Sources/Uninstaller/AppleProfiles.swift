@@ -116,6 +116,15 @@ public struct AppleProfiles: Decodable, Sendable {
         "PrivilegedHelperTools",
     ]
 
+    /// Never listed, whatever the file says: iCloud and cloud folders (section 4.5), the personal databases that
+    /// always go to the Trash (D4), and the live network configuration root must not touch (D7).
+    static let refusedRoots = [
+        "~/Library/Mobile Documents", "~/Library/CloudStorage", "~/Library/Application Support/MobileSync",
+        "~/Library/Application Support/AddressBook", "~/Library/Calendars", "~/Library/Safari",
+        "~/Library/Containers/com.apple.Notes", "~/Library/Group Containers/group.com.apple.notes",
+        "/Library/Preferences/SystemConfiguration",
+    ]
+
     /// Every rule this catalog breaks, one line each. Empty means it may be used.
     public func problems(home: URL) -> [String] {
         var found: [String] = version == 1 ? [] : ["version \(version) is not 1"]
@@ -159,6 +168,7 @@ public struct AppleProfiles: Decodable, Sendable {
         }
         if hasBadComponent(path) { return "has an empty, \".\", \"..\" or \"*\" component" }
         if relative.split(separator: "/").count < 3 { return "has fewer than three components" }
+        if let root = refusedRoots.first(where: { overlaps(path, $0) }) { return "overlaps \(root), which is never listed" }
         // What exists is checked as Safety sees it. A path whose folder does not exist can't be listed either.
         let url = path.hasPrefix("~/") ? home.appendingPathComponent(String(relative)) : URL(fileURLWithPath: path)
         if case .protectedLocation? = ProtectedPaths.refusal(for: url, home: home) { return "is or contains a protected folder" }

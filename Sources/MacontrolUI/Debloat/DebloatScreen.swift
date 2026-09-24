@@ -153,7 +153,7 @@ private struct AppBlock: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.app.name).font(.body.weight(.medium))
                 if let failure = row.failure {
-                    Label("Couldn't look at it: \(failure)", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Label(failure, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if let blocker = row.plan?.blocker {
                     Label(blocker, systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if isUnverified {
@@ -311,13 +311,10 @@ struct DebloatSheet: View {
             let count = confirmation.rows.count
             let items = count == 1 ? "1 item" : "\(count) items"
             let permanent = confirmation.mode == .permanent
-            let names = DebloatModel.list(confirmation.jobs.map(\.plan.app.name))
             VStack(spacing: 0) {
                 TrashSheet(
                     title: permanent ? "Delete \(items) permanently?" : "Move \(items) to the Trash?",
-                    message: permanent
-                        ? "They skip the Trash and can't be put back. Frees up to \((confirmation.rowBytes + confirmation.runtimeBytes).formattedBytes)."
-                        : "\(names) and what \(confirmation.jobs.count == 1 ? "it" : "they") installed move to the Trash. Put them back from History until you empty the Trash, which is when the space is freed.",
+                    message: confirmation.summary,
                     notes: confirmation.notes,
                     rows: confirmation.rows,
                     confirmTitle: permanent ? "Delete Permanently" : "Move to Trash",

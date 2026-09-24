@@ -34,12 +34,24 @@ public struct SimRuntimeTool: Sendable {
     public typealias Runner = @Sendable (_ tool: URL, _ arguments: [String], _ environment: [String: String]) async -> (status: Int32, output: Data)
 
     public var run: Runner
+    /// Asks Xcode, and the apps inside it (Simulator), to quit before its runtimes go: `simctl runtime delete` shuts
+    /// down running simulators. True when none is left. Tests keep the default, which quits nothing.
+    public var quit: @Sendable (InstalledApp) async -> Bool
+    /// Whether CoreSimulator's tool is there. An Xcode that was never opened has none: then it has no runtimes, and
+    /// removing it takes no tool away.
+    public var isInstalled: @Sendable () -> Bool
 
-    public init(run: @escaping Runner) {
+    public init(
+        run: @escaping Runner, quit: @escaping @Sendable (InstalledApp) async -> Bool = { _ in true },
+        isInstalled: @escaping @Sendable () -> Bool = { true }
+    ) {
         self.run = run
+        self.quit = quit
+        self.isInstalled = isInstalled
     }
 
     public func list(xcode: URL) async throws -> [SimRuntime] {
+        guard isInstalled() else { return [] }
         let result = await run(Self.simctl, ["runtime", "list", "-j"], Self.environment(xcode: xcode))
         guard result.status == 0 else { throw SimRuntimeError.failed(result.status) }
         return try Self.parse(result.output)
@@ -76,27 +88,45 @@ public struct SimRuntimeTool: Sendable {
         return environment
     }
 
-    /// The real tool. Its output is read on a GCD thread, never the cooperative pool.
-    public static let live = SimRuntimeTool { tool, arguments, environment in
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = tool
-                process.arguments = arguments
-                process.environment = environment
-                let output = Pipe()
-                process.standardOutput = output
-                process.standardError = FileHandle.nullDevice
-                process.standardInput = FileHandle.nullDevice
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(returning: (-1, Data()))
-                    return
+    /// The real tool, Xcode's polite quit and the tool's fixed path.
+    public static let live = SimRuntimeTool(
+        run: runner(timeout: .seconds(120)),
+        quit: { await RunningApps.quit($0) },
+        isInstalled: { FileManager.default.isExecutableFile(atPath: simctl.path) }
+    )
+
+    /// Runs the tool with its output read on a GCD thread, never the cooperative pool. A tool still running after
+    /// `timeout` (a hung CoreSimulatorService) is terminated, which counts as a failure: Xcode is then kept.
+    // ponytail: one limit for list and delete; split it once T-0078 measures how long a real delete takes.
+    static func runner(timeout: Duration) -> Runner {
+        { tool, arguments, environment in
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let process = Process()
+                    process.executableURL = tool
+                    process.arguments = arguments
+                    process.environment = environment
+                    let output = Pipe()
+                    process.standardOutput = output
+                    process.standardError = FileHandle.nullDevice
+                    process.standardInput = FileHandle.nullDevice
+                    let started = ContinuousClock.now
+                    do {
+                        try process.run()
+                    } catch {
+                        continuation.resume(returning: (-1, Data()))
+                        return
+                    }
+                    let limit = DispatchWorkItem { process.terminate() }
+                    let (seconds, attoseconds) = timeout.components
+                    DispatchQueue.global().asyncAfter(deadline: .now() + Double(seconds) + Double(attoseconds) / 1e18, execute: limit)
+                    let data = output.fileHandleForReading.readDataToEndOfFile()
+                    process.waitUntilExit()
+                    limit.cancel()
+                    // Whatever a stopped tool says at the end, it did not finish.
+                    let finished = ContinuousClock.now - started < timeout
+                    continuation.resume(returning: (finished ? process.terminationStatus : -1, data))
                 }
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                continuation.resume(returning: (process.terminationStatus, data))
             }
         }
     }
