@@ -94,7 +94,8 @@ public final class UninstallModel {
 
     private let uninstaller: Uninstaller?
     private let engine: ScanEngine?
-    private var measuring: Set<URL> = []
+    /// Apps being measured, each with the callers waiting for that attempt.
+    private var measuring: [URL: [CheckedContinuation<Void, Never>]] = [:]
     /// Bundle walks allowed at once. Every visible row asks for its size, and each is a full walk.
     private var freeMeasureSlots = 3
     private var measureQueue: [CheckedContinuation<Void, Never>] = []
@@ -167,8 +168,15 @@ public final class UninstallModel {
     }
 
     func measureIfNeeded(_ app: InstalledApp) async {
-        guard uninstaller != nil, let engine, sizes[app.url] == nil, measuring.insert(app.url).inserted else { return }
-        defer { measuring.remove(app.url) }
+        guard uninstaller != nil, let engine else { return }
+        // Another caller is measuring it. Its attempt ends without a size if that caller is cancelled (its row
+        // scrolled away, or Size sort was left), so wait for it and measure again if the size is still missing.
+        while sizes[app.url] == nil, measuring[app.url] != nil {
+            await withCheckedContinuation { measuring[app.url, default: []].append($0) }
+        }
+        guard !Task.isCancelled, sizes[app.url] == nil else { return }
+        measuring[app.url] = []
+        defer { measuring.removeValue(forKey: app.url)?.forEach { $0.resume() } }
         await takeMeasureSlot()
         defer { returnMeasureSlot() }
         // A row scrolled away while waiting, or its plan measured the bundle meanwhile.

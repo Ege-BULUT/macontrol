@@ -46,15 +46,18 @@ import Uninstaller
         #expect(Self.names(.smallestFirst, apps, sizes: sizes) == ["Tiny", "Twin A", "Twin B", "Big", "Also Unmeasured", "Unmeasured"])
     }
 
-    /// The order depends on the apps, never on the order they were listed in.
+    /// The order depends on the apps, never on the order they were listed in. Every rotation, forwards and
+    /// backwards, so each pair of apps comes in both ways round, and a failure repeats.
     @Test(arguments: AppSort.allCases)
     func everySortGivesOneOrderForAnyInputOrder(sort: AppSort) {
         let apps = (0..<12).map { Self.app("App \($0 % 5)", folder: "/Volumes/V\($0)", added: $0 % 3 == 0 ? nil : Double($0 % 4)) }
         let sizes = Dictionary(uniqueKeysWithValues: apps.enumerated().map { ($0.element.url, UInt64($0.offset % 3) * 100) }.filter { $0.1 > 0 })
         let expected = sort.sorted(apps) { sizes[$0.url] }
-        var generator = SystemRandomNumberGenerator()
-        for _ in 0..<20 {
-            #expect(sort.sorted(apps.shuffled(using: &generator)) { sizes[$0.url] }.map(\.url) == expected.map(\.url))
+        for shift in apps.indices {
+            let rotated = Array(apps[shift...] + apps[..<shift])
+            for input in [rotated, rotated.reversed()] {
+                #expect(sort.sorted(input) { sizes[$0.url] }.map(\.url) == expected.map(\.url), "shift \(shift)")
+            }
         }
     }
 
@@ -112,6 +115,30 @@ import Uninstaller
         await model.loadApps()
         await model.measureAll()
         #expect(model.apps.count == 4 && model.apps.allSatisfy { (model.sizes[$0.url] ?? 0) > 0 })
+    }
+
+    /// Row X and measureAll both want X's size while three big rows hold the three measure slots. The caller that
+    /// claimed X first is cancelled: the row scrolled away, or the user left Size sort. The other must still measure X.
+    @Test(.serialized, arguments: [(first: "row", cancel: true), (first: "all", cancel: true), (first: "row", cancel: false)])
+    func aCancelledCallerDoesNotLeaveTheAppUnmeasured(first: String, cancel: Bool) async throws {
+        let temp = try TemporaryDirectory()
+        for name in ["A", "B", "C"] {
+            try UninstallModelTests.bundle(temp, name, "com.example.macontrol-\(name)")
+            for i in 0..<4000 { try temp.file("Applications/\(name).app/Contents/Resources/f\(i)", size: 10) }
+        }
+        for name in ["X", "Y"] { try UninstallModelTests.bundle(temp, name, "com.example.macontrol-\(name)") }
+        let model = UninstallModel(uninstaller: try UninstallModelTests.uninstaller(temp))
+        await model.loadApps()
+        let byName = Dictionary(uniqueKeysWithValues: model.apps.map { ($0.name, $0) })
+        let busy = ["A", "B", "C"].map { name in Task { await model.measureIfNeeded(byName[name]!) } }
+        let start = { (caller: String) in caller == "row" ? Task { await model.measureIfNeeded(byName["X"]!) } : Task { await model.measureAll() } }
+        let claimer = start(first)
+        try await Task.sleep(for: .milliseconds(5))
+        let waiter = start(first == "row" ? "all" : "row")
+        try await Task.sleep(for: .milliseconds(5))
+        if cancel { claimer.cancel() }
+        for task in busy + [claimer, waiter] { await task.value }
+        #expect(model.sizes[byName["X"]!.url] != nil)
     }
 
     // MARK: Screen
