@@ -41,6 +41,8 @@ nonisolated enum MapPalette {
     /// Colours of the folders at the top of a scan, carried from one preview to the next and onto the finished
     /// map, so a folder keeps its colour while sizes change rank (T-0063). Colour by rank reshuffled most of the
     /// legend on every preview. A scan of the same folder starts from the colours of its last finished map.
+    /// The finished map never puts one colour on two neighbours; while a scan runs, two touching wedges below the
+    /// largest can share one, in about 1 preview in 12 of a random sweep (see `finish` for why).
     struct ScanColours: Equatable {
         /// Each coloured name's slot in `branches`.
         private(set) var slots: [String: Int] = [:]
@@ -73,8 +75,8 @@ nonisolated enum MapPalette {
 
         /// The last update, for the finished map, and again whenever its tree changes. Smaller names that sit next
         /// to one of their colour get a new one. Previews skip this: doing it on every preview flipped colours back
-        /// and forth while two folders of about one size swapped places, so while a scan runs two touching wedges
-        /// below the largest can share a colour. A later scan of the folder keeps this map's largest colours.
+        /// and forth while two folders of about one size swapped places. A later scan of the folder keeps this
+        /// map's largest colours.
         mutating func finish(ranked: [String]) {
             update(ranked: ranked)
             for index in ranked.indices.dropFirst(branches.count) where neighbourSlots(at: index, of: ranked).contains(slots[ranked[index]] ?? -1) {
