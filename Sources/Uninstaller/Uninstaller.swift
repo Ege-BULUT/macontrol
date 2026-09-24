@@ -105,7 +105,8 @@ public final class Uninstaller: Sendable {
         }
         let appReport = await actions.remove([bundle], mode)
         // An updater still finishing after the quit can put a new copy at the path the Trash step just emptied.
-        guard case .trashed? = appReport.outcomes.first, !FileSystem.exists(plan.app.url) else {
+        let bundleGone = switch appReport.outcomes.first { case .trashed?, .deleted?: true; default: false }
+        guard bundleGone, !FileSystem.exists(plan.app.url) else {
             let reason = "Not moved, because \(plan.app.name) is still installed."
             let kept = chosen.map { TrashOutcome.failed($0.url, message: reason) }
             return TrashReport(batch: appReport.batch, outcomes: appReport.outcomes + kept)

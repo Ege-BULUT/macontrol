@@ -168,6 +168,14 @@ import Testing
         #expect(try Self.audit(trash) != [])
     }
 
+    /// DESIGN-debloat section 3.3 step 2: the app scrubs its environment before any other statement runs.
+    @Test func appScrubsItsEnvironmentFirst() throws {
+        let text = try String(contentsOf: Self.sources.appendingPathComponent("Macontrol/main.swift"), encoding: .utf8)
+        let code = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("//") && !$0.hasPrefix("import ") }
+        #expect(code.first == "PrivilegedLauncher.scrubEnvironment()")
+    }
+
     static func swiftFiles() throws -> [URL] {
         let enumerator = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)
         return (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
