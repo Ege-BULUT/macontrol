@@ -38,10 +38,13 @@ for key in ProcessInfo.processInfo.environment.keys { unsetenv(key) }
 
 var arguments = Array(CommandLine.arguments.dropFirst())
 var executor = PrivilegedExecutor(launchctl: LaunchdSystem.run)
+/// Tests only: waits after the foreground check, before the fork, where a rewrite of request.json must change nothing.
+var afterCheck: () -> Void = {}
 
 #if DEBUG
 // Tests run the debug helper as themselves: --test-root <system root> --test-home <home> [--test-hold <file> <index>]
-// waits before item <index> until <file> exists. Not root and no test root: refused, so it never acts on this Mac.
+// waits until <file> exists: before item <index>, or with index -1 right after the foreground check, before the fork.
+// Not root and no test root: refused, so it never acts on this Mac.
 if let flag = arguments.firstIndex(of: "--test-root"), arguments.count >= flag + 4, arguments[flag + 2] == "--test-home" {
     let root = arguments[flag + 1]
     let home = arguments[flag + 3]
@@ -50,10 +53,11 @@ if let flag = arguments.firstIndex(of: "--test-root"), arguments.count >= flag +
         hold = (arguments[flag + 5], index)
     }
     arguments.removeSubrange(flag...)
+    let wait: @Sendable (String) -> Void = { file in for _ in 0..<600 where access(file, F_OK) != 0 { usleep(50_000) } }
     executor = PrivilegedExecutor(testRoot: root, home: home, launchctl: LaunchdSystem.run, beforeItem: { [hold] index in
-        guard let hold, hold.index == index else { return }
-        for _ in 0..<600 where access(hold.file, F_OK) != 0 { usleep(50_000) }
+        if let hold, hold.index == index { wait(hold.file) }
     })
+    if let hold, hold.index < 0 { afterCheck = { wait(hold.file) } }
 }
 #endif
 
@@ -65,6 +69,7 @@ case .failure(let exit): Darwin.exit(exit.rawValue)
 }
 
 // A fork is safe only while this process has never had a second thread; if the check started one, refuse.
+afterCheck()
 guard pthread_is_threaded_np() == 0, inheritEveryRegion() else { exit(PrivilegedExit.systemError.rawValue) }
 let child = detach()
 guard child >= 0 else { exit(PrivilegedExit.systemError.rawValue) }

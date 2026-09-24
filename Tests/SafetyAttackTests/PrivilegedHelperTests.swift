@@ -26,7 +26,8 @@ import Testing
     }
 
     /// Starts the helper as `do shell script` would, minus root: argv, then its exit status. `afterCheck` runs once
-    /// the parent has returned (the foreground check passed and the child detached); then the hold is released.
+    /// the parent has returned (the foreground check passed and the child detached); then the hold is released. With
+    /// `holdAt: -1` the helper waits right after its foreground check, before the fork, and `afterCheck` runs there.
     static func launcher(
         _ fx: RootFixture, holdAt: Int? = nil, beforeCheck: @escaping @Sendable (URL) -> Void = { _ in },
         afterCheck: @escaping @Sendable (URL) -> Void = { _ in }, release: Bool = true,
@@ -44,9 +45,17 @@ import Testing
             process.arguments = [request.path, sha, "--test-root", root, "--test-home", home]
                 + (holdAt.map { ["--test-hold", hold, String($0)] } ?? [])
             try process.run()
+            if holdAt == -1 {
+                // The check created result.jsonl; the helper now waits before its fork.
+                let result = request.deletingLastPathComponent().appendingPathComponent("result.jsonl").path
+                while process.isRunning && access(result, F_OK) != 0 { usleep(10_000) }
+                afterCheck(request)
+                FileManager.default.createFile(atPath: hold, contents: nil)
+            }
             // Not waitUntilExit: that turns the main run loop inside a main-actor job.
             while process.isRunning { usleep(10_000) }
             guard process.terminationStatus == 0 else { throw PrivilegedError.helperRejected(process.terminationStatus) }
+            guard holdAt != -1 else { return }
             afterCheck(request)
             if release { FileManager.default.createFile(atPath: hold, contents: nil) }
         }
@@ -111,7 +120,7 @@ import Testing
     }
 
     /// sec 1: once the check passed, a rewritten `request.json` changes nothing; the child works from the bytes it
-    /// checked. (Rewritten in place, same inode, while the child waits before its first item.)
+    /// checked. Rewritten in place (same inode) while the helper waits right after its check, before the fork.
     @Test func aRequestRewrittenAfterTheCheckChangesNothing() async throws {
         let fx = try RootFixture()
         try fx.file("root/Library/Caches/Vendor/a")
@@ -121,7 +130,7 @@ import Testing
         ]).encoded()
         let item = try Self.item(fx, "root/Library/Caches/Vendor")
 
-        let outcomes = await Self.run(fx, [item], launcher: try Self.launcher(fx, holdAt: 0, afterCheck: { request in
+        let outcomes = await Self.run(fx, [item], launcher: try Self.launcher(fx, holdAt: -1, afterCheck: { request in
             let handle = try? FileHandle(forWritingTo: request)
             try? handle?.truncate(atOffset: 0)
             try? handle?.write(contentsOf: forged)
