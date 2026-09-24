@@ -1,0 +1,33 @@
+import Foundation
+@testable import Safety
+import Testing
+
+@Suite struct RestorePointTests {
+    /// What `tmutil localsnapshot` printed on this Mac (feasibility-permanent, tmutil-run.log, 2026-09-23).
+    static let captured = """
+        NOTE: local snapshots are considered purgeable and may be removed at any time by deleted(8).
+        Created local snapshot with date: 2026-09-23-152529
+
+        """
+
+    @Test func theSnapshotNameComesFromTmutilsOutput() {
+        #expect(RestorePoint.snapshotName(in: Self.captured) == "com.apple.TimeMachine.2026-09-23-152529.local")
+        #expect(RestorePoint.snapshotName(in: "Created local snapshot with date: 2026-09-23-152529") != nil)
+    }
+
+    @Test(arguments: [
+        "", "NOTE: local snapshots are considered purgeable and may be removed at any time by deleted(8).",
+        "Failed to create local snapshot", "Created local snapshot with date: 2026-09-23", "Created local snapshot with date: $(date)",
+    ])
+    func outputWithoutASnapshotGivesNoName(output: String) {
+        #expect(RestorePoint.snapshotName(in: output) == nil)
+    }
+
+    /// Makes a real local snapshot of this Mac's Data volume (about a minute), so only on request. Delete it
+    /// afterwards with `tmutil deletelocalsnapshots <date>`.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["MACONTROL_TMUTIL"] == "1"))
+    func createMakesALocalSnapshot() async throws {
+        let name = try await RestorePoint.create()
+        #expect(name.hasPrefix("com.apple.TimeMachine.") && name.hasSuffix(".local"))
+    }
+}

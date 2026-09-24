@@ -72,33 +72,58 @@ struct RemovalEngine: Sendable {
             close(fd)
             return .changed
         }
-        var failures: [Failure] = []
-        empty(fd, device: opened.st_dev, item: path, prefix: "", failures: &failures)
+        var failures = empty(fd, device: opened.st_dev, item: path)
         if unlinkat(parent, name, AT_REMOVEDIR) != 0, failures.isEmpty {
             failures.append(Failure(path: "", reason: Self.describe(errno)))
         }
         return failures.isEmpty ? .removed : .failed(failures)
     }
 
-    /// Removes everything inside the folder `fd`, which it closes.
-    private func empty(_ fd: Int32, device: dev_t, item: String, prefix: String, failures: inout [Failure]) {
-        defer { close(fd) }
+    /// One folder being emptied: its descriptor, every name it held when opened, and how far the walk got.
+    private struct Level {
+        let fd: Int32
+        let names: [[CChar]]
+        var next = 0
+        /// Its path inside the item, with a trailing slash; empty for the item.
+        let prefix: String
+        /// Its name in the level above; nil for the item.
+        let name: [CChar]?
+        let failuresBefore: Int
+    }
+
+    /// Removes everything inside the folder `fd`, which it closes. A loop over an explicit stack, not recursion: the
+    /// actor's queue thread has a 512 KB stack, which a 300-level tree overflowed.
+    private func empty(_ fd: Int32, device: dev_t, item: String) -> [Failure] {
         // Every name first: whether a listing still returns every entry once some are removed is unspecified.
         guard let names = Self.names(in: fd) else {
-            failures.append(Failure(path: prefix, reason: Self.describe(errno)))
-            return
+            close(fd)
+            return [Failure(path: "", reason: Self.describe(errno))]
         }
-        for name in names {
-            let relative = prefix + Self.string(name)
+        var failures: [Failure] = []
+        var levels = [Level(fd: fd, names: names, prefix: "", name: nil, failuresBefore: 0)]
+        while let level = levels.last {
+            guard level.next < level.names.count else {
+                // Emptied, as far as it goes: close it and remove it from the level above.
+                levels.removeLast()
+                close(level.fd)
+                if let name = level.name, let above = levels.last, unlinkat(above.fd, name, AT_REMOVEDIR) != 0,
+                   failures.count == level.failuresBefore {
+                    failures.append(Failure(path: String(level.prefix.dropLast()), reason: Self.describe(errno)))
+                }
+                continue
+            }
+            levels[levels.count - 1].next += 1
+            let name = level.names[level.next]
+            let relative = level.prefix + Self.string(name)
             func fail(_ reason: String) { failures.append(Failure(path: relative, reason: reason)) }
             var info = stat()
-            guard fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else {
+            guard fstatat(level.fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else {
                 if errno != ENOENT { fail(Self.describe(errno)) }
                 continue
             }
             beforeEntry?(item, relative)
             guard info.st_mode & S_IFMT == S_IFDIR else {
-                if unlinkat(fd, name, 0) != 0, errno != ENOENT { fail(Self.describe(errno)) }
+                if unlinkat(level.fd, name, 0) != 0, errno != ENOENT { fail(Self.describe(errno)) }
                 continue
             }
             if info.st_dev != device {
@@ -109,13 +134,13 @@ struct RemovalEngine: Sendable {
                 fail("It is in iCloud and not downloaded")
                 continue
             }
-            let child = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            let child = openat(level.fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             guard child >= 0 else {
                 let code = errno
                 // Swapped for a link or a file since the fstatat: that entry goes, never what a link points to.
                 if code != ELOOP && code != ENOTDIR {
                     fail(Self.describe(code))
-                } else if unlinkat(fd, name, 0) != 0 {
+                } else if unlinkat(level.fd, name, 0) != 0 {
                     fail(Self.describe(errno))
                 }
                 continue
@@ -126,10 +151,14 @@ struct RemovalEngine: Sendable {
                 fail("It changed while it was being deleted")
                 continue
             }
-            let before = failures.count
-            empty(child, device: device, item: item, prefix: relative + "/", failures: &failures)
-            if unlinkat(fd, name, AT_REMOVEDIR) != 0, failures.count == before { fail(Self.describe(errno)) }
+            guard let names = Self.names(in: child) else {
+                fail(Self.describe(errno))
+                close(child)
+                continue
+            }
+            levels.append(Level(fd: child, names: names, prefix: relative + "/", name: name, failuresBefore: failures.count))
         }
+        return failures
     }
 
     // MARK: Names

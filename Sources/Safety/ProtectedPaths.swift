@@ -214,55 +214,56 @@ struct ProtectionPolicy: Sendable {
             close(folder)
             return .dataless
         }
-        var walk = BlockerWalk(base: path, device: info.st_dev, forErase: forErase)
-        if let reason = walk.check(folder, prefix: "") { return .refused(reason) }
-        if walk.sawDataless { return .dataless }
-        return walk.sawUnwritable ? .refused(.needsAdministrator) : nil
+        return blocker(inside: folder, base: path, device: info.st_dev, forErase: forErase)
     }
 
     /// Fd-relative, no link followed, so a tree deeper than PATH_MAX is covered too; it never leaves the folder's volume.
+    /// A loop over a stack of open listings, not recursion: the Trash actor's thread has a 512 KB stack.
     // ponytail: one fstatat per entry; getattrlistbulk (as ScanEngine's BulkReader) if big folders make it slow.
-    private struct BlockerWalk {
-        let base: String
-        let device: dev_t
-        let forErase: Bool
+    private static func blocker(inside fd: Int32, base: String, device: dev_t, forErase: Bool) -> RemovalBlocker? {
         var sawDataless = false
-        var sawUnwritable = false
-
-        /// The first refusal inside `fd`, which it takes ownership of.
-        mutating func check(_ fd: Int32, prefix: String) -> RefusalReason? {
-            if forErase && faccessat(fd, ".", W_OK, AT_EACCESS) != 0 { sawUnwritable = true }
-            guard let listing = fdopendir(fd) else {
-                close(fd)
-                return nil
-            }
-            defer { closedir(listing) }
-            let folder = dirfd(listing)
-            while let entry = readdir(listing) {
-                let name = RemovalEngine.name(of: entry)
-                if RemovalEngine.isDotOrDotDot(name) { continue }
-                let relative = prefix + RemovalEngine.string(name)
-                var info = stat()
-                guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { continue }
-                if info.st_flags & ProtectionPolicy.userLock != 0 { return .holdsLocked(relative) }
-                if info.st_flags & ProtectionPolicy.systemFlags != 0 { return .systemProtected }
-                let isDataless = info.st_flags & UInt32(SF_DATALESS) != 0
-                guard info.st_mode & S_IFMT == S_IFDIR, !isDataless else {
-                    sawDataless = sawDataless || isDataless
-                    continue
-                }
-                if info.st_dev != device { return .protectedLocation(base + "/" + relative) }
-                let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-                guard child >= 0 else {
-                    // An unreadable folder cannot be emptied. A folder swapped for a link since the fstatat is left to
-                    // the sink's own checks.
-                    if forErase && (errno == EACCES || errno == EPERM) { sawUnwritable = true }
-                    continue
-                }
-                if let reason = check(child, prefix: relative + "/") { return reason }
-            }
+        var sawUnwritable = forErase && faccessat(fd, ".", W_OK, AT_EACCESS) != 0
+        guard let top = fdopendir(fd) else {
+            close(fd)
             return nil
         }
+        var levels: [(listing: UnsafeMutablePointer<DIR>, prefix: String)] = [(top, "")]
+        defer { levels.forEach { closedir($0.listing) } }
+        while let level = levels.last {
+            guard let entry = readdir(level.listing) else {
+                closedir(levels.removeLast().listing)
+                continue
+            }
+            let folder = dirfd(level.listing)
+            let name = RemovalEngine.name(of: entry)
+            if RemovalEngine.isDotOrDotDot(name) { continue }
+            let relative = level.prefix + RemovalEngine.string(name)
+            var info = stat()
+            guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { continue }
+            if info.st_flags & userLock != 0 { return .refused(.holdsLocked(relative)) }
+            if info.st_flags & systemFlags != 0 { return .refused(.systemProtected) }
+            let isDataless = info.st_flags & UInt32(SF_DATALESS) != 0
+            guard info.st_mode & S_IFMT == S_IFDIR, !isDataless else {
+                sawDataless = sawDataless || isDataless
+                continue
+            }
+            if info.st_dev != device { return .refused(.protectedLocation(base + "/" + relative)) }
+            let child = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard child >= 0 else {
+                // An unreadable folder cannot be emptied. A folder swapped for a link since the fstatat is left to the
+                // sink's own checks.
+                if forErase && (errno == EACCES || errno == EPERM) { sawUnwritable = true }
+                continue
+            }
+            if forErase && faccessat(child, ".", W_OK, AT_EACCESS) != 0 { sawUnwritable = true }
+            guard let listing = fdopendir(child) else {
+                close(child)
+                continue
+            }
+            levels.append((listing, relative + "/"))
+        }
+        if sawDataless { return .dataless }
+        return sawUnwritable ? .refused(.needsAdministrator) : nil
     }
 
     /// A volume mounted below `path` (a disk image, an SMB or sshfs mount): moving the folder would
