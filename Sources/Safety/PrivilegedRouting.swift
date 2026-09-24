@@ -161,12 +161,12 @@ public enum PrivilegedRouting {
                 continue
             }
             guard let request = folder.readRequest() else { continue }
-            let known = journaled ?? Set(journal.entries().map { "\($0.batch)\n\($0.originalPath)" })
-            journaled = known
+            var known = journaled ?? Set(journal.entries().map { "\($0.batch)\n\($0.originalPath)" })
             let entries = lines.compactMap { line -> JournalEntry? in
                 guard let index = line.index, request.items.indices.contains(index) else { return nil }
                 return journalEntry(line, request.items[index], batch: batch, restorePoint: nil)
-            }.filter { !known.contains("\($0.batch)\n\($0.originalPath)") }
+            }.filter { known.insert("\($0.batch)\n\($0.originalPath)").inserted }
+            journaled = known
             guard !entries.isEmpty, let handle = try? journal.openForAppending() else { continue }
             for entry in entries { try? TrashJournal.append(entry, to: handle) }
         }

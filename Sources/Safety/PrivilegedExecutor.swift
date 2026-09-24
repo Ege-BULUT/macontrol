@@ -126,10 +126,7 @@ public struct PrivilegedExecutor: Sendable {
             return
         }
         defer { close(trash) }
-        let homeURL = URL(fileURLWithPath: home)
-        let policy = ProtectionPolicy(
-            home: homeURL, journal: homeURL.appendingPathComponent("Library/Application Support/Macontrol/trash-journal.jsonl")
-        )
+        let policy = Self.policy(home: home)
         for (index, item) in items.enumerated() {
             beforeItem?(index)
             let outcome = process(item, op: checked.request.op, home: home, policy: policy, trash: trash)
@@ -140,6 +137,19 @@ public struct PrivilegedExecutor: Sendable {
 
     /// Section 3.5 "per item", in order; nothing changes before the last check.
     func process(_ item: PrivilegedRequest.Item, op: DeletionMode, home: String, policy: ProtectionPolicy, trash: Int32) -> HelperOutcome {
+        if let refusal = refusal(of: item, home: home, policy: policy) { return refusal }
+        let path = item.path
+        if isLaunchDaemon(path), let failure = stopDaemon(path) { return failure }
+        let moved = moveToTrash(path, identity: item.identity, home: home, trash: trash)
+        guard op == .permanent, case .trashed(let to) = moved else { return moved }
+        // ponytail: the erase is permanent-engine's RemovalEngine (T-0074), the code the app uses; until it merges, a
+        // permanent item stops in the Trash and says so.
+        return .failed("Moved to the Trash, but not deleted yet. Empty the Trash to finish.", to: to)
+    }
+
+    /// Every check before a change, none of which touches the disk: the canonical spelling, the root allowlist, the
+    /// requesting user's policy, identity, locked items inside, and `requiresGone`.
+    func refusal(of item: PrivilegedRequest.Item, home: String, policy: ProtectionPolicy) -> HelperOutcome? {
         let path: String
         do throws(RefusalReason) {
             path = try ProtectedPaths.canonicalPath(of: URL(fileURLWithPath: item.path))
@@ -161,12 +171,13 @@ public struct PrivilegedExecutor: Sendable {
                 return .failed("Not removed, because \((gone as NSString).lastPathComponent) is still there.")
             }
         }
-        if isLaunchDaemon(path), let failure = stopDaemon(path) { return failure }
-        let moved = moveToTrash(path, identity: item.identity, home: home, trash: trash)
-        guard op == .permanent, case .trashed(let to) = moved else { return moved }
-        // ponytail: the erase is permanent-engine's RemovalEngine (T-0074), the code the app uses; until it merges, a
-        // permanent item stops in the Trash and says so.
-        return .failed("Moved to the Trash, but not deleted yet. Empty the Trash to finish.", to: to)
+        return nil
+    }
+
+    /// The requesting user's policy: their home and their journal, spelled out, never this process's (sec 6).
+    static func policy(home: String) -> ProtectionPolicy {
+        let home = URL(fileURLWithPath: home)
+        return ProtectionPolicy(home: home, journal: home.appendingPathComponent("Library/Application Support/Macontrol/trash-journal.jsonl"))
     }
 
     // MARK: LaunchDaemons
