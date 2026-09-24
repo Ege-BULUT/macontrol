@@ -8,15 +8,22 @@
 #   --zip PATH  serve this local release zip (Macontrol-<version>.zip) instead of downloading the newest
 #               GitHub release; skips every network call except the deploy itself
 #
-# dist/site holds: site/*, images from docs/assets (WebP screenshots, a 256 px icon), the OpenLead board
-# under board/ (pages, data, attachments), downloads/<release>.zip plus a copy as downloads/latest.zip,
-# and version.json {version, file, size, sha256, published}. The repo is private, so the zip is served
-# from Vercel, never linked from GitHub. dist/ also holds release archives, so only dist/site is rebuilt.
-# Needs: cwebp (brew install webp), gh (without --zip), vercel (without --dry-run).
+# dist/site holds: site/*, images from docs/assets (WebP screenshots, landing-page crops, a 256 px icon,
+# favicon.ico, a 1200x630 og.jpg), the OpenLead board under board/ (pages, data, attachments) and
+# downloads/<release>.zip. The release's version, size, date and SHA-256 are written into the HTML, every
+# download link points at the versioned file, and vercel.json gets a 307 from /downloads/latest.zip to it.
+# The repo is private, so the zip is served from Vercel, never linked from GitHub. dist/ also holds release
+# archives, so only dist/site is rebuilt.
+#
+# The page copy describes one release line, SITE_RELEASE. Only a release from that line is served: bump
+# SITE_RELEASE in the same commit that updates the copy for the next minor version.
+# Needs: cwebp (brew install webp); without --zip, gh logged in as Ege-BULUT with read access to the repo and
+# jq (in macOS 15 and later); without --dry-run, vercel.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 REPO="Ege-BULUT/macontrol"
+SITE_RELEASE="0.1"
 BOARD="${BOARD:-$(git rev-parse --path-format=absolute --git-common-dir)/../.board}"
 OUT="$ROOT/dist/site"
 
@@ -36,25 +43,46 @@ command -v cwebp >/dev/null || { echo "cwebp not found (brew install webp)" >&2;
 [ -f "$BOARD/.vercel/project.json" ] || { echo "no Vercel link at $BOARD/.vercel" >&2; exit 1; }
 
 /bin/rm -rf "$OUT"
-mkdir -p "$OUT/assets/shots" "$OUT/board" "$OUT/downloads"
+mkdir -p "$OUT/assets/shots" "$OUT/assets/crops" "$OUT/board" "$OUT/downloads"
+
+# Landing-page crops: the part of the window each section talks about, as "x y width height" in
+# screenshot pixels. The <img> width/height in site/index.html must match.
+crop_box() {
+    case "$1" in
+        disk-map-treemap) echo 330 88 1010 1140 ;;
+        clean) echo 325 88 1465 1052 ;;
+        uninstall) echo 748 82 1036 1144 ;;
+        overview) echo 450 150 1330 720 ;;
+        history) echo 440 150 1330 720 ;;
+    esac
+}
 
 # Site and images
 cp -R site/. "$OUT/"
 sips -Z 256 docs/assets/icon.png --out "$OUT/assets/icon.png" >/dev/null
+sips -Z 32 -s format ico docs/assets/icon.png --out "$OUT/favicon.ico" >/dev/null
+# Link previews: 1200x630 of the light sunburst and the folder list beside it.
+sips -c 772 1470 --cropOffset 345 330 docs/assets/screenshots/disk-map-sunburst-light.png --out "$OUT/og.png" >/dev/null
+sips -z 630 1200 -s format jpeg -s formatOptions 85 "$OUT/og.png" --out "$OUT/assets/og.jpg" >/dev/null
+/bin/rm -f "$OUT/og.png"
 for png in docs/assets/screenshots/*.png; do
-    cwebp -quiet -q 82 "$png" -o "$OUT/assets/shots/$(basename "${png%.png}").webp"
+    name="$(basename "${png%.png}")"
+    cwebp -quiet -q 82 "$png" -o "$OUT/assets/shots/$name.webp"
+    box="$(crop_box "${name%-*}")"
+    [ -z "$box" ] || cwebp -quiet -q 82 -crop $box "$png" -o "$OUT/assets/crops/$name.webp"
 done
 
-# Changelog: rendered from CHANGELOG.md when the repo has one, else the hand copy in site/docs stays.
-if [ -f CHANGELOG.md ]; then
-    python3 - CHANGELOG.md "$OUT/docs/changelog.html" <<'PY'
+# Changelog: rendered from CHANGELOG.md into the markers in docs/changelog.html.
+python3 - CHANGELOG.md "$OUT/docs/changelog.html" <<'PY'
 import html, re, sys
 # ponytail: headings, lists, paragraphs, **bold**, `code`, [links]; add fences/tables if CHANGELOG.md uses them
 def inline(t):
     t = html.escape(t, quote=False)
     t = re.sub(r'`([^`]+)`', r'<code>\1</code>', t)
     t = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
-    return re.sub(r'\[([^\]]+)\]\(([^)\s"]+)\)', r'<a href="\2">\1</a>', t)
+    t = re.sub(r'\[([^\]]+)\]\(([^)\s"]+)\)', r'<a href="\2">\1</a>', t)
+    # CHANGELOG.md can only name the Gatekeeper step; the site links it to the install guide.
+    return t.replace('Open Anyway', '<a href="install.html#first-launch">Open Anyway</a>')
 out, para, items, releases = [], [], [], []
 def flush():
     if para: out.append('<p>' + inline(' '.join(para)) + '</p>'); para.clear()
@@ -66,62 +94,81 @@ for line in open(sys.argv[1], encoding='utf-8').read().splitlines():
         flush()
         level, text = len(m.group(1)), m.group(2)
         if level == 2:
-            # One collapsible release per "## <version>, <date>" heading; the newest starts open.
+            # One section per "## <version>, <date>" heading. site.js collapses all but the newest (data-open).
             version, _, date = text.partition(', ')
-            if releases: out.append('</div></details>')
+            if releases: out.append('</div></div>')
             releases.append(version)
             small = f' <small>{inline(date)}</small>' if date else ''
-            out.append(f'<details class="acc release" id="v{html.escape(version)}"{" open" if len(releases) == 1 else ""}>'
-                       f'<summary><h2>{inline(version)}{small}</h2></summary><div class="acc-body">')
+            out.append(f'<div class="acc release" id="v{html.escape(version)}"{" data-open" if len(releases) == 1 else ""}>'
+                       f'<h2>{inline(version)}{small}</h2><div class="acc-body">')
         elif level == 3: out.append(f'<h3>{inline(text)}</h3>')
     elif re.match(r'[-*]\s+', s): (para and flush()); items.append(s[2:].strip())
     elif not s: flush()
     elif items and line.startswith(' '): items[-1] += ' ' + s
     else: (items and flush()); para.append(s)
 flush()
-if releases: out.append('</div></details>')
+if releases: out.append('</div></div>')
 # The page has its own intro, so drop CHANGELOG.md's text before the first release.
-out = out[next((i for i, o in enumerate(out) if o.startswith('<details')), 0):]
-# The page has its own intro, so drop CHANGELOG.md's text before the first release.
-out = out[next((i for i, o in enumerate(out) if o.startswith('<details')), 0):]
+out = out[next((i for i, o in enumerate(out) if o.startswith('<div class="acc')), 0):]
 page = open(sys.argv[2], encoding='utf-8').read()
 start, end = page.index('<!-- CHANGELOG:START'), page.index('<!-- CHANGELOG:END -->')
 open(sys.argv[2], 'w', encoding='utf-8').write(page[:start] + '\n'.join(out) + '\n' + page[end:])
 PY
-    echo "changelog: rendered from CHANGELOG.md"
-else
-    echo "changelog: hand copy (no CHANGELOG.md)"
-fi
 
 # Board: pages, data and attachments only (no .git, .vercel or scripts)
 cp "$BOARD"/*.html "$OUT/board/"
 cp -R "$BOARD/data" "$BOARD/attachments" "$OUT/board/"
 cp -R "$BOARD/.vercel" "$OUT/.vercel"
 
-# Release zip: the newest release, pre-releases included
+# Release zip: the newest release of the SITE_RELEASE line, pre-releases included
 if [ -n "$ZIP" ]; then
     FILE="$(basename "$ZIP")"
     VERSION="${FILE#Macontrol-}"; VERSION="${VERSION%.zip}"
     cp "$ZIP" "$OUT/downloads/$FILE"
     PUBLISHED="$(git log -1 --format=%cI "refs/tags/v$VERSION" 2>/dev/null || date -u +%FT%TZ)"
 else
-    read -r TAG PUBLISHED < <(gh release list --repo "$REPO" --limit 1 --exclude-drafts \
-        --json tagName,publishedAt --jq '.[0] | "\(.tagName) \(.publishedAt)"')
-    [ -n "${TAG:-}" ] || { echo "no release found in $REPO" >&2; exit 1; }
+    # "<tag> <published> <newest tag overall>", or an empty line when the line has no release yet
+    LINE="$(gh release list --repo "$REPO" --limit 50 --exclude-drafts --json tagName,publishedAt |
+        jq -r --arg line "v$SITE_RELEASE." '.[0].tagName as $newest
+            | map(select(.tagName | startswith($line)))[0] // empty | "\(.tagName) \(.publishedAt) \($newest)"')"
+    read -r TAG PUBLISHED NEWEST <<<"$LINE"
+    [ -n "$TAG" ] || { echo "no v$SITE_RELEASE.x release in $REPO" >&2; exit 1; }
+    [ "$TAG" = "$NEWEST" ] || echo "note: serving $TAG, not the newer $NEWEST: the page describes $SITE_RELEASE." \
+        "Update the copy and SITE_RELEASE together to serve it." >&2
     gh release download "$TAG" --repo "$REPO" --pattern '*.zip' --dir "$OUT/downloads" --clobber
     ZIPS=("$OUT"/downloads/*.zip)
     [ ${#ZIPS[@]} -eq 1 ] || { echo "expected one zip in $TAG, got ${#ZIPS[@]}" >&2; exit 1; }
     FILE="$(basename "${ZIPS[0]}")"
     VERSION="${TAG#v}"
 fi
-cp "$OUT/downloads/$FILE" "$OUT/downloads/latest.zip"
+case "$VERSION" in
+    "$SITE_RELEASE".*) ;;
+    *) echo "release $VERSION is not a $SITE_RELEASE.x release, and the page describes $SITE_RELEASE." \
+        "Update the copy and SITE_RELEASE together." >&2; exit 1 ;;
+esac
+
+# The release goes into the HTML, so the page names, sizes and checks the download without JavaScript.
 SIZE="$(stat -f %z "$OUT/downloads/$FILE")"
 SHA="$(shasum -a 256 "$OUT/downloads/$FILE" | cut -d' ' -f1)"
-printf '{"version": "%s", "file": "%s", "size": %s, "sha256": "%s", "published": "%s"}\n' \
-    "$VERSION" "$FILE" "$SIZE" "$SHA" "$PUBLISHED" > "$OUT/version.json"
+MB="$(awk -v b="$SIZE" 'BEGIN { printf "%.1f MB", b / 1e6 }')"
+DAY="$(LC_ALL=C date -j -f %Y-%m-%d "${PUBLISHED%%T*}" '+%-d %B %Y')"
+find "$OUT" -name '*.html' -not -path "$OUT/board/*" -exec sed -i '' -e "s|/downloads/latest\.zip|/downloads/$FILE|g" \
+    -e "s|{{version}}|$VERSION|g" -e "s|{{file}}|$FILE|g" -e "s|{{size}}|$MB|g" -e "s|{{sha256}}|$SHA|g" \
+    -e "s|{{published}}|$DAY|g" {} +
+if grep -rlE '\{\{[a-z0-9]+\}\}' --include='*.html' --exclude-dir=board "$OUT"; then
+    echo "unfilled placeholders in the files above" >&2; exit 1
+fi
+# Old and shared links to /downloads/latest.zip get a temporary redirect to the current file.
+python3 - "$OUT/vercel.json" "$FILE" <<'PY'
+import json, sys
+path, file = sys.argv[1:]
+config = json.load(open(path))
+config['redirects'].append({'source': '/downloads/latest.zip', 'destination': '/downloads/' + file, 'permanent': False})
+json.dump(config, open(path, 'w'), indent=2)
+PY
 
 echo "dist/site: $(find "$OUT" -type f -not -path '*/.vercel/*' | wc -l | tr -d ' ') files, $(du -sh "$OUT" | cut -f1)"
-echo "version.json: $(cat "$OUT/version.json")"
+echo "release: $FILE, $MB, published $DAY, sha256 $SHA"
 if [ "$DRY" = 1 ]; then
     echo "dry run: would run 'vercel deploy --prod --yes' in dist/site (project $(sed -E 's/.*"projectName":"([^"]+)".*/\1/' "$OUT/.vercel/project.json"))"
     exit 0

@@ -5,11 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>macontrol: see where your disk space went</title>
 <meta name="description" content="A native macOS app that maps your disk and cleans it up, with every removal going to the Trash first. Free, macOS 14+, Apple Silicon.">
-<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://macontrol.vercel.app/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/">
 <meta property="og:title" content="macontrol">
 <meta property="og:description" content="See where your disk space went, and get it back safely.">
-<meta property="og:image" content="https://macontrol.vercel.app/assets/shots/disk-map-sunburst-light.webp">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The macontrol Disk Map: a sunburst of a home folder with its largest folders listed beside it">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="assets/icon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
 <link rel="stylesheet" href="style.css">
@@ -34,16 +42,15 @@
     <div>
       <img class="icon" src="assets/icon.png" width="88" height="88" alt="macontrol app icon">
       <h1>See where your disk space went, and get it back safely.</h1>
-      <p class="lede">A native Mac app that maps your disk and cleans it up. Everything it removes goes to the Trash first, so you can always put it back.</p>
+      <p class="lede">A native Mac app that maps your disk and cleans it up. Everything it removes goes to the Trash first, so you can put it back until you empty the Trash.</p>
       <div class="get">
         <a class="btn" href="/downloads/latest.zip">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/></svg>
           Download for Mac
         </a>
-        <span class="ver" data-v-show hidden>Version <span data-v="version"></span> preview, <span data-v="size"></span></span>
+        <span class="ver">Version {{version}} preview, {{size}}</span>
       </div>
       <p class="req">macOS 14+ · Apple Silicon · Free</p>
-      <p class="req-note">Open source is coming: the code will be published once licensing is finalized.</p>
     </div>
     <figure class="shot">
       <picture>
@@ -72,10 +79,10 @@
           <li><b>Keyboard first.</b> Arrows move, <kbd>Return</kbd> opens, <kbd>Esc</kbd> goes up, <kbd>⌘[</kbd> <kbd>⌘]</kbd> go back and forward, <kbd>Space</kbd> opens Quick Look.</li>
         </ul>
       </div>
-      <figure class="shot">
+      <figure class="shot crop">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/disk-map-treemap-dark.webp">
-          <img src="assets/shots/disk-map-treemap-light.webp" width="1800" height="1239" loading="lazy" decoding="async" alt="The Disk Map as a treemap: Library, Pictures, Movies, projects, Downloads and Music as nested rectangles with their sizes">
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/disk-map-treemap-dark.webp">
+          <img src="assets/crops/disk-map-treemap-light.webp" width="1010" height="1140" loading="lazy" decoding="async" alt="The Disk Map as a treemap: Library, Pictures, Movies, projects, Downloads and Music as nested rectangles with their sizes">
         </picture>
       </figure>
     </div>
@@ -90,10 +97,10 @@
           <li><b>Rules fail closed.</b> A pattern that reaches outside the folders it is meant for drops its whole rule when the catalog loads.</li>
         </ul>
       </div>
-      <figure class="shot">
+      <figure class="shot crop">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/clean-dark.webp">
-          <img src="assets/shots/clean-light.webp" width="1800" height="1241" loading="lazy" decoding="async" alt="Clean: app caches, logs and developer data grouped by category, each item labelled Safe, Review or Manual with its size">
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/clean-dark.webp">
+          <img src="assets/crops/clean-light.webp" width="1465" height="1052" loading="lazy" decoding="async" alt="Clean: app caches, logs and developer data grouped by category, each item labelled Safe, Review or Manual with its size">
         </picture>
       </figure>
     </div>
@@ -108,29 +115,29 @@
           <li><b>Sort and filter.</b> Sort by name, date added or size, and show all apps, yours or Apple's. New in 0.1.1.</li>
         </ul>
       </div>
-      <figure class="shot">
+      <figure class="shot crop">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/uninstall-dark.webp">
-          <img src="assets/shots/uninstall-light.webp" width="1800" height="1240" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/uninstall-dark.webp">
+          <img src="assets/crops/uninstall-light.webp" width="1036" height="1144" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
         </picture>
       </figure>
     </div>
 
     <div class="pair">
-      <figure class="shot">
+      <figure class="shot crop">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/overview-dark.webp">
-          <img src="assets/shots/overview-light.webp" width="1800" height="1303" loading="lazy" decoding="async" alt="Overview: disk capacity, the largest folders in the home folder, and how much is safe to clean">
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/overview-dark.webp">
+          <img src="assets/crops/overview-light.webp" width="1330" height="720" loading="lazy" decoding="async" alt="Overview: disk capacity, the largest folders in the home folder, and how much is safe to clean">
         </picture>
         <figcaption>
           <h3>Overview</h3>
           <p>Capacity, the largest folders in your home and how much is safe to clean. Purgeable space is shown as a dated note and never counted as free.</p>
         </figcaption>
       </figure>
-      <figure class="shot">
+      <figure class="shot crop">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/history-dark.webp">
-          <img src="assets/shots/history-light.webp" width="1800" height="1304" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/history-dark.webp">
+          <img src="assets/crops/history-light.webp" width="1330" height="720" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
         </picture>
         <figcaption>
           <h3>History</h3>
@@ -181,7 +188,7 @@
     <ol class="path">
       <li><b>You choose it</b>In Clean only Safe items start selected. Every removal ends in a confirmation that lists exactly what will move.</li>
       <li><b>It is checked again</b>Right before the move, the item is compared with what the scan saw. A file that was replaced, or swapped for a link, stays put.</li>
-      <li><b>Protected places are refused</b>Your home folder and its main folders, Applications, Library and system folders never move.</li>
+      <li><b>Key folders are refused</b>Your home folder and its main folders, Applications, Library and system folders never move.</li>
       <li><b>It goes to the Trash</b>Through macOS's own Move to Trash. macontrol never empties the Trash: the space comes back when you do.</li>
       <li><b>You can undo it</b>Each batch is written to a journal. History puts it back while it is still in the Trash and its old place is free.</li>
     </ol>
@@ -221,7 +228,7 @@
       </a>
     </div>
     <p class="req">macOS 14+ · Apple Silicon · Free</p>
-      <p class="req-note">Open source is coming: the code will be published once licensing is finalized.</p>
+    <p class="req-note">Open source is coming: the code will be published once licensing is finalized.</p>
   </div>
 </section>
 </main>

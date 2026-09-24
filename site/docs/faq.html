@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FAQ: macontrol docs</title>
 <meta name="description" content="Questions and answers. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/faq.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/faq.html">
+<meta property="og:title" content="FAQ: macontrol docs">
+<meta property="og:description" content="Questions and answers. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The macontrol Disk Map: a sunburst of a home folder with its largest folders listed beside it">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="../assets/icon.png">
@@ -41,82 +52,82 @@
 <h1>Questions and answers</h1>
 <p class="lede">Short answers. If a question is about a specific screen, <a href="using.html">Using macontrol</a> goes deeper.</p>
 
-<details class="acc" id="permanent">
-<summary><h2>Does macontrol delete anything permanently?</h2></summary>
+<div class="acc" id="permanent">
+<h2>Does macontrol delete anything permanently?</h2>
 <div class="acc-body">
 <p>No. In 0.1 everything goes to the Trash, and macontrol never empties it. History can put a batch back while it is still in the Trash. Permanent deletion is planned for 0.2 as an opt-in hardcore mode.</p>
 </div>
-</details>
-<details class="acc" id="space">
-<summary><h2>I removed things, but the free space did not change.</h2></summary>
+</div>
+<div class="acc" id="space">
+<h2>I removed things, but the free space did not change.</h2>
 <div class="acc-body">
 <p>The space comes back when you empty the Trash. Some of it can stay in use even then: clones, snapshots and other hard links can share the same data. The Disk Map review and History say how much emptying the Trash will actually free.</p>
 </div>
-</details>
-<details class="acc" id="cost">
-<summary><h2>Is it free?</h2></summary>
+</div>
+<div class="acc" id="cost">
+<h2>Is it free?</h2>
 <div class="acc-body">
 <p>Yes. macontrol is free. There is no account, no subscription and no ads. The source code will be published as open source once licensing is finalized.</p>
 </div>
-</details>
-<details class="acc" id="privacy">
-<summary><h2>Does it send anything anywhere?</h2></summary>
+</div>
+<div class="acc" id="privacy">
+<h2>Does it send anything anywhere?</h2>
 <div class="acc-body">
 <p>No. macontrol has no networking code. It does not check for updates, collect statistics or upload what it scans.</p>
 </div>
-</details>
-<details class="acc" id="notarized">
-<summary><h2>Why is it not notarized?</h2></summary>
+</div>
+<div class="acc" id="notarized">
+<h2>Why is it not notarized?</h2>
 <div class="acc-body">
 <p>Notarization needs a paid Apple Developer Program membership, and macontrol does not have one. Releases are signed ad hoc, so macOS asks you to confirm the first launch. The <a href="install.html#first-launch">install guide</a> shows the steps.</p>
 </div>
-</details>
-<details class="acc" id="damaged">
-<summary><h2>macOS says the app is damaged and can't be opened.</h2></summary>
+</div>
+<div class="acc" id="damaged">
+<h2>macOS says the app is damaged and can't be opened.</h2>
 <div class="acc-body">
 <p>The app's signature no longer matches its files. That usually means the zip was unpacked with the <code>unzip</code> command, which leaves <code>._</code> files inside the app. Delete the app, then unzip the download again by double-clicking it in Finder, or in Terminal:</p>
 <pre><code>ditto -x -k ~/Downloads/Macontrol-*.zip ~/Downloads/</code></pre>
 <p>If it still happens, download it again and compare its SHA-256 with the one on the <a href="install.html#download">install page</a>.</p>
 </div>
-</details>
-<details class="acc" id="intel">
-<summary><h2>Does it run on Intel Macs?</h2></summary>
+</div>
+<div class="acc" id="intel">
+<h2>Does it run on Intel Macs?</h2>
 <div class="acc-body">
 <p>Not yet. 0.1 is built for Apple Silicon only. Intel and universal builds are on the roadmap.</p>
 </div>
-</details>
-<details class="acc" id="not-scanned">
-<summary><h2>Why do some folders say “not scanned”?</h2></summary>
+</div>
+<div class="acc" id="not-scanned">
+<h2>Why do some folders say “not scanned”?</h2>
 <div class="acc-body">
 <p>macOS did not let macontrol read them. Most often that is Mail, Messages, Safari, Cookies and the Trash without <a href="full-disk-access.html">Full Disk Access</a>. Their size is unknown, not zero, so macontrol says so instead of showing a smaller number.</p>
 </div>
-</details>
-<details class="acc" id="fda-again">
-<summary><h2>Why do I have to allow Full Disk Access again after updating?</h2></summary>
+</div>
+<div class="acc" id="fda-again">
+<h2>Why do I have to allow Full Disk Access again after updating?</h2>
 <div class="acc-body">
 <p>macOS ties the permission to the app's signature. Ad hoc signatures change with every build, so each new version counts as a new app.</p>
 </div>
-</details>
-<details class="acc" id="apple-apps">
-<summary><h2>Why can't it remove GarageBand, iMovie or Pages?</h2></summary>
+</div>
+<div class="acc" id="apple-apps">
+<h2>Why can't it remove GarageBand, iMovie or Pages?</h2>
 <div class="acc-body">
 <p>Apple's App Store apps are usually owned by root, so removing them needs an administrator, and 0.1 has no admin powers. It marks them “Needs admin”, with Reveal in Finder. Apps that are part of macOS sit on the sealed system volume and cannot be removed while System Integrity Protection is on. Admin removals and a checklist for Apple's optional apps are planned for 0.2.</p>
 </div>
-</details>
-<details class="acc" id="skipped">
-<summary><h2>Why did Clean skip some items?</h2></summary>
+</div>
+<div class="acc" id="skipped">
+<h2>Why did Clean skip some items?</h2>
 <div class="acc-body">
 <p>It leaves alone anything changed in the last 10 minutes and anything that belongs to an app that is running, because that data may be in use. While an iOS Simulator runs, Clean also skips the caches it cannot inspect. Each skipped item shows the reason.</p>
 </div>
-</details>
-<details class="acc" id="source">
-<summary><h2>Where is the source code?</h2></summary>
+</div>
+<div class="acc" id="source">
+<h2>Where is the source code?</h2>
 <div class="acc-body">
 <p>The GitHub repository is private for now. It will be published as open source once licensing is finalized. <a href="build.html">Build from source</a> covers what you need once you have the code.</p>
 </div>
-</details>
-<details class="acc" id="benchmarks">
-<summary><h2>How were the speed numbers measured?</h2></summary>
+</div>
+<div class="acc" id="benchmarks">
+<h2>How were the speed numbers measured?</h2>
 <div class="acc-body">
 <p>With <code>mcscan</code>, the app's scan engine as a command-line tool, against <code>dua</code> and <code>ncdu -t8</code>. hyperfine ran 1 warm-up and 5 timed runs per tool on a warm cache, plus 3 untimed runs to check that each tool reports the same total every time.</p>
 <ul>
@@ -126,7 +137,7 @@
 </ul>
 <p>Machine: Apple M1, 8 cores, 8 GB, macOS 26.6, with another process keeping one core busy the whole time. Compare the tools with each other rather than with your own Mac.</p>
 </div>
-</details>
+</div>
 <nav class="pager" aria-label="Pages"><a href="safety.html" rel="prev">Previous: Safety model</a><a href="build.html" rel="next">Next: Build from source</a></nav>
   </main>
 </div>

@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog: macontrol docs</title>
 <meta name="description" content="Changelog. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/changelog.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/changelog.html">
+<meta property="og:title" content="Changelog: macontrol docs">
+<meta property="og:description" content="Changelog. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The macontrol Disk Map: a sunburst of a home folder with its largest folders listed beside it">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="../assets/icon.png">
@@ -40,29 +51,7 @@
   <main class="doc">
 <h1>Changelog</h1>
 <p class="lede">What changed in each release. Releases before 1.0 are previews.</p>
-<!-- CHANGELOG:START (scripts/deploy-site.sh replaces this block with CHANGELOG.md when the repository has one) -->
-<details class="acc release" id="v0.1.0" open><summary><h2>0.1.0 <small>23 September 2026, preview</small></h2></summary><div class="acc-body">
-<p>The first preview: disk cleanup and disk space visualization in one native macOS app.</p>
-<h3>What works</h3>
-<ul>
-  <li><strong>Overview:</strong> disk usage at a glance, with a Full Disk Access onboarding that continues by itself once access is granted.</li>
-  <li><strong>Disk Map:</strong> sunburst and treemap, drill into any folder, breadcrumbs and back and forward, inspector, Reveal in Finder, Quick Look, and a Discard Pile to stage items before removing them.</li>
-  <li><strong>Clean:</strong> caches, logs and developer data from a validated catalog. Each item is labelled Safe, Review or Manual, and only Safe items are preselected. Anything changed in the last 10 minutes or held by a running app is skipped.</li>
-  <li><strong>Uninstall:</strong> apps with their leftovers, matched by bundle identifier with evidence. Data shared with another app is never preselected.</li>
-  <li><strong>History:</strong> every removal is journaled and can be put back.</li>
-  <li><strong>Scanning:</strong> a parallel <code>getattrlistbulk</code> engine. Hard links and clones count once, so totals match the ground truth exactly.</li>
-</ul>
-<h3>Safety</h3>
-<p>Everything goes to the Trash. Protected locations (your documents, keychains, cloud drives, system folders) are refused. Items are checked again right before they move, so a file swapped for a link after the scan is not touched.</p>
-<h3>Known limits</h3>
-<ul>
-  <li>Apple Silicon only. Requires macOS 14 or later.</li>
-  <li>Not notarized: the first launch needs <a href="install.html#first-launch">Open Anyway</a>.</li>
-  <li>Ad hoc signed, so Full Disk Access has to be granted again after installing a new version.</li>
-  <li>Root-owned items and Apple's App Store apps (GarageBand, iMovie, iWork) are marked “Needs admin” and cannot be removed yet.</li>
-  <li>While an iOS Simulator is running, Clean skips the caches it cannot inspect.</li>
-</ul>
-</div></details>
+<!-- CHANGELOG:START (scripts/deploy-site.sh renders CHANGELOG.md here) -->
 <!-- CHANGELOG:END -->
 <nav class="pager" aria-label="Pages"><a href="build.html" rel="prev">Previous: Build from source</a></nav>
   </main>
