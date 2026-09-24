@@ -25,6 +25,9 @@ struct SealedAppPanel: View {
         self.home = home
     }
 
+    /// The sheet the guide button opens, with the box unticked. Tests host this one (review 2, item 5).
+    var guideSheet: SealedGuideSheet { SealedGuideSheet(apps: [app], integrity: integrity, home: home) }
+
     static let dockAdvice = "Remove it from the Dock: Control-click its Dock icon, then Options > Remove from Dock."
     static let expertButton = "Expert: remove system apps yourself…"
 
@@ -70,8 +73,6 @@ struct SealedAppPanel: View {
         .frame(maxWidth: 720, alignment: .leading)
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sheet(isPresented: $showsGuide) {
-            SealedGuideSheet(apps: [app], integrity: integrity, home: home)
-        }
+        .sheet(isPresented: $showsGuide) { guideSheet }
     }
 }

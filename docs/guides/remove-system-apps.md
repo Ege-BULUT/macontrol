@@ -17,6 +17,10 @@ Each step below is tagged:
   others, but has not been run end to end. It will be tested in macOS 14, 15 and 26 virtual machines before macontrol
   offers to do any of it (DESIGN-debloat section 5.4).
 
+If any command prints an error, stop there and run nothing after it. A later step can do harm when the one before it
+failed: if the mount fails, `rm -rf` fails without a word, and `bless` would then work on the volume your home folder
+is on.
+
 ## Before you start
 
 - This lowers your Mac's security. With protection off, iPhone and iPad apps and Apple Pay may stop working (reported by others, unverified).
@@ -37,24 +41,11 @@ a command can't land on a different folder than the one it names. The examples b
 (`/dev/disk3s3s1` on the Mac this was written on) and drops the snapshot's last `s1`. Apps outside
 `/System/Applications` and its `Utilities` folder get no command, and neither does a name or home folder that holds a
 `$` or a line break. System Settings and Terminal get no command either: "The undo steps need this app." When no app
-is left to remove, the sheet shows no steps and no undo steps.
+is left to remove, or the Mac isn't starting up from a system snapshot, the sheet shows no steps and no undo steps.
 
-If System Integrity Protection and Authenticated Root are already off, the sheet says so:
-
-> System Integrity Protection and Authenticated Root are off on this Mac. macontrol doesn't remove system apps itself until this procedure and its undo have been tested on macOS 14, 15 and 26. Until then, these are steps you run yourself.
-
-It then leaves out steps 1 to 4 below and numbers its own steps from 1: first this FileVault check, then steps 5 to 7
-(so "Mount the system volume" is step 2 there).
-
-### Check that FileVault is off *(verified)*
-
-Open Terminal. This command should say "FileVault is Off." It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.
-
-```sh
-fdesetup status
-```
-
-Verified: on macOS 26.6 it runs without a password and prints `FileVault is Off.` on a Mac with FileVault off.
+With either protection on, the sheet shows steps 1 to 4 and the undo steps. The commands that change the system
+volume, steps 5 to 8, appear only when you open the guide again with both protections off, because they name the disk
+your Mac started up from.
 
 ## Steps
 
@@ -82,7 +73,7 @@ csrutil authenticated-root disable
 
 ### 4. Check that both are off *(unverified)*
 
-Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password. Then open this guide in macontrol again and copy the next commands from there: they name the disk your Mac started up from, which can change after a restart.
+Back in macOS, open Terminal. Both commands should say disabled; if either says enabled, stop here. These only read, and need no password. Then open this guide in macontrol again: the commands that remove the apps appear there once both protections are off, written for the disk your Mac started up from, which can change after a restart.
 
 ```sh
 csrutil status
@@ -92,18 +83,39 @@ csrutil authenticated-root status
 Both run without a password on macOS 26.6 (checked), but their output with the protections off has not been seen
 yet, so the step is unverified.
 
-### 5. Mount the system volume *(unverified)*
+## Once both protections are off
 
-Makes an empty folder in your home folder and mounts this Mac's system volume there, the startup disk without its sealed snapshot. The second command asks for your password.
+When System Integrity Protection and Authenticated Root are off, the sheet says so:
+
+> System Integrity Protection and Authenticated Root are off on this Mac. macontrol doesn't remove system apps itself until this procedure and its undo have been tested on macOS 14, 15 and 26. Until then, these are steps you run yourself.
+
+It then shows only steps 5 to 8 below, numbered 1 to 4 there, and the undo steps.
+
+### 5. Check that FileVault is off *(verified)*
+
+Open Terminal. This command should say "FileVault is Off." It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.
 
 ```sh
-mkdir '/Users/you/sysmount'
-sudo mount -o nobrowse -t apfs '/dev/disk3s3' '/Users/you/sysmount'
+fdesetup status
 ```
 
-### 6. Delete the apps *(unverified)*
+Verified: on macOS 26.6 it runs without a password and prints `FileVault is Off.` on a Mac with FileVault off.
 
-Each command deletes one app from the mounted system volume.
+### 6. Mount the system volume *(unverified)*
+
+Makes a folder in your home folder and mounts this Mac's system volume there, the startup disk without its sealed snapshot. The second command asks for your password. The last one only reads: it lists the apps on the mounted volume. If any of these commands prints an error, such as "No such file or directory", stop here and run nothing else.
+
+```sh
+mkdir -p '/Users/you/sysmount'
+sudo mount -o nobrowse -t apfs '/dev/disk3s3' '/Users/you/sysmount'
+ls -d '/Users/you/sysmount/System/Applications/Chess.app'
+```
+
+If the mount failed, `/Users/you/sysmount` is an empty folder, and `ls` says the app isn't there.
+
+### 7. Delete the apps *(unverified)*
+
+Each command deletes one app from the mounted system volume. If one prints an error, stop here and don't run the next step.
 
 ```sh
 sudo rm -rf '/Users/you/sysmount/System/Applications/Chess.app'
@@ -111,7 +123,7 @@ sudo rm -rf '/Users/you/sysmount/System/Applications/Chess.app'
 
 An app in the Utilities folder ends in `System/Applications/Utilities/<name>.app'` instead.
 
-### 7. Make the changed volume the one that starts up *(unverified)*
+### 8. Make the changed volume the one that starts up *(unverified)*
 
 This creates a new system snapshot and starts up from it. Then restart your Mac.
 
@@ -120,7 +132,10 @@ sudo bless --mount '/Users/you/sysmount' --bootefi --create-snapshot
 ```
 
 `man bless` on macOS 26.6: `--create-snapshot` creates an APFS root snapshot of the target system volume and sets it
-as the root snapshot for the next boot.
+as the root snapshot for the next boot. The same page lists `--bootefi` for this mode only among the options for Intel
+(EFI) Macs. Its section for Apple silicon leaves `--bootefi` out and says bless may ask for an administrator's password
+there, beyond `sudo`. Whether Apple silicon needs, ignores or refuses `--bootefi` has not been tested; the same applies
+to undo step 1.
 
 ## To undo
 

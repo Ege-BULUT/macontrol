@@ -1,9 +1,5 @@
 import Darwin
 
-/// SPI in libsystem_kernel with no SDK header (feasibility-apple-apps D1-D2). 0 means the bit is allowed.
-@_silgen_name("csr_check")
-private func csr_check(_ mask: UInt32) -> Int32
-
 /// What macOS lets anyone do to its own apps (DESIGN-debloat section 5.1). Read-only: two calls, no subprocess.
 /// Any failure reads as protected.
 public struct SystemIntegrity: Sendable, Equatable {
@@ -27,7 +23,15 @@ public struct SystemIntegrity: Sendable, Equatable {
     }
 
     public static func current() -> SystemIntegrity {
-        read(csrCheck: csr_check, root: rootMount)
+        read(csrCheck: csrCheck(), root: rootMount)
+    }
+
+    /// `csr_check`, an SPI in libsystem_kernel with no SDK header (feasibility-apple-apps D1-D2), looked up at run
+    /// time: a macOS without it reads as protected instead of stopping the app at launch. 0 means the bit is allowed.
+    static func csrCheck(named name: String = "csr_check") -> ((UInt32) -> Int32)? {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) else { return nil }  // RTLD_DEFAULT
+        let check = unsafeBitCast(symbol, to: (@convention(c) (UInt32) -> Int32).self)
+        return { check($0) }
     }
 
     /// The flags and source of the root mount.
@@ -36,13 +40,14 @@ public struct SystemIntegrity: Sendable, Equatable {
         var mountedFrom: String
     }
 
-    /// `csrCheck` stands in for `csr_check`: only 0 counts as "allowed". A nil root reads as a sealed snapshot of an unknown device.
-    static func read(csrCheck: (UInt32) -> Int32, root: () -> RootMount?) -> SystemIntegrity {
+    /// `csrCheck` stands in for `csr_check`: only 0 counts as "allowed", and no function at all means protected.
+    /// A nil root reads as a sealed snapshot of an unknown device.
+    static func read(csrCheck: ((UInt32) -> Int32)?, root: () -> RootMount?) -> SystemIntegrity {
         let mount = root()
         let snapshot = mount.map { $0.flags & UInt32(MNT_SNAPSHOT) != 0 } ?? true
         return SystemIntegrity(
-            filesystemProtected: csrCheck(1 << 1) != 0,
-            authenticatedRoot: csrCheck(1 << 11) != 0,
+            filesystemProtected: csrCheck?(1 << 1) != 0,
+            authenticatedRoot: csrCheck?(1 << 11) != 0,
             rootIsSealedSnapshot: snapshot,
             systemDevice: mount.flatMap { systemDevice(mountedFrom: $0.mountedFrom, isSnapshot: snapshot) }
         )

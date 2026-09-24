@@ -21,11 +21,11 @@ import Testing
         names.map { URL(fileURLWithPath: folder).appendingPathComponent("\($0).app") }
     }
 
-    /// What `/bin/sh` makes of one quoted word.
-    static func shellWord(_ quoted: String) throws -> String {
+    /// The words `/bin/sh` makes of quoted text, one per line (no name here holds a line break).
+    static func shellWords(_ quoted: String) throws -> [String] {
         let shell = Process()
         shell.executableURL = URL(fileURLWithPath: "/bin/sh")
-        shell.arguments = ["-c", "printf %s \(quoted)"]
+        shell.arguments = ["-c", "printf '%s\\n' \(quoted)"]
         shell.environment = [:]
         shell.currentDirectoryURL = FileManager.default.temporaryDirectory
         let output = Pipe()
@@ -34,26 +34,29 @@ import Testing
         let data = output.fileHandleForReading.readDataToEndOfFile()
         shell.waitUntilExit()
         #expect(shell.terminationStatus == 0, "\(quoted)")
-        return String(decoding: data, as: UTF8.self)
+        return String(decoding: data, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false).dropLast().map(String.init)
     }
 
     @Test func hostileNamesRoundTripThroughTheShell() throws {
         let guide = SealedGuide(apps: Self.apps(Self.hostileNames) + Self.apps(["Terminal's"], in: "/System/Applications/Utilities"),
-                                integrity: Self.sipOn, home: Self.home)
+                                integrity: Self.sipOff, home: Self.home)
         #expect(guide.skipped.isEmpty && guide.unavailable == nil)
         let deletions = guide.commands.filter { $0.hasPrefix("sudo rm -rf ") }
         #expect(deletions.count == Self.hostileNames.count + 1)
         let expected = Self.hostileNames.map { "\(Self.mountPoint)/System/Applications/\($0).app" }
             + ["\(Self.mountPoint)/System/Applications/Utilities/Terminal's.app"]
         for (line, path) in zip(deletions, expected) {
-            #expect(try Self.shellWord(String(line.dropFirst("sudo rm -rf ".count))) == path)
+            #expect(try Self.shellWords(String(line.dropFirst("sudo rm -rf ".count))) == [path])
         }
-        #expect(try Self.shellWord(SealedGuide.quote(Self.mountPoint)) == Self.mountPoint)
+        // The check before the deletions lists exactly the same apps.
+        let list = try #require(guide.commands.first { $0.hasPrefix("ls -d ") })
+        #expect(try Self.shellWords(String(list.dropFirst("ls -d ".count))) == expected)
+        #expect(try Self.shellWords(SealedGuide.quote(Self.mountPoint)) == [Self.mountPoint])
     }
 
     @Test func everyDeletionEndsInOneAppBelowTheMountPoint() throws {
         let guide = SealedGuide(apps: Self.apps(Self.hostileNames) + Self.apps(["Console"], in: "/System/Applications/Utilities"),
-                                integrity: Self.sipOn, home: Self.home)
+                                integrity: Self.sipOff, home: Self.home)
         let prefix = "sudo rm -rf '/Users/o'\\''brien x/sysmount/System/Applications/"
         let destructive = guide.commands.filter { $0.contains("rm ") }
         #expect(destructive.count == Self.hostileNames.count + 1)
@@ -94,7 +97,7 @@ import Testing
         let needed = [URL(fileURLWithPath: "/System/Applications/System Settings.app"),
                       URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"),
                       URL(fileURLWithPath: "/System/Applications/Utilities/TERMINAL.app")]
-        let guide = SealedGuide(apps: Self.apps(["Chess"]) + needed, integrity: Self.sipOn, home: Self.home)
+        let guide = SealedGuide(apps: Self.apps(["Chess"]) + needed, integrity: Self.sipOff, home: Self.home)
         #expect(guide.removable == ["System/Applications/Chess.app"])
         #expect(guide.skipped.map(\.name) == ["System Settings", "Terminal", "TERMINAL"])
         #expect(guide.skipped.allSatisfy { $0.reason == SealedGuide.neededForUndo })
@@ -105,7 +108,7 @@ import Testing
     }
 
     @Test func aSkippedAppLeavesTheOthers() {
-        let guide = SealedGuide(apps: Self.apps(["Chess", "$x"]), integrity: Self.sipOn, home: Self.home)
+        let guide = SealedGuide(apps: Self.apps(["Chess", "$x"]), integrity: Self.sipOff, home: Self.home)
         #expect(guide.removable == ["System/Applications/Chess.app"])
         #expect(guide.skipped.map(\.name) == ["$x"])
         #expect(guide.commands.filter { $0.hasPrefix("sudo rm") }.count == 1)
@@ -120,6 +123,15 @@ import Testing
         #expect(guide.steps.isEmpty && guide.undo.isEmpty && guide.unavailable != nil)
     }
 
+    /// With `/` not a snapshot, the device is the volume already mounted there (review 2, item 3).
+    @Test(arguments: [false, true])
+    func aRootThatIsNotASnapshotShowsNoSteps(off: Bool) {
+        var live = off ? Self.sipOff : Self.sipOn
+        live.rootIsSealedSnapshot = false
+        let guide = SealedGuide(apps: Self.apps(["Chess"]), integrity: live, home: Self.home)
+        #expect(guide.steps.isEmpty && guide.undo.isEmpty && guide.unavailable?.contains("isn't starting up from a system snapshot") == true)
+    }
+
     @Test(arguments: ["/Users/a$b", "/Users/a\nb"])
     func aHomeThatCannotBeWrittenShowsNoSteps(home: String) {
         let guide = SealedGuide(apps: Self.apps(["Chess"]), integrity: Self.sipOn, home: URL(fileURLWithPath: home))
@@ -130,14 +142,12 @@ import Testing
         let guide = SealedGuide(apps: Self.apps(["Chess"]), integrity: Self.sipOn, home: Self.home)
         #expect(guide.steps.map(\.title) == [
             "Turn off FileVault", "Start up in macOS Recovery", "Turn off both protections in Recovery", "Check that both are off",
-            "Mount the system volume", "Delete the apps", "Make the changed volume the one that starts up",
         ])
-        #expect(guide.commands.prefix(7) == [
+        // Nothing that names the disk or changes the system volume until the guide is opened with both off (review 2, item 2).
+        #expect(guide.steps.flatMap(\.commands) == [
             "csrutil disable", "csrutil authenticated-root disable", "csrutil status", "csrutil authenticated-root status",
-            "mkdir '/Users/o'\\''brien x/sysmount'",
-            "sudo mount -o nobrowse -t apfs '/dev/disk3s3' '/Users/o'\\''brien x/sysmount'",
-            "sudo rm -rf '/Users/o'\\''brien x/sysmount/System/Applications/Chess.app'",
         ])
+        #expect(guide.steps[3].detail?.contains("if either says enabled, stop here") == true)
         #expect(guide.undo.flatMap(\.commands) == [
             "sudo bless --mount '/' --bootefi --last-sealed-snapshot", "csrutil authenticated-root enable", "csrutil enable",
         ])
@@ -154,7 +164,13 @@ import Testing
         ])
         // Risk 2 says FileVault must be off; this read-only check (feasibility D4) is the only thing that looks.
         #expect(guide.steps[0].commands == ["fdesetup status"] && guide.steps[0].verified)
-        #expect(!guide.steps.flatMap(\.commands).contains { $0.hasPrefix("csrutil") })
+        // The mount is checked by listing the apps before anything is deleted, and each step says to stop on an error (review 2, item 1).
+        let mount = "'/Users/o'\\''brien x/sysmount'", chess = "'/Users/o'\\''brien x/sysmount/System/Applications/Chess.app'"
+        #expect(guide.steps.flatMap(\.commands) == [
+            "fdesetup status", "mkdir -p \(mount)", "sudo mount -o nobrowse -t apfs '/dev/disk3s3' \(mount)", "ls -d \(chess)",
+            "sudo rm -rf \(chess)", "sudo bless --mount \(mount) --bootefi --create-snapshot",
+        ])
+        for step in guide.steps.prefix(3) { #expect(step.detail?.contains("stop here") == true, "\(step.title)") }
         #expect(SealedGuide.waitsForVerification.contains("macontrol doesn't remove system apps itself until"))
     }
 
@@ -183,15 +199,14 @@ import Testing
         #expect(doc.contains(SealedGuide.protectionsOff) && doc.contains(SealedGuide.waitsForVerification))
         let on = SealedGuide(apps: Self.apps(["Chess"]), integrity: Self.sipOn, home: Self.home)
         let off = SealedGuide(apps: Self.apps(["Chess"]), integrity: Self.sipOff, home: Self.home)
-        let offOnly = off.steps.filter { step in !on.steps.contains { $0.title == step.title } }
-        #expect(offOnly.map(\.title) == ["Check that FileVault is off"])
-        for step in on.steps + on.undo + offOnly {
+        #expect(Set(on.steps.map(\.title)).isDisjoint(with: off.steps.map(\.title)) && on.undo == off.undo)
+        for step in on.steps + off.steps + on.undo {
             let tag = step.verified ? "*(verified)*" : "*(unverified)*"
             #expect(lines.contains { $0.hasPrefix("### ") && $0.contains(step.title) && $0.hasSuffix(tag) }, "\(step.title) \(tag)")
             if let detail = step.detail { #expect(doc.contains(detail), "\(step.title): detail differs") }
         }
         let headings = lines.filter { $0.hasPrefix("### ") }
-        #expect(headings.count == on.steps.count + on.undo.count + offOnly.count)
+        #expect(headings.count == on.steps.count + off.steps.count + on.undo.count)
         #expect(headings.allSatisfy { $0.hasSuffix("*(verified)*") || $0.hasSuffix("*(unverified)*") })
     }
 }

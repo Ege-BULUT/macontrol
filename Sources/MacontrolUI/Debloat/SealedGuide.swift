@@ -68,6 +68,9 @@ struct SealedGuide {
         let homeWritable = home.path.hasPrefix("/") && home.path.split(separator: "/").allSatisfy { Self.isWritable(String($0)) }
         unavailable = if removable.isEmpty {
             "None of the chosen apps can be removed this way."
+        } else if !integrity.rootIsSealedSnapshot {
+            // The volume at / is then the device itself, which is already mounted, so no mount command fits (review 2, item 3).
+            "This Mac isn't starting up from a system snapshot, which this guide expects, so macontrol shows no commands. Stop here."
         } else if device == nil {
             "macontrol couldn't read which disk holds this Mac's system volume, so it shows no commands. Stop here."
         } else if !homeWritable {
@@ -79,7 +82,7 @@ struct SealedGuide {
         // Without commands to run, turning the protections off would only lower security, so no step is shown.
         var steps: [Step] = []
         if unavailable == nil, !integrity.allowsSealedRemoval {
-            steps += [
+            steps = [
                 Step(title: "Turn off FileVault",
                      detail: "System Settings > Privacy & Security > FileVault > Turn Off. Wait until it has finished; this can take hours."),
                 Step(title: "Start up in macOS Recovery",
@@ -88,24 +91,27 @@ struct SealedGuide {
                      detail: "In Recovery, choose Utilities > Terminal and run these two commands. Then restart from the Apple menu.",
                      commands: ["csrutil disable", "csrutil authenticated-root disable"]),
                 Step(title: "Check that both are off",
-                     detail: "Back in macOS, open Terminal. Both commands should say disabled. These only read, and need no password. Then open this guide in macontrol again and copy the next commands from there: they name the disk your Mac started up from, which can change after a restart.",
+                     detail: "Back in macOS, open Terminal. Both commands should say disabled; if either says enabled, stop here. These only read, and need no password. Then open this guide in macontrol again: the commands that remove the apps appear there once both protections are off, written for the disk your Mac started up from, which can change after a restart.",
                      commands: ["csrutil status", "csrutil authenticated-root status"]),
             ]
-        } else if unavailable == nil {
-            // FileVault must be off (risk 2); with the protections already off, nothing else has checked that.
-            steps.append(Step(title: "Check that FileVault is off",
-                              detail: "Open Terminal. This command should say \"FileVault is Off.\" It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.",
-                              commands: ["fdesetup status"],
-                              verified: true))
-        }
-        if unavailable == nil, let device {
-            steps += [
+        } else if unavailable == nil, let device {
+            // Only the guide opened with both protections off names the disk (review 2, item 2).
+            let apps = removable.map { Self.quote(mountPoint + "/" + $0) }
+            steps = [
+                // FileVault must be off (risk 2); with the protections already off, nothing else has checked that.
+                Step(title: "Check that FileVault is off",
+                     detail: "Open Terminal. This command should say \"FileVault is Off.\" It only reads, and needs no password. If FileVault is on, stop here and turn it off first: System Settings > Privacy & Security > FileVault > Turn Off.",
+                     commands: ["fdesetup status"],
+                     verified: true),
+                // A failed mount leaves an empty folder, `rm -rf` then fails silently and bless targets the Data
+                // volume, so `ls` checks every app on the mount first (review 2, item 1).
                 Step(title: "Mount the system volume",
-                     detail: "Makes an empty folder in your home folder and mounts this Mac's system volume there, the startup disk without its sealed snapshot. The second command asks for your password.",
-                     commands: ["mkdir \(Self.quote(mountPoint))", "sudo mount -o nobrowse -t apfs \(Self.quote(device)) \(Self.quote(mountPoint))"]),
+                     detail: "Makes a folder in your home folder and mounts this Mac's system volume there, the startup disk without its sealed snapshot. The second command asks for your password. The last one only reads: it lists the apps on the mounted volume. If any of these commands prints an error, such as \"No such file or directory\", stop here and run nothing else.",
+                     commands: ["mkdir -p \(Self.quote(mountPoint))", "sudo mount -o nobrowse -t apfs \(Self.quote(device)) \(Self.quote(mountPoint))",
+                                "ls -d \(apps.joined(separator: " "))"]),
                 Step(title: "Delete the apps",
-                     detail: "Each command deletes one app from the mounted system volume.",
-                     commands: removable.map { "sudo rm -rf \(Self.quote(mountPoint + "/" + $0))" }),
+                     detail: "Each command deletes one app from the mounted system volume. If one prints an error, stop here and don't run the next step.",
+                     commands: apps.map { "sudo rm -rf \($0)" }),
                 Step(title: "Make the changed volume the one that starts up",
                      detail: "This creates a new system snapshot and starts up from it. Then restart your Mac.",
                      commands: ["sudo bless --mount \(Self.quote(mountPoint)) --bootefi --create-snapshot"]),

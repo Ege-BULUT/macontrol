@@ -11,6 +11,16 @@ import Testing
         #expect(integrity.filesystemProtected && integrity.authenticatedRoot && !integrity.allowsSealedRemoval)
     }
 
+    /// A macOS without the SPI reads as protected; linking it directly would stop the app at launch (review 2, nit 7).
+    @Test func aMissingCsrCheckMeansProtected() throws {
+        #expect(SystemIntegrity.csrCheck(named: "csr_check_gone") == nil)
+        let integrity = SystemIntegrity.read(csrCheck: SystemIntegrity.csrCheck(named: "csr_check_gone"), root: { Self.sealedRoot })
+        #expect(integrity.filesystemProtected && integrity.authenticatedRoot && !integrity.allowsSealedRemoval)
+        // On this Mac the lookup finds it, and it answers each bit with 0 or an error, never a crash.
+        let check = try #require(SystemIntegrity.csrCheck())
+        #expect([check(1 << 1), check(1 << 11)].allSatisfy { $0 == 0 || $0 == -1 })
+    }
+
     @Test func eachProtectionIsItsOwnBit() {
         var asked: [UInt32] = []
         let both = SystemIntegrity.read(csrCheck: { asked.append($0); return 0 }, root: { Self.sealedRoot })

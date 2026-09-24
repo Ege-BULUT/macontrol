@@ -42,23 +42,28 @@ import Uninstaller
         #expect(host.texts(role: .checkBox).isEmpty)
     }
 
-    /// The sheet is hosted on its own: presenting it from the panel would put a sheet window on the user's screen.
-    @Test func theCommandsWaitForTheBox() throws {
-        let host = Host(SealedGuideSheet(apps: [Self.chess], integrity: Self.sipOn, home: Self.home), size: Snapshot.sheetSize)
+    /// The panel's own sheet, hosted on its own: presenting it from the panel would put a sheet window on the user's
+    /// screen. Hosting `guideSheet` keeps the panel's call site under test (review 2, item 5).
+    @Test(arguments: [false, true])
+    func theCommandsWaitForTheBox(off: Bool) throws {
+        let integrity = off ? Self.sipOff : Self.sipOn
+        let host = Host(Self.panel(integrity).guideSheet, size: Snapshot.sheetSize)
         defer { host.close() }
-        let guide = SealedGuide(apps: [Self.chess.url], integrity: Self.sipOn, home: Self.home)
-        #expect(guide.commands.count == 11)
+        let guide = SealedGuide(apps: [Self.chess.url], integrity: integrity, home: Self.home)
+        #expect(guide.commands.count == (integrity.allowsSealedRemoval ? 9 : 7))
 
         #expect(host.texts(role: .staticText).contains("Strongly not recommended"))
         #expect(host.texts(role: .button) == ["Close"], "no command and no Copy button before the box is ticked")
         #expect(!host.allTexts.contains { text in guide.commands.contains { text.contains($0) } })
 
         #expect(host.press(role: .checkBox, SealedGuide.acknowledgement))
-        #expect(host.texts(role: .button) == Array(repeating: "Copy", count: guide.commands.count) + ["Close"])
+        // Each Copy button names its command for VoiceOver (review 2, nit 8).
+        #expect(host.texts(role: .button) == guide.commands.map { "Copy \($0)" } + ["Close"])
         let shown = host.texts(role: .staticText)
         for command in guide.commands { #expect(shown.contains(command), "\(command) is not shown") }
-        #expect(shown.filter { $0 == "Unverified" }.count == guide.steps.count + guide.undo.count)
-        #expect(!shown.contains("Verified"))
+        let verified = guide.steps.filter(\.verified).count
+        #expect(shown.filter { $0 == "Unverified" }.count == guide.steps.count + guide.undo.count - verified)
+        #expect(shown.filter { $0 == "Verified" }.count == verified)
     }
 
     /// DebloatScreen builds the panel with `SealedAppPanel(app:size:)`, so no total is passed (review R2).
@@ -228,4 +233,3 @@ private final class Host {
         return pressed
     }
 }
-

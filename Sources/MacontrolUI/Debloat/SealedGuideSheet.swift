@@ -159,6 +159,7 @@ private struct CommandRow: View {
             }
             .controlSize(.small)
             .help("Copy this command")
+            .accessibilityLabel("Copy \(command)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
