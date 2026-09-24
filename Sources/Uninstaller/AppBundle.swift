@@ -44,16 +44,23 @@ struct AppBundle {
         )
     }
 
-    /// The name Finder shows, localized for system apps.
+    /// The name Finder shows. Asking LaunchServices for it registers the bundle there, so it is asked only for apps
+    /// macOS protects, which it knows already: a test fixture's app would otherwise stay in LaunchServices for good
+    /// (feasibility-apple-apps open question 7: 3,614 stale records). Other apps show their file name, as Finder does
+    /// unless an app localizes its name.
     private var displayName: String {
-        let shown = FileManager.default.displayName(atPath: url.path)
+        let shown = isProtectedByMacOS ? FileManager.default.displayName(atPath: url.path) : url.lastPathComponent
         return shown.hasSuffix(".app") ? String(shown.dropLast(4)) : shown
+    }
+
+    private var isProtectedByMacOS: Bool {
+        let restricted = FileSystem.status(of: url).map { $0.st_flags & UInt32(SF_RESTRICTED) != 0 } ?? false
+        return restricted || isOnReadOnlyVolume
     }
 
     private func kind(systemRoot: URL) -> AppKind {
         let systemFolder = systemRoot.appendingPathComponent("System").path + "/"
-        let restricted = FileSystem.status(of: url).map { $0.st_flags & UInt32(SF_RESTRICTED) != 0 } ?? false
-        if url.path.hasPrefix(systemFolder) || restricted || isOnReadOnlyVolume {
+        if url.path.hasPrefix(systemFolder) || isProtectedByMacOS {
             return .builtIn
         }
         let hasReceipt = FileSystem.exists(url.appendingPathComponent("Contents/_MASReceipt/receipt"))
