@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- Source of site/assets/og.jpg, the 1200x630 link-preview image. Re-render it when the site copy moves to a
+     new release line: open this file in a 1200x630 viewport at 1x, take a JPEG screenshot (quality 85) and
+     save it as site/assets/og.jpg. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden; position: relative;
+    background: #fbfbfd; color: #1d1d1f;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  }
+  .text { position: absolute; left: 72px; top: 0; bottom: 0; width: 470px; display: flex; flex-direction: column; justify-content: center; }
+  .brand { display: flex; align-items: center; gap: 18px; font-size: 54px; font-weight: 700; letter-spacing: -0.03em; }
+  .brand img { width: 84px; height: 84px; margin-left: -6px; }
+  h1 { font-size: 40px; line-height: 1.12; letter-spacing: -0.02em; font-weight: 700; margin: 34px 0 0; text-wrap: balance; }
+  p { font-size: 22px; color: #6e6e73; margin: 26px 0 0; }
+  .shot { position: absolute; left: 590px; top: 114px; isolation: isolate; }
+  /* The same halo as the site's hero: the demo's six top-level folders at their real shares. */
+  .shot::before {
+    content: ""; position: absolute; z-index: -1; left: 42%; top: 50%; width: 110%; aspect-ratio: 1;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    background: conic-gradient(#3d7ff0 0 42.4%, #d6862f 0 60.7%, #5fc3da 0 75.9%, #e9507d 0 87%, #f2d04b 0 96.5%, #7e4a9e 0 100%);
+    mask: radial-gradient(closest-side, transparent 30%, #000 42%, #000 80%, transparent 100%);
+    filter: blur(40px); opacity: 0.55;
+  }
+  .crop {
+    width: 570px; height: 402px; border-radius: 14px; overflow: hidden; background: #fff;
+    border: 1px solid rgba(60, 60, 67, 0.16);
+    box-shadow: 0 18px 36px rgba(20, 30, 60, 0.16), 0 2px 6px rgba(20, 30, 60, 0.08);
+  }
+  /* The sunburst and the inspector beside it: screenshot pixels x 530-1790, y 215-1105, at 0.45. */
+  .crop img { display: block; width: 814px; margin: -97px 0 0 -240px; }
+</style>
+</head>
+<body>
+  <div class="text">
+    <div class="brand"><img src="../docs/assets/icon.png" alt="">macontrol</div>
+    <h1>See where your disk space went, and get it back safely.</h1>
+    <p>Free · macOS 14+ · Apple Silicon</p>
+  </div>
+  <div class="shot"><div class="crop"><img src="../docs/assets/screenshots/disk-map-sunburst-light.png" alt=""></div></div>
+</body>
+</html>
