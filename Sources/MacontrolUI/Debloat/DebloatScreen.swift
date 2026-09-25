@@ -25,7 +25,7 @@ struct DebloatScreen: View {
         .sheet(item: $model.confirmation) { _ in DebloatSheet(model: model) }
         .sheet(item: $model.lockedPanel) { app in
             VStack(spacing: 0) {
-                SealedAppPanel(app: app, size: model.lockedSizes[app.url])
+                SealedAppPanel(app: app, size: model.lockedSizes[app.url], systemAppsSize: model.systemAppsSize)
                     .frame(minWidth: 560, minHeight: 360)
                 Divider()
                 HStack {

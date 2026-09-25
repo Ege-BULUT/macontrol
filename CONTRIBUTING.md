@@ -11,12 +11,12 @@ The app runs on Apple Silicon Macs with macOS 14 or later. Building it needs Xco
 ```sh
 swift build                    # the app, mcscan and the helper
 swift test                     # every test; must stay green on main
-scripts/bundle-app.sh          # release build, ad-hoc signed, as build/Macontrol.app
+scripts/bundle-app.sh          # release build as build/Macontrol.app (see Signing)
 scripts/bundle-app.sh debug    # the same from a debug build
 build/Macontrol.app/Contents/MacOS/Macontrol --snapshot /tmp/shots   # every screen, light and dark, with demo data
 ```
 
-- **Signing.** Full Disk Access is tied to the app's signature, and an ad-hoc signature changes with every build. Set `SIGN_IDENTITY` to an Apple Development identity to keep the grant across rebuilds.
+- **Signing.** Full Disk Access is tied to the app's signature, and an ad-hoc signature changes with every build. `bundle-app.sh` signs with the self-signed certificate from `scripts/make-signing-cert.sh` when this Mac has it, so the grant survives rebuilds; otherwise it signs ad hoc and says so. `SIGN_IDENTITY=-` forces ad hoc. See [docs/RELEASING.md](docs/RELEASING.md).
 - **UI tests run headless.** A test or tool that draws a window creates it only through `SnapshotRenderer.offscreenWindow(size:styleMask:)`, never `NSWindow(...)` directly. It calls `runHeadless()` itself and keeps the window outside every display (`OffscreenWindowTests`). With `runHeadless()` alone, AppKit still moves titled windows onto your screen. The snapshot tests render every screen this way. Set `MACONTROL_SNAPSHOT_DIR=<folder>` to keep the PNGs of the Clean, Disk Map and Uninstall suites. For PNGs of every screen, use `Macontrol --snapshot <folder>`.
 - **Opt-in tests.** A few suites need a fixture or extra time and only run when asked:
   - `research/bench/make_fixture.sh && MACONTROL_BENCH_FIXTURE=research/bench/fixtures/tree swift test --filter BenchFixtureTests`. The fixture is gitignored, so a fresh clone builds it first (about 1.7 GB on an APFS volume).

@@ -93,6 +93,10 @@ public final class DebloatModel {
     /// Part of macOS: shown locked, with their size.
     var locked: [InstalledApp] = []
     var lockedSizes: [URL: UInt64] = [:]
+    /// All of macOS's own apps together, once each is measured; nil until then.
+    var systemAppsSize: UInt64? {
+        locked.allSatisfy { lockedSizes[$0.url] != nil } ? locked.reduce(0) { $0 + (lockedSizes[$1.url] ?? 0) } : nil
+    }
     var hasLoadedApps = false
     private(set) var loadError: String?
     /// App rows the user ticked. Empty at first, always (section 4.5): Xcode is a tool someone chose, not bloat.

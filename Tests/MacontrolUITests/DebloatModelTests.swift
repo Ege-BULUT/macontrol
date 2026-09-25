@@ -11,6 +11,14 @@ import Uninstaller
         return (row, leftover)
     }
 
+    /// The sealed panel's total for macOS's own apps waits until every one is measured.
+    @Test func systemAppsSizeWaitsForEveryLockedApp() throws {
+        let model = DebloatModel.demo()
+        #expect(model.systemAppsSize == model.lockedSizes.values.reduce(0, +))
+        model.lockedSizes[try #require(model.locked.first).url] = nil
+        #expect(model.systemAppsSize == nil)
+    }
+
     @Test func appRowsStartUnticked() async throws {
         let fx = try DebloatFixture()
         let model = try await fx.model(hardcore: true, administrator: true)

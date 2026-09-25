@@ -2,6 +2,21 @@
 
 What changed in each release. Releases before 1.0 are previews.
 
+## 0.2.0, unreleased, preview
+
+### New
+
+- Hardcore mode: a checkbox in the toolbar on every screen. Off, the default at every launch, removals go to the Trash. On, they are deleted permanently, after a warning you confirm. A few items that hold your own data still go to the Trash, and the sheet says why.
+- Restore point: a hardcore confirmation can make a local Time Machine snapshot first. It is never automatic, and it is offered only for items on the startup disk.
+- Administrator removals: root-owned leftovers and apps are removed through a helper started with the macOS administrator password dialog. The helper checks every item again as root.
+- Debloat: remove Apple's optional apps (Xcode, GarageBand, Logic Pro, MainStage, iMovie, Pages, Numbers, Keynote, Final Cut Pro, Motion, Compressor) with their content. For Xcode, its simulator runtimes are deleted first.
+- Apps on the sealed system volume say why macOS keeps them. An expert guide explains how to remove them yourself in Terminal, with the risks. macontrol never removes them.
+- History shows permanent deletions, partly deleted items and restore points.
+
+### Changed
+
+- Uninstall shows each app's file name instead of its localized name for apps macOS doesn't protect: asking macOS for the localized name registered every scanned bundle with LaunchServices.
+
 ## 0.1.1, 24 September 2026, preview
 
 ### New

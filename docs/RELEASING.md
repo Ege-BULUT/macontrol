@@ -63,11 +63,11 @@ maintainer's Mac before tagging; CI tests come once the repo is public.
 ## Local builds
 
 `scripts/signing-identity.sh` prints `macontrol Self-Signed` when this Mac has the certificate
-(it unlocks the keychain first, so codesign never asks), otherwise `-` for ad hoc. Until
-`bundle-app.sh` uses it by default:
+(it unlocks the keychain first, so codesign never asks), otherwise `-` for ad hoc.
+`bundle-app.sh` uses it when `SIGN_IDENTITY` is unset, and stops if the lookup fails:
 
 ```bash
-SIGN_IDENTITY="$(scripts/signing-identity.sh)" scripts/bundle-app.sh
+scripts/bundle-app.sh                   # SIGN_IDENTITY=- scripts/bundle-app.sh signs ad hoc
 codesign -d -r- build/Macontrol.app     # designated => identifier "dev.macontrol.Macontrol" and certificate leaf = H"…"
 ```
 

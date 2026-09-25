@@ -23,7 +23,7 @@ fi
 if [ "$SIGN_IDENTITY" = - ]; then
     echo "Signing ad hoc: Full Disk Access must be granted again after this build (docs/RELEASING.md)." >&2
 fi
-VERSION="0.1.1"
+VERSION="0.2.0"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
 swift build -c "$CONFIG" --product Macontrol
