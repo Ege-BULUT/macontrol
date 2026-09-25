@@ -141,6 +141,8 @@ struct TrashSheet: View {
             return run.promisesRestorePoint ? message + " " + PermanentText.restorePointSpace : message
         }
         guard isPermanent else {
+            // Like `summary(of:)`: when nothing moved, nothing is in the Trash to put back.
+            guard !report.trashedURLs.isEmpty else { return "Nothing was moved to the Trash." }
             return "Items stay in the Trash and still use their space. Put them back from History until you empty the Trash."
         }
         // Compared with what the deleted rows could free, not the whole sheet: refused items free nothing.

@@ -687,6 +687,19 @@ import Uninstaller
         #expect(explanation() == "m")
     }
 
+    /// A Trash result where nothing moved must not say "Items stay in the Trash" (T-0083, the Debloat "Xcode was skipped" result).
+    @Test func aTrashResultWithNothingMovedSaysSo() {
+        let url = URL(fileURLWithPath: "/Users/demo/Library/Caches/a")
+        func explanation(_ outcome: TrashOutcome) -> String {
+            TrashSheet(
+                title: "t", message: "m", rows: [TrashSheetRow(url: url, bytes: 1)], confirmTitle: "c",
+                report: TrashReport(batch: UUID(), outcomes: [outcome]), isWorking: false, onConfirm: {}, onClose: {}
+            ).explanation
+        }
+        #expect(explanation(.refused(url, .identityChanged)) == "Nothing was moved to the Trash.")
+        #expect(explanation(.trashed(original: url, trashedTo: URL(fileURLWithPath: "/Users/demo/.Trash/a"))).hasPrefix("Items stay in the Trash"))
+    }
+
     @Test(arguments: [false, true])
     func aRestorePointIsMadeOnlyWhenTicked(ticked: Bool) async throws {
         let fixture = try RemovalFixture()
