@@ -97,7 +97,7 @@ import Testing
     }
 
     /// Security review 3(c): root may act below `com.apple.*`/`Apple*` names only at the catalog's own paths, so the
-    /// helper keeps them as a constant. Read as text, so this compiles before and after privileged-helper merges.
+    /// helper keeps them as a constant. Read as text.
     @Test func everyLibraryPathIsInPrivilegedScope() throws {
         let paths = AppleProfiles.bundled.systemLibraryPaths
         #expect(paths.count == 12)
@@ -105,12 +105,7 @@ import Testing
         let texts = try FileManager.default.contentsOfDirectory(atPath: safety.path).filter { $0.hasSuffix(".swift") }
             .map { try String(contentsOf: safety.appendingPathComponent($0), encoding: .utf8) }
         // The file that declares it: PrivilegedRouting.swift names both words too, and directory order is not fixed.
-        guard let scope = texts.first(where: { $0.contains("static let appleContent") }) else {
-            withKnownIssue("T-0075: PrivilegedScope.appleContent is not on this branch yet") {
-                Issue.record("no PrivilegedScope.appleContent in Sources/Safety")
-            }
-            return
-        }
+        let scope = try #require(texts.first(where: { $0.contains("static let appleContent") }), "no PrivilegedScope.appleContent in Sources/Safety")
         for path in paths {
             #expect(scope.contains("\"\(path)\""), "\(path) is missing from PrivilegedScope.appleContent")
         }
