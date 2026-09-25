@@ -1,0 +1,87 @@
+name: Safety report
+description: macontrol offered to remove, or removed, something it should not have.
+labels: [safety, bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security vulnerabilities do not belong here.** If someone could exploit the problem, for example with a crafted file tree or a link swap, report it privately as described in [SECURITY.md](https://github.com/Ege-BULUT/macontrol/blob/main/SECURITY.md).
+
+        Unless Hardcore mode was on, macontrol moved what it removed to the Trash, and History can usually put it back while it is still there. In Hardcore mode removals are permanent.
+  - type: textarea
+    id: item
+    attributes:
+      label: Item
+      description: The path, or its pattern. Replace your user name with `~` and anything private with `*`.
+      placeholder: ~/Library/Application Support/SomeApp/*.sqlite
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it was offered
+      options:
+        - Clean rule
+        - Uninstall leftover
+        - Debloat (an Apple app or its content)
+        - Disk Map
+        - Other, or more than one
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: Rule, app or group
+      description: The Clean rule or category, the app being uninstalled and the leftover group, the Apple app in Debloat, or the folder scanned in the Disk Map.
+  - type: dropdown
+    id: trashed
+    attributes:
+      label: Was it removed?
+      options:
+        - Yes, moved to the Trash
+        - Yes, deleted permanently (Hardcore mode)
+        - No, it was only offered
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: restored
+    attributes:
+      label: Could it be put back from History?
+      options:
+        - Yes, fully
+        - Partly
+        - "No"
+        - Did not try
+        - Not applicable, it was not removed
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: Was it preselected (Safe) or did you select it? Why should it have been left alone?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: macontrol version
+      description: From Macontrol › About Macontrol, or the name of the zip you downloaded.
+      placeholder: 0.1.1
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.6
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This report contains no personal file paths I don't want to share.
+          required: true
