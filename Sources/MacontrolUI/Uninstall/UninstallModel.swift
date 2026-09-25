@@ -61,7 +61,8 @@ struct UninstallConfirmation: Identifiable, RemovalConfirmation {
         if !backgroundItems.isEmpty {
             ran.append("these background items may have been stopped: \(backgroundItems.joined(separator: ", "))")
         }
-        return "Nothing was moved to the Trash, but \(ran.joined(separator: ", and ")). \(reason)"
+        let nothing = run.isPermanent ? "Nothing was removed" : "Nothing was moved to the Trash"
+        return "\(nothing), but \(ran.joined(separator: ", and ")). \(reason)"
     }
 }
 

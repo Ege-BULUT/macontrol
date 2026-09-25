@@ -28,7 +28,7 @@ struct ReviewSheet: View {
                     Image(systemName: "flame.circle.fill").foregroundStyle(Theme.danger),
                     title: PermanentText.title(count: review.items.count),
                     message: PermanentText.message(freesUpTo: freesUpTo)
-                        + (run.wantsRestorePoint && run.canMakeRestorePoint ? " " + PermanentText.restorePointSpace : "")
+                        + (run.promisesRestorePoint ? " " + PermanentText.restorePointSpace : "")
                 )
                 PermanentStrip().clipShape(.rect(cornerRadius: 6))
             } else {
@@ -102,7 +102,7 @@ struct ReviewSheet: View {
                     if item.isInCloud { Label(DiskMapText.inCloud, systemImage: "icloud").font(.caption).foregroundStyle(Theme.cautionText) }
                     if item.isIncomplete { Label(DiskMapText.notFullyScanned, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.cautionText) }
                     if let note = item.note { Text(note).font(.caption).foregroundStyle(Theme.cautionText) }
-                    if run.isPermanent, let reason = run.trashOnly[item.url] {
+                    if let reason = run.trashOnly[item.url] {
                         Label(reason.prefix(1).uppercased() + reason.dropFirst(), systemImage: "trash").font(.caption).foregroundStyle(.secondary)
                     }
                 }

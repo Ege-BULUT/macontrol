@@ -30,22 +30,32 @@ extension TrashOutcome {
     /// A permanent removal that stopped after the item was moved to the Trash: "Partly deleted. …", "Moved to the
     /// Trash, but not deleted: …" and "Moved to the Trash as "<name>", but nothing in it could be deleted …". The item
     /// is no longer where it was, so lists and the map drop it; the row keeps Safety's sentence (DESIGN-debloat D3).
-    var isLeftInTrash: Bool {
-        if case .failed(_, let message) = self { message.hasPrefix("Partly deleted") || message.hasPrefix("Moved to the Trash") } else { false }
+    /// MERGE NOTE (T-0074/T-0075): these prefixes match Safety's sentences, which this branch's Safety does not have yet.
+    /// After the merge, pin them with a test built from Safety's own builders (`@testable import Safety`:
+    /// `TrashBatch.partlyDeleted`, `TrashBatch.notDeleted` with and without `asAdministrator`, and the "it changed
+    /// there" literal in TrashBatch and PrivilegedExecutor): each must give `isLeftInTrash`, and only `partlyDeleted`
+    /// `isPartlyDeleted`. A rewording in Safety would otherwise put an item that left its place back in the lists.
+    var isLeftInTrash: Bool { isPartlyDeleted || isWholeInTrash }
+
+    /// Stopped with the whole item in the Trash, nothing deleted: journaled as trashed, so History can put it back and
+    /// counts it in the Trash, and so do Clean and Disk Map (T-0073 review 2).
+    var isWholeInTrash: Bool {
+        if case .failed(_, let message) = self { message.hasPrefix("Moved to the Trash") } else { false }
     }
 
     /// No longer at its path: in the Trash, deleted, or stopped halfway with the rest in the Trash.
     var leftItsPlace: Bool { isRemoved || isLeftInTrash }
 
     /// What happened, in words a user can act on. A permanent batch's other failures are Safety's own sentences
-    /// ("Moved to the Trash, but not deleted: …"), shown as they are.
+    /// ("Moved to the Trash, but not deleted: …"), shown as they are, and so are sentences that already say nothing
+    /// moved ("Not removed: the administrator password was not given."), which "Could not move it: " would double.
     func words(in mode: DeletionMode) -> String {
         switch self {
         case .trashed: "Moved to the Trash"
         case .deleted: "Deleted permanently"
         case .refused(_, let reason): reason.words
         case .failed(let url, _) where isPartlyDeleted: PermanentText.partlyDeleted(nameInTrash ?? url.lastPathComponent)
-        case .failed(_, let message): mode == .permanent ? message : "Could not move it: \(message)"
+        case .failed(_, let message): mode == .permanent || message.hasPrefix("Not removed") ? message : "Could not move it: \(message)"
         }
     }
 
@@ -78,6 +88,8 @@ extension RefusalReason {
 
 extension TrashReport {
     var trashedURLs: Set<URL> { Set(outcomes.filter(\.isTrashed).map(\.url)) }
+    /// Whole in the Trash: moved there, or a permanent removal that deleted nothing of it. Their bytes are "In Trash".
+    var inTrashURLs: Set<URL> { Set(outcomes.filter { $0.isTrashed || $0.isWholeInTrash }.map(\.url)) }
     var deletedURLs: Set<URL> { Set(outcomes.filter(\.isDeleted).map(\.url)) }
     /// In the Trash, deleted, or stopped halfway with the rest in the Trash: either way the item left its place.
     var removedURLs: Set<URL> { Set(outcomes.filter(\.leftItsPlace).map(\.url)) }

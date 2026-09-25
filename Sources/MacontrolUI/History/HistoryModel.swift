@@ -26,6 +26,8 @@ public final class HistoryModel {
 
     /// Bytes still in the Trash from every batch, helper-trashed items included. Trashing frees nothing until the
     /// Trash is emptied (F-0042), and permanent deletions are not in the Trash at all.
+    /// MERGE NOTE (T-0075): a partly deleted line (`leftInTrash != nil`) keeps its full size in `allocated`, so leave it
+    /// out of this sum; `HistoryBatch.status` says the rest is in the Trash instead.
     var inTrashBytes: UInt64 {
         entries.filter { !$0.restored && !$0.isPermanent }.reduce(0) { $0 + $1.allocated }
     }
@@ -107,6 +109,9 @@ struct HistoryBatch: Identifiable {
     /// Never "freed" for the Trash: a same-volume trash is a rename and frees 0 bytes until the Trash is emptied (F-0042).
     /// Nor for a permanent batch: the journal holds the items' sizes, not what came back. A restore point or another
     /// snapshot keeps their blocks, and a partly deleted folder is journaled at its full size (T-0073 review 1).
+    /// MERGE NOTE (T-0075): lines with `leftInTrash != nil` were only partly deleted. Take them out of `deleted` and
+    /// add, per line, "Partly deleted. The rest is in the Trash as "<lastPathComponent of leftInTrash>"; empty the
+    /// Trash to finish." (`PermanentText.partlyDeleted`). `aPartlyDeletedLineSaysTheRestIsInTheTrash` flips then.
     var status: String {
         var parts: [String] = []
         if !deleted.isEmpty {

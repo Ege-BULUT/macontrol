@@ -7,9 +7,14 @@ import ScanEngine
 struct RemovalRun: Equatable {
     var mode: DeletionMode = .trash
     /// D4 items and why each still goes to the Trash; empty in Trash mode. They are left out of "Frees up to X".
+    /// When every item is one, the run opens in Trash mode, since nothing would skip the Trash, and keeps the reasons
+    /// for its rows (T-0073 review 2).
     var trashOnly: [URL: String] = [:]
-    /// Free space where the items live, read when the confirmation opened: the restore point box needs 1 GB.
+    /// Free space on the startup disk, read when the confirmation opened: the restore point box needs 1 GB there.
     var availableAtOpen: UInt64?
+    /// Some item is on another disk. A restore point can't bring it back: `tmutil localsnapshot` snapshots only the
+    /// volumes in the Time Machine backup, so the box stays off (T-0073 review 2).
+    var isOffStartupDisk = false
     var wantsRestorePoint = false
     var isCreatingRestorePoint = false
     /// Why the restore point could not be made. The sheet then asks before deleting.
@@ -27,7 +32,13 @@ struct RemovalRun: Equatable {
         self.mode = mode
         guard mode == .permanent, let support else { return }
         trashOnly = Dictionary(urls.compactMap { url in support.trashOnlyReason(url).map { (url, $0) } }, uniquingKeysWith: { a, _ in a })
-        availableAtOpen = support.available(urls)
+        if !urls.isEmpty && urls.allSatisfy({ trashOnly[$0] != nil }) {
+            // A permanent sheet would promise a delete that never happens, then report "Nothing was deleted".
+            self.mode = .trash
+            return
+        }
+        isOffStartupDisk = !urls.allSatisfy(support.isOnStartupDisk)
+        availableAtOpen = support.startupAvailable()
     }
 
     var isPermanent: Bool { mode == .permanent }
@@ -37,7 +48,14 @@ struct RemovalRun: Equatable {
         rows.filter { trashOnly[$0.url] == nil }.reduce(0) { $0 + $1.bytes }
     }
 
-    var canMakeRestorePoint: Bool { (availableAtOpen ?? 0) >= Self.restorePointMinimum }
+    var canMakeRestorePoint: Bool { !isOffStartupDisk && (availableAtOpen ?? 0) >= Self.restorePointMinimum }
+    /// Why the box is off, when it is.
+    var restorePointUnavailable: String { isOffStartupDisk ? PermanentText.restorePointOtherDisk : PermanentText.restorePointTooFull }
+    /// A ticked box still stands for a restore point: none failed, and the user did not go on without one. Only then
+    /// may the sheet say "Space comes back when the restore point is removed."
+    var promisesRestorePoint: Bool {
+        isPermanent && wantsRestorePoint && canMakeRestorePoint && restorePointProblem == nil && !goesOnWithoutRestorePoint
+    }
     var needsRestorePoint: Bool {
         isPermanent && wantsRestorePoint && canMakeRestorePoint && !goesOnWithoutRestorePoint && restorePoint == nil
     }
@@ -63,8 +81,12 @@ extension Optional where Wrapped: RemovalConfirmation {
 /// What a confirmation needs besides TrashService in hardcore mode; each part is injected in tests.
 struct RemovalSupport {
     var createRestorePoint: () async throws -> String = { try await RestorePoint.create() }
-    /// Available bytes summed over the volumes that hold `urls`, nil when unreadable.
+    /// Available bytes summed over the volumes that hold `urls`, nil when unreadable: the measured result.
     var available: ([URL]) -> UInt64? = { RemovalSupport.availableSpace(holding: $0) }
+    /// Whether a restore point covers the item: it is on the startup disk.
+    var isOnStartupDisk: (URL) -> Bool = { RemovalSupport.isOnStartupDisk($0) }
+    /// Available bytes on the startup disk, where `tmutil` makes the restore point; nil when unreadable.
+    var startupAvailable: () -> UInt64? = { try? VolumeSummary.of(URL(fileURLWithPath: "/System/Volumes/Data")).available }
     /// Why an item goes to the Trash even in permanent mode (D4), or nil.
     var trashOnlyReason: (URL) -> String? = { TrashOnly.reason(for: $0) }
 
@@ -72,6 +94,8 @@ struct RemovalSupport {
     static let demo = RemovalSupport(
         createRestorePoint: { "com.apple.TimeMachine.2026-09-24-101500.local" },
         available: { _ in 131_207_000_000 },
+        isOnStartupDisk: { _ in true },
+        startupAvailable: { 131_207_000_000 },
         trashOnlyReason: { TrashOnly.reason(for: $0, home: URL(fileURLWithPath: "/Users/demo")) }
     )
 
@@ -80,6 +104,12 @@ struct RemovalSupport {
         let volumes = Set(urls.compactMap { try? $0.deletingLastPathComponent().resourceValues(forKeys: [.volumeURLKey]).volume })
         let readings = volumes.compactMap { try? VolumeSummary.of($0).available }
         return readings.isEmpty ? nil : readings.reduce(0, +)
+    }
+
+    /// The item's folder is on the startup disk. Firmlinked paths (/Users, /Applications, /Library) are, and an
+    /// external or disk-image volume is not. Unreadable counts as not: the box then stays off.
+    nonisolated static func isOnStartupDisk(_ url: URL) -> Bool {
+        (try? url.deletingLastPathComponent().resourceValues(forKeys: [.volumeIsRootFileSystemKey]))?.volumeIsRootFileSystem == true
     }
 
     /// Makes the restore point the confirmation at `path` asks for, showing progress there, and returns that

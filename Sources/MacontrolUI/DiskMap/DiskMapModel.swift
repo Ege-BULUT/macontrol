@@ -288,7 +288,6 @@ struct TrashedItem: Identifiable, Hashable, Sendable {
     let parent: Int
     let name: String
     let bytes: UInt64
-    let trashedTo: URL
 
     var id: Int { node }
 }

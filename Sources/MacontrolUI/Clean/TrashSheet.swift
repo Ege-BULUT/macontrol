@@ -103,7 +103,7 @@ struct TrashSheet: View {
         ForEach(rows) { row in
             TrashSheetRowView(
                 row: row, outcome: outcomes[row.url], notMoved: notMoved[row.url], isDone: report != nil, mode: mode,
-                trashOnly: isPermanent ? run.trashOnly[row.url] : nil
+                trashOnly: run.trashOnly[row.url]
             )
         }
     }
@@ -138,8 +138,7 @@ struct TrashSheet: View {
 
     var explanation: String {
         guard let report else {
-            let ticked = isPermanent && restorePoint?.wrappedValue == true
-            return ticked ? message + " " + PermanentText.restorePointSpace : message
+            return run.promisesRestorePoint ? message + " " + PermanentText.restorePointSpace : message
         }
         guard isPermanent else {
             return "Items stay in the Trash and still use their space. Put them back from History until you empty the Trash."
@@ -220,7 +219,7 @@ struct RestorePointBox: View {
             Toggle(PermanentText.restorePointLabel, isOn: $isOn)
                 .toggleStyle(.checkbox)
                 .disabled(!run.canMakeRestorePoint || isWorking)
-            Text(run.canMakeRestorePoint ? PermanentText.restorePointNote : PermanentText.restorePointTooFull)
+            Text(run.canMakeRestorePoint ? PermanentText.restorePointNote : run.restorePointUnavailable)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -263,6 +262,7 @@ enum PermanentText {
     static let restorePointNote = "Rolling back returns every file on this Mac to this moment; anything newer is lost. While it "
         + "exists, the deleted items still use their space. macOS may remove it on its own. It is not a backup."
     static let restorePointTooFull = "Not enough free space for a restore point."
+    static let restorePointOtherDisk = "A restore point covers only the startup disk, and some of these items are on another disk."
     static let restorePointSpace = "Space comes back when the restore point is removed."
     static let creatingRestorePoint = "Creating a restore point…"
     static let snapshotNote = "The rest is held by local snapshots or shared with other files, and comes back when macOS "
@@ -311,7 +311,7 @@ private struct TrashSheetRowView: View {
     let notMoved: String?
     let isDone: Bool
     let mode: DeletionMode
-    /// Why this row goes to the Trash in a permanent batch (D4).
+    /// Why this row goes to the Trash even in hardcore mode (D4).
     let trashOnly: String?
 
     var body: some View {

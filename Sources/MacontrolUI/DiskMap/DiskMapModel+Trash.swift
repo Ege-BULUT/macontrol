@@ -70,7 +70,7 @@ extension DiskMapModel {
         let run = RemovalRun(mode: hardcore.mode, urls: items.map(\.url), support: support)
         review = ReviewState(items: items, run: run)
         // Items that still go to the Trash in hardcore mode (D4) free nothing now.
-        Task { await measure(items, only: items.map(\.url).filter { run.trashOnly[$0] == nil }) }
+        Task { await measure(items, only: items.map(\.url).filter { !run.isPermanent || run.trashOnly[$0] == nil }) }
     }
 
     /// "Frees about X now": clone- and hard-link-aware, from the engine (F-0004), never the map's on-disk sum.
@@ -127,21 +127,24 @@ extension DiskMapModel {
         var removedAny = false
         for outcome in report.outcomes {
             switch outcome {
-            case .trashed(let original, let trashedTo):
+            case .trashed(let original, _):
                 guard let item = stagedItem(at: original) else { continue }
                 if !tree.flags(of: item.node).contains(.removed), let parent = tree.parent(of: item.node) {
                     tree.removeSubtree(at: item.node)
-                    trashed.append(TrashedItem(node: item.node, parent: parent, name: item.name, bytes: item.bytes, trashedTo: trashedTo))
+                    trashed.append(TrashedItem(node: item.node, parent: parent, name: item.name, bytes: item.bytes))
                     removedAny = true
                 }
                 pile.remove(item.node)
                 outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: .inTrash))
             case .deleted(let original), .failed(let original, _) where outcome.isLeftInTrash:
-                // Gone for good, or stopped halfway with the rest in the Trash: off the map like a trashed item, but
-                // not "In Trash", whose bytes it would overstate.
+                // Gone for good, or stopped with the item in the Trash: off the map like a trashed item. Only an item
+                // whole in the Trash is "In Trash"; a partly deleted one's bytes would overstate it.
                 guard let item = stagedItem(at: original) else { continue }
-                if !tree.flags(of: item.node).contains(.removed), tree.parent(of: item.node) != nil {
+                if !tree.flags(of: item.node).contains(.removed), let parent = tree.parent(of: item.node) {
                     tree.removeSubtree(at: item.node)
+                    if outcome.isWholeInTrash {
+                        trashed.append(TrashedItem(node: item.node, parent: parent, name: item.name, bytes: item.bytes))
+                    }
                     removedAny = true
                 }
                 pile.remove(item.node)
