@@ -9445,7 +9445,7 @@
       "id": "T-0063",
       "title": "Perf/UX: no map and no proportion until a scan finishes",
       "description": "The map appears only on .completed. Measured with the release engine (mcscan) while load average was 14-16 from other agents: home 1,580,704 nodes in 10.7 s (189 MB peak RSS), ~/projects 818k nodes in 5.4 s (122 MB), bench fixture 1.2-1.5 s (50 MB, exact 2,368,040,960 B). Under lighter load the benchmark had 0.68 s and 2.1 s. The scanning view shows items, bytes and the current path but no share of the total, so a startup-disk scan looks open-ended. Cheap fix: a determinate bar of bytesVisited against the volume's used bytes (startup disk) or the last scan's total (rescan). Bigger follow-up: a progressive top-level map from periodic sink snapshots, like DaisyDisk.",
-      "status": "ready_for_review",
+      "status": "accepted",
       "urgency": "medium",
       "tag": "perf",
       "milestone": "M3",
@@ -9456,7 +9456,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T14:08:28",
-      "updatedAt": "2026-09-24T09:56:02",
+      "updatedAt": "2026-09-25T11:54:59",
       "comments": [
         {
           "author": "ux-polish",
@@ -9505,6 +9505,12 @@
           "role": "engineer",
           "date": "2026-09-24T09:55:58",
           "text": "fix-live-map-2, fix round 2 for review-live-map-2, feat/ux-polish @ b4e4211 (two commits on ab11937: 574288a has the fixes and tests, b4e4211 changes only the doc). swift build is green. The full swift test passed 326/326 in 61 s. The worktree was clean afterwards, and the branch still merges cleanly into main 5910c96.\n\n(1, medium, Move to Trash does not recolour): FIXED at the shared point. treeDidChange() now runs treeColours.finish(ranked:) on the new tree's top 256, sorted the way the side list sorts them. Both writers of `tree` go through it: replaceTree on .completed (which now does `treeColours = previewColours; replaceTree(result)`) and the Move to Trash splice. Your probe's direct `tree =` plus treeDidChange() path is covered as well. After the trash of B: A=0 C=2 D=3 E=4 F=5 G=6 H=7 I=1 J=2. The seven that stay keep their colours, and I takes B's colour. Main recolours C through I.\nTest: DiskMapStateTests.trashingOneOfTheLargestKeepsTheMapApart, run in both styles through the real stage() and apply(TrashReport). It scans 10 folders and trashes each of the 8 largest in turn. It checks three things: the 8 largest have 8 colours, the 7 that stay keep theirs, and no two ring neighbours share a colour.\n\n(2, low, ring closure): FIXED. ScanColours.neighbourSlots now works around the ring, so the last name's other neighbour is the first. Both finish() and a new smaller name's first colour use it. Nine folders now give n8=1, the same as main. The ring check is back in scanColoursKeepTheLargestApartAndEachNameSteady as `(index + 1) % ranked.count`, and the trash test checks it too: with 9 folders left, all drawn, the ring closes on two named wedges.\n\n(3, low, neighbours during previews): the limit is now STATED, not smoothed. The ScanColours doc says the finished map never puts one colour on two neighbours, but while a scan runs two touching wedges below the 8 largest can share one, in about 1 preview in 12 of a random sweep. The finish() doc gives the reason: recolouring on every preview made colours flip back and forth. Corrected acceptance: neighbouring slices never share a colour in the finished map, and that includes after a Move to Trash. During previews, the 8 largest always have 8 different colours, and a smaller wedge can match the wedge next to it.\n\n(4, low, nothing tests that the app asks for previews): FIXED. ScanOptions has two new internal fields, progressInterval (default 0.1 s) and firstPreview (default 250 ms), and buildTree and walk read them; the defaults leave the app unchanged. The new test is DiskMapStateTests.theAppAsksForPreviewsAndAPlainScanGetsNone. It gives the real DiskMapModel.scan an engine with a 1 ms interval and firstPreview .zero, then runs it on 40 folders and expects previewVersion > 0. A plain engine scan must give progress > 0 and previews == 0. Each side retries up to 20 times, because a small tree can finish before the first progress tick.\n\nDeliberate-bug proofs. I ran them in a scratch git-archive copy with a cold build, 2 builds, filter DiskMapStateTests|DiskMapPaletteTests:\n- M1: treeDidChange recolours only while isScanning, which is ab11937's behaviour. The trash test fails with 16 issues: the top 8 have 7 colours in 7 of 8 cases per style.\n- M3: DiskMapModel.scan calls engine.scan(root) without previews. The previews test fails with previewVersion 0.\n- M2: neighbourSlots goes back to linear neighbours. The palette sweep fails with 56 issues, and the trash test fails with 4 issues (ring last == first after f0 or f1 is trashed).\n- M4: the engine always takes previews. The previews test fails because the plain scan got previews.\n\nI also ran your ReviewProbe2Tests against 574288a:\n- P1: the ring's last and first share a colour in 0 of 500 maps (was 45; main 0).\n- P2: two of the top 8 share a colour after a trash in 0 of 300 runs (was 271; main 0). Adjacent wedges of one colour: 0.\n- P3b: 1,543 of 18,300 preview frames, the same as before. That is the limit stated in (3).\n\nNote: in the first full run, aFlatFolderKeepsTheListAndArrowsCheap failed once, 63 ms against its 50 ms limit, with the load average at 38 to 52. It passed alone in 13 ms and in the second full run in 12 ms. This test and its limit are unchanged from main, and this change does not touch that path."
+        },
+        {
+          "author": "review-live-map-1",
+          "role": "reviewer",
+          "date": "2026-09-25T11:46:13",
+          "text": "review-live-map-1 (new cycle, round 1): reviewing feat/ux-polish @ b4e4211 against origin/main 76952e5, building in ~/projects/macontrol-wt/ux-polish; probes as temp test files there, removed before finishing."
         }
       ],
       "log": [
@@ -9753,6 +9759,18 @@
           "actor": "fix-live-map-2",
           "event": "released",
           "detail": "assignee was 'fix-live-map-2'"
+        },
+        {
+          "ts": "2026-09-25T11:46:13",
+          "actor": "review-live-map-1",
+          "event": "comment",
+          "detail": "review-live-map-1 (new cycle, round 1): reviewing feat/ux-polish @ b4e4211 again…"
+        },
+        {
+          "ts": "2026-09-25T11:54:59",
+          "actor": "review-live-map-1",
+          "event": "reviewed",
+          "detail": "verdict=approve by review-live-map-1, 1800s"
         }
       ],
       "sessions": [
@@ -9836,6 +9854,15 @@
           "durationSec": 1080.0,
           "tokens": null,
           "summary": "Fix round 2 @ b4e4211: treeDidChange settles colours (trash recolours), ring-aware neighbours, preview limit documented, previews-requested test via injectable ScanOptions timing. 4/4 mutations caught. Probes P1 0/500, P2 0/300. 326/326."
+        },
+        {
+          "ts": "2026-09-25T11:54:59",
+          "agent": "review-live-map-1",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": 1800.0,
+          "tokens": null,
+          "summary": "verdict=approve: review-live-map-1 (new cycle, round 1) @ feat/ux-polish b4e4211 vs origin/main 7"
         }
       ],
       "attachments": [
@@ -9900,10 +9927,10 @@
           "addedAt": "2026-09-24T09:14:56"
         }
       ],
-      "verdict": "request_changes",
-      "verdictBy": "review-live-map-2",
-      "verdictAt": "2026-09-24T09:38:03",
-      "verdictNotes": "Round 4 @ ab11937 (review-live-map-2). Verified OK: swift build green; swift test 324/324 in 66 s in the worktree, worktree clean afterwards. No macontrol-tests-* folder was created while that run lasted (the count moves with 3 other suites running). The branch still merges cleanly into main 5910c96 (git merge-tree). Re-read of the code: previews are built on the walk's run thread with the FolderWalk lock held. Per preview, the main actor gets at most 256 entries plus one ScanColours.update. ScanPreviewChart is Equatable on (version, style). On .completed, the sort is the side list's own cached sortedChildren, so the main thread does no extra sort. The final tree is unchanged (describe() test). readGoal, Stop and the generation guards are as in round 3. Previews are opt-in, and mcscan does not ask for them. Round-3 dispositions: (1) implemented as described, and the top-8 invariant holds on every update; (2) implemented.\nProbes are in scratchpad/review-live-map-2/export/Tests/MacontrolUITests/ReviewProbe2Tests.swift and use the real DiskMapModel and MapLayoutBuilder (sunburst, 800x600@2x).\nISSUES:\n(1, medium, colours after Move to Trash) A splice does not recolour. DiskMapModel+Trash sets tree and calls treeDidChange(), and treeColours stays as the scan left it. The folder that moves into the 8 largest keeps its sticky slot, which one of the 8 already holds. Example: A..J, trash B. The branch gives A=0 C=2 D=3 E=4 F=5 G=6 H=7 I=0, so A and I are both blue; main gives 8 colours. Sweep of 300 trashes of one top-8 folder (9-30 names): two of the 8 largest share a colour in 271 on the branch and 0 on main. This regresses main in the map's main action and lasts until the next scan. The fix note calls it \"as before this change\", but main is the baseline. Fix: after treeDidChange() in the splice, run the same finish that .completed runs (treeColours.finish(ranked: ranked(sortedChildren(of: root).prefix(256), in: tree))). Add a test that trashes one of the 8 largest.\n(2, low, ring closure) ScanColours.finish and slot(at:) check only index-1 and index+1, but the sunburst ring closes. Main's MapPalette.slot(for:of:) guards last against first, and topSlots bypasses it for every name in `colours`. Example: 9 folders, all drawn. The branch gives n8=0 next to n0=0 (blue on blue); main gives n8=1. Sweep of 500 finished maps with 2-24 names, all drawn: last and first share a colour in 45 on the branch and 0 on main. The round-2 palette test checked (index + 1) % total; its ab11937 replacement checks only linear neighbours, so this passes. Fix: count ranked.first as a neighbour of ranked.last. This is exact when every name with bytes is drawn; otherwise a grey smaller-items wedge sits between them, and the extra check is harmless. Restore the ring check in the test.\n(3, low, neighbours during previews) By design, the neighbour pass runs only in finish. Through the real model and builder, 1,543 of 18,300 preview frames (300 random scans of 9-40 names) show adjacent wedges of one colour, ring closure included; rank colouring shows 0. The round-3 acceptance text says \"neighbouring slices never share a colour\", which is now true only for the finished map. Either guard it with hysteresis, or state the limit in the disposition and in ScanColours' doc.\n(4, low, test gap) Nothing tests that the app asks for previews. Deliberate bug: engine.scan(root, previews: true) changed to engine.scan(root) in DiskMapModel.scan. Built, then --filter \"DiskMap|ScanEngine|TreeSink|Shell|Overview|Snapshot\" passed 112/112, so the live map vanishes from the app with a green suite. One option: make the first-preview delay and the progress interval injectable, then assert that scan(_, previews: true) yields at least one .preview and scan(_) yields none.\nNot a defect: the per-listing bytesUnderTopLevel accumulation still runs with previews off. By the builder's own numbers it adds about 75 ms per 150k listings, under 1% of a home scan."
+      "verdict": "approve",
+      "verdictBy": "review-live-map-1",
+      "verdictAt": "2026-09-25T11:54:59",
+      "verdictNotes": "review-live-map-1 (new cycle, round 1) @ feat/ux-polish b4e4211 vs origin/main 76952e5. APPROVE.\nVerified: cold swift build green (52 s). Full swift test 327/327 in 61 s. That count includes main's OffscreenWindowTests, cherry-picked uncommitted for the run and reverted afterwards (see N1). The branch still merges cleanly into origin/main 76952e5 (git merge-tree). Worktree clean at b4e4211 afterwards.\nRound-4 dispositions (V5): (1) treeDidChange runs finish, so both tree writers recolour, and so does the permanent-delete path on feat/hardcore-ui, which uses the same `self.tree = tree; treeDidChange()`. (2) neighbourSlots works around the ring. (3) the limit is stated in the ScanColours/finish docs. (4) theAppAsksForPreviewsAndAPlainScanGetsNone. Re-proved with deliberate bugs: dropping the treeDidChange finish failed trashingOneOfTheLargestKeepsTheMapApart (both styles, top 8 had 7 colours, ring neighbours matched), and dropping `previews: true` failed the previews test (previewVersion 0). Both restored with git checkout.\nData races: preview() and every sink.add run with the FolderWalk lock held (run() takes it around progress). nextPreview is touched only on the run thread. The volume read runs on GCD and the result is gated by generation and isScanning. TSan run (--filter ScanEngineTests|TreeSinkTests|DiskMapStateTests + probes, 61 tests): 0 reports.\nFinal tree vs a plain scan: probe with a 1 ms progress interval and firstPreview .zero, through the public stream, 10 runs over 600 folders / 3,600 files: previews in 10/10 runs, the final tree differed from a plain scan in 0, preview entries over the final total 0. The plain scan got 0 previews.\nMain-actor cost per preview (debug, 256 entries): receive 0.94 ms, one layout about 1.8 ms, the a11y sort 0.84 ms. At about 4 previews a second that is under 2% of the main thread. ScanPreviewChart is equatable on (version, style), so progress ticks skip it.\nHand-off: after .completed and finishScan, the layout is nil and MapChart shows its small ProgressView until prepareLayout returns. On 1,483,057 nodes (debug) that took 3.6 ms for the sunburst and 5.2 ms for the treemap; the existing 1.01M-node test prints 39/59 ms. At most a few frames, so no flicker to fix. Colours carry over: the scanning and scanned snapshots rendered off screen (light/dark, 900x600) keep every folder's colour.\nAllocation churn: no work per node was added. Per listing there is one dictionary update and a walk up the ancestors, and it also runs with previews off. That is about 75 ms per 150k listings, as round 4 noted, so no change needed.\nNOTES (not blocking):\nN1 (process): the branch predates main's 224e152 OffscreenWindow fix. Running this branch's suite as-is puts titled snapshot and MinimumSize windows at the user's screen origin. I ran it with `git cherry-pick -n 224e152` (removed the AppListOrderTests modify/delete leftover), then restored. Merge origin/main (clean) before anyone runs UI tests on this branch again.\nN2 (nit): treeDidChange sorts the root's children to settle colours. After a Move to Trash while the map is drilled into a subfolder, that sort evicts the side list's one-entry sortedCache, so the focus gets sorted again. This only costs anything for a root with a huge number of entries (a 200k-entry sort took 244 ms). The comment \"The side list reuses this sort at the root\" holds only when the focus is the root."
     },
     {
       "id": "T-0064",
@@ -10594,7 +10621,7 @@
       "relatedTo": [],
       "owner": "",
       "createdAt": "2026-09-23T16:09:50",
-      "updatedAt": "2026-09-24T10:20:57",
+      "updatedAt": "2026-09-25T13:35:55",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -10649,6 +10676,30 @@
           "role": "reviewer",
           "date": "2026-09-24T10:20:57",
           "text": "From review-permanent-engine-2 (T-0074 round 2): in permanent mode, three .failed outcomes mean the item has left its path and is in the Trash: 'Moved to the Trash, but not deleted: it changed there…', the new 'Moved to the Trash as \"\u003cname>\", but nothing in it could be deleted (…). Undo it from History, or empty the Trash to finish.' (b6659ba, journaled as trashed, Undo works) and 'Partly deleted…'. On feat/hardcore-ui, DiskMapModel+Trash.swift:145 turns every .failed into notMoved and keeps the node, and TrashOutcome.isRemoved is false for all three, so the map and the lists show the item as still in place. Either treat these messages as removed, or ask T-0074 to return .trashed(original:trashedTo:) for the 'nothing deleted' case (whole in the Trash with Undo, the same as a trash-mode outcome)."
+        },
+        {
+          "author": "fix-debloat-catalog-2",
+          "role": "engineer",
+          "date": "2026-09-24T10:46:51",
+          "text": "From debloat-catalog, fix round 2 (feat/debloat-catalog db86533), 2 items for hardcore-ui, no action needed on my side:\n(1) Uninstall screen: Xcode's plan now includes /Library/Developer/PrivateFrameworks. Its note starts with SimRuntimeTool.heldNote (\"Holds the only tool that deletes simulator runtimes. To delete them too, remove Xcode in Debloat.\"), so isPreselected is false after privileged-helper merges and UninstallModel's choices ?? isPreselected leaves it unticked. The Uninstall screen still removes Xcode.app itself and never says that its simulator runtimes (about 12 GB here) stay, or that git and clang break when xcode-select points into it. Debloat covers both. If you want Uninstall to say it too, the condition is AppleProfiles.bundled.profile(for: app.bundleIdentifier)?.simulatorRuntimes == true, and for git and clang, readlink /private/var/db/xcode_select_link pointing inside the bundle (DebloatModel.xcodeSelectLink).\n(2) TrashSheet is fixed at 640x540 with the notes section above the rows. With Debloat's Xcode run (6 notes), only 1 or 2 of its 10 rows show without scrolling (review-debloat-catalog-2 #10, SS11 on T-0076). A taller sheet, or rows above the notes, would fix it."
+        },
+        {
+          "author": "finish-hardcore-ui",
+          "role": "engineer",
+          "date": "2026-09-25T11:43:06",
+          "text": "finish-hardcore-ui takes over from build-hardcore-ui (orchestrator role: finisher): merge origin/main, close open criteria and review issues, snapshots, full suite."
+        },
+        {
+          "author": "finish-privileged-helper-engine",
+          "role": "engineer",
+          "date": "2026-09-25T12:00:12",
+          "text": "From T-0075 (feat/privileged-helper-engine 73ff9c6), one display ask for your TrashSheet rewrite: TrashReport now has notes: [URL: String] (default [:]). The helper fills it for a LaunchDaemon plist it removed without a bootout: 'Its background service may keep running until the next restart.' (DESIGN-debloat 3.5 step 4, Risk 7). Please show report.notes[row.url] under that row's outcome once the report is in (a secondary caption, like the outcome label). Uninstaller.uninstall(...) returns it inside the report unchanged. I did not touch TrashSheet here, to avoid a conflict with your rewrite."
+        },
+        {
+          "author": "finish-sealed-apps",
+          "role": "engineer",
+          "date": "2026-09-25T12:32:34",
+          "text": "Heads-up from finish-sealed-apps (T-0077): after merging main (224e152, OffscreenWindow), the full swift test hangs with no summary. Cause, traced under lldb: every orderFrontRegardless/orderOut of a titled offscreen window starts an _NSWindowTransformAnimation (-[NSWindow _doOrderWindow:]) that never ends off every display, and each one parks a dispatch thread in -[NSAnimation _runBlocking]. After ~32 windows the 64-thread pool is gone and the run stalls forever. Your current run in macontrol-wt/hardcore-ui (swiftpm-testing-helper pid 62363, 18+ min) shows 65 threads in _runBlocking in a sample, the same hang. Fix (in feat/sealed-apps, will reach main with that PR): SnapshotRenderer.offscreenWindow sets window.animationBehavior = .none before ordering in; lldb breakpoint on -[NSAnimation startAnimation] goes from 12 hits to 0 for MinimumSizeTests. Until it merges, apply that one line locally to get a full run."
         }
       ],
       "log": [
@@ -10723,10 +10774,114 @@
           "actor": "review-permanent-engine-2",
           "event": "comment",
           "detail": "From review-permanent-engine-2 (T-0074 round 2): in permanent mode, three .faile…"
+        },
+        {
+          "ts": "2026-09-24T10:46:51",
+          "actor": "fix-debloat-catalog-2",
+          "event": "comment",
+          "detail": "From debloat-catalog, fix round 2 (feat/debloat-catalog db86533), 2 items for ha…"
+        },
+        {
+          "ts": "2026-09-25T11:43:06",
+          "actor": "finish-hardcore-ui",
+          "event": "comment",
+          "detail": "finish-hardcore-ui takes over from build-hardcore-ui (orchestrator role: finishe…"
+        },
+        {
+          "ts": "2026-09-25T11:43:08",
+          "actor": "finish-hardcore-ui",
+          "event": "released",
+          "detail": "assignee was 'build-hardcore-ui'"
+        },
+        {
+          "ts": "2026-09-25T11:43:08",
+          "actor": "finish-hardcore-ui",
+          "event": "claimed",
+          "detail": "assignee: (none) -> finish-hardcore-ui"
+        },
+        {
+          "ts": "2026-09-25T12:00:12",
+          "actor": "finish-privileged-helper-engine",
+          "event": "comment",
+          "detail": "From T-0075 (feat/privileged-helper-engine 73ff9c6), one display ask for your Tr…"
+        },
+        {
+          "ts": "2026-09-25T12:32:34",
+          "actor": "finish-sealed-apps",
+          "event": "comment",
+          "detail": "Heads-up from finish-sealed-apps (T-0077): after merging main (224e152, Offscree…"
+        },
+        {
+          "ts": "2026-09-25T13:35:54",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-uninstall-1600-dark.png (SS1: Uninstall 1600 dark, hardcore on: checkbox, banner, sort/filter, container unticked with its note)"
+        },
+        {
+          "ts": "2026-09-25T13:35:54",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-uninstall-900-light.png (SS2: Uninstall 900x600 light, hardcore on)"
+        },
+        {
+          "ts": "2026-09-25T13:35:55",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-uninstall-sheet-permanent-dark.png (SS3: permanent Uninstall sheet: red strip, admin note, restore-point box)"
+        },
+        {
+          "ts": "2026-09-25T13:35:55",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-clean-result-light.png (SS4: permanent result: measured free space, snapshot line, Partly deleted, trash-only item)"
+        },
+        {
+          "ts": "2026-09-25T13:35:55",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-history-900-dark.png (SS5: History 900 dark: permanent batch with restore-point line, helper-trashed batch)"
+        },
+        {
+          "ts": "2026-09-25T13:35:55",
+          "actor": "finish-hardcore-ui",
+          "event": "attached",
+          "detail": "attachments/t0073-modal-light.png (SS6: turn-on modal, three bullets, no checkbox)"
         }
       ],
       "sessions": [],
-      "assignee": "build-hardcore-ui"
+      "assignee": "finish-hardcore-ui",
+      "attachments": [
+        {
+          "file": "attachments/t0073-uninstall-1600-dark.png",
+          "label": "SS1: Uninstall 1600 dark, hardcore on: checkbox, banner, sort/filter, container unticked with its note",
+          "addedAt": "2026-09-25T13:35:54"
+        },
+        {
+          "file": "attachments/t0073-uninstall-900-light.png",
+          "label": "SS2: Uninstall 900x600 light, hardcore on",
+          "addedAt": "2026-09-25T13:35:54"
+        },
+        {
+          "file": "attachments/t0073-uninstall-sheet-permanent-dark.png",
+          "label": "SS3: permanent Uninstall sheet: red strip, admin note, restore-point box",
+          "addedAt": "2026-09-25T13:35:55"
+        },
+        {
+          "file": "attachments/t0073-clean-result-light.png",
+          "label": "SS4: permanent result: measured free space, snapshot line, Partly deleted, trash-only item",
+          "addedAt": "2026-09-25T13:35:55"
+        },
+        {
+          "file": "attachments/t0073-history-900-dark.png",
+          "label": "SS5: History 900 dark: permanent batch with restore-point line, helper-trashed batch",
+          "addedAt": "2026-09-25T13:35:55"
+        },
+        {
+          "file": "attachments/t0073-modal-light.png",
+          "label": "SS6: turn-on modal, three bullets, no checkbox",
+          "addedAt": "2026-09-25T13:35:55"
+        }
+      ]
     },
     {
       "id": "T-0074",
@@ -11002,7 +11157,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-24T10:29:49",
+      "updatedAt": "2026-09-25T13:36:07",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -11075,6 +11230,24 @@
           "role": "engineer",
           "date": "2026-09-24T10:29:19",
           "text": "Correction to finding (3), counted from the logs instead of memory: 29 full swift test runs in total (16 on feat/privileged-helper, 5 on the integration branch, 1 scratch merge with hardcore-ui, 7 with debloat-catalog). 5 ended early with exit 0 and no summary: 09:29 and about 09:37 and 09:39 on this branch, about 10:05 and 10:10 on the debloat-catalog scratch merge. Complete runs in between too (09:30-09:34, 09:41-09:59). The 8 runs after 10:10 were all complete."
+        },
+        {
+          "author": "finish-privileged-helper-engine",
+          "role": "engineer",
+          "date": "2026-09-25T11:43:48",
+          "text": "Taking over from fix-privileged-helper-1 (paused at WIP 87cc0a2, released on its behalf). Plan: merge feat/permanent-engine 517e17e and origin/main 76952e5, finish the round-1 review items on top of the WIP, full suite, then ready_for_review."
+        },
+        {
+          "author": "finish-privileged-helper-engine",
+          "role": "engineer",
+          "date": "2026-09-25T12:00:12",
+          "text": "Finisher round (feat/privileged-helper-engine): 87cc0a2 (fixer's WIP) + fee569d merge feat/permanent-engine 517e17e + 87458da merge origin/main 76952e5 (site, off-screen snapshot fix, 0.1.1; no conflicts, no window code in this branch's tests) + 73ff9c6 finish.\n\nRound-1 dispositions (V5):\n1 HIGH fixed. Uninstaller sends bundleIdentifier only when plan.app.kind == .appleAppStore (MAS receipt + anchor apple generic + team 59GAB85EFG); otherwise nil, so the root allowlist refuses Apple-named items before any dialog. Test AdminUninstallTests.aClaimedAppleIdentifierIsNotSent (loginwindow, networkextension; thirdParty vs appleAppStore, including PrivilegedScope on what is sent). Mutation 'always send the Info.plist identifier': killed (both cases, aRootOwnedBundleGoesThroughTheHelper, 4 UninstallFlowTests). Consequence: Xcode from a .xip (no MAS receipt) sends no identifier, so a root-owned com.apple.dt.Xcode.plist is refused (fails closed).\n2 fixed. TrashBatch.notDeleted(_:trashName:asAdministrator:) gives helper items 'drag it back from the Trash in Finder' and no Undo; the executor uses it. Test aFailedEraseSendsTheUserToFinderNotToUndo; mutation asAdministrator:false killed.\n3 fixed in data, display handed to T-0073. Result line 'note' -> PrivilegedRouting.Answer.notes -> TrashReport.notes[url] = 'Its background service may keep running until the next restart.' for otherPath (print status 0, no exact path line) and badLabel; none for match/notLoaded. Tests: launchDaemonIsBootedOutOnlyWhenLaunchdLoadedThisPlist (6 cases), aDeletedDaemonWhoseBootoutWasSkippedSaysItStillRuns, aSkippedBootoutsNoteReachesTheApp (built helper), PermanentAttackTests.threePassesInOrder (report.notes). Mutations: executor never sets the note, routing drops it, TrashService drops it: all killed. Not shown in TrashSheet on this branch: feat/hardcore-ui rewrites TrashSheet and its row view, so a UI line here would only make a merge conflict; asked on T-0073.\n4 fixed. bundle-app.sh: SIGN_IDENTITY defaults to scripts/signing-identity.sh when present (T-0081), else '-'; after signing it checks Identifier=\u003cid>.priv and flags=0x10002(adhoc,runtime) for '-' or flags=0x10000(runtime) for a certificate. Only the ad hoc path ran here (signing-identity.sh is not on this branch); negative checks: the certificate flags string rejects the ad hoc helper, a one-character-off identifier is rejected.\n5 fixed. The first unanswered item after the helper dies says 'stopped while it worked on this, so some or all of it may already be gone or in the Trash'; the rest keep 'stopped before it got to this'. aHelperKilledMidBatchLeavesTheRestAsStopped; mutation killed.\n6 fixed. anotherSpellingOfADaemonIsRefused (case variant of LaunchDaemons on this case-insensitive disk passes identity and O_NOFOLLOW_ANY): mutation 'no canonical-spelling guard' killed (plist trashed, bootout skipped).\nResidual for T-0078/design risks (review 1): a drag-installed bundle is user-writable, so the root helper is only as trustworthy as the user account.\n\nTests: swift build 0 warnings. Full swift test 427/427 in 56 suites x2 with the summary line. One earlier full run ended with exit 0 and no summary while PrivilegedHelperTests ran (same as the builder's 5/29). feat/hardcore-ui runs end the same way without any helper test, and finish-hardcore-ui traced the exit to swift_task_asyncMainDrainQueue -> exit (the main run loop returned), so it is a shared test-process issue, not this branch's. I removed the 27 fixtures that run left (birth-time window). Criterion 6: codesign -dv Identifier=dev.macontrol.Macontrol.priv flags=0x10002(adhoc,runtime); --verify --strict --deep ok; the release helper has no --test-root string. Snapshot of the merged app attached (no UI source changed here)."
+        },
+        {
+          "author": "finish-hardcore-ui",
+          "role": "engineer",
+          "date": "2026-09-25T13:36:07",
+          "text": "Re your TrashReport.notes ask (12:00): not done on feat/hardcore-ui, because TrashReport has no notes field there (main 76952e5 does not have 73ff9c6's Safety change yet), so the view line would not compile. Merge note for whichever of the two PRs merges second: in Sources/MacontrolUI/Clean/TrashSheet.swift pass report?.notes[row.url] into TrashSheetRowView (next to outcome/notMoved, in rowViews) and show it under the outcome label as Text(note).font(.caption).foregroundStyle(.secondary). One test: a TrashSheet hosted with a report whose notes has the LaunchDaemon sentence shows that string in the row (NSView-tree text search, like HardcoreModeTests)."
         }
       ],
       "log": [
@@ -11197,6 +11370,72 @@
           "actor": "build-privileged-helper",
           "event": "released",
           "detail": "assignee was 'build-privileged-helper'"
+        },
+        {
+          "ts": "2026-09-24T10:44:08",
+          "actor": "review-privileged-helper-1",
+          "event": "reviewed",
+          "detail": "verdict=request_changes by review-privileged-helper-1, 1800s"
+        },
+        {
+          "ts": "2026-09-24T10:45:10",
+          "actor": "fix-privileged-helper-1",
+          "event": "claimed",
+          "detail": "assignee: (none) -> fix-privileged-helper-1"
+        },
+        {
+          "ts": "2026-09-24T10:50:12",
+          "actor": "fix-privileged-helper-1",
+          "event": "updated",
+          "detail": "status: ready_for_review -> development"
+        },
+        {
+          "ts": "2026-09-25T11:43:47",
+          "actor": "fix-privileged-helper-1",
+          "event": "released",
+          "detail": "assignee was 'fix-privileged-helper-1'"
+        },
+        {
+          "ts": "2026-09-25T11:43:47",
+          "actor": "finish-privileged-helper-engine",
+          "event": "claimed",
+          "detail": "assignee: (none) -> finish-privileged-helper-engine"
+        },
+        {
+          "ts": "2026-09-25T11:43:48",
+          "actor": "finish-privileged-helper-engine",
+          "event": "comment",
+          "detail": "Taking over from fix-privileged-helper-1 (paused at WIP 87cc0a2, released on its…"
+        },
+        {
+          "ts": "2026-09-25T12:00:12",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0075-uninstall-light.png (Uninstall, light, large (merged main 76952e5 + helper): admin leftover disabled without a helper, as before)"
+        },
+        {
+          "ts": "2026-09-25T12:00:12",
+          "actor": "finish-privileged-helper-engine",
+          "event": "comment",
+          "detail": "Finisher round (feat/privileged-helper-engine): 87cc0a2 (fixer's WIP) + fee569d …"
+        },
+        {
+          "ts": "2026-09-25T12:00:37",
+          "actor": "finish-privileged-helper-engine",
+          "event": "updated",
+          "detail": "status: development -> ready_for_review"
+        },
+        {
+          "ts": "2026-09-25T12:00:38",
+          "actor": "finish-privileged-helper-engine",
+          "event": "released",
+          "detail": "assignee was 'finish-privileged-helper-engine'"
+        },
+        {
+          "ts": "2026-09-25T13:36:07",
+          "actor": "finish-hardcore-ui",
+          "event": "comment",
+          "detail": "Re your TrashReport.notes ask (12:00): not done on feat/hardcore-ui, because Tra…"
         }
       ],
       "sessions": [
@@ -11208,6 +11447,35 @@
           "durationSec": 7336.0,
           "tokens": null,
           "summary": "Privileged helper built on feat/privileged-helper (a541cac..2ecb9af, main 5910c96 merged) and tested against the real engine on feat/privileged-helper-engine (f5223b7, 924cab5). Scope with first-component rule, request/result format (no restore), foreground check 65/77/71, fork-without-exec child with every VM region inherited (fixed a 9/100 os_log SIGSEGV), Trash sink with post-rename identity check, checked LaunchDaemon bootout, routing with one fd-checked root result file, crash recovery, Uninstaller one remove call with requiresGone and the admin route, bundle-app.sh signing (adhoc,runtime; .priv identifier). swift test 369/369 x9 on the branch, 420-421 x4 on the integration branch; 8 design bug proofs + 10 extra. Open: 5 of 29 full runs ended early with exit 0 and no summary, cause not found. Merge after permanent-engine."
+        },
+        {
+          "ts": "2026-09-24T10:44:08",
+          "agent": "review-privileged-helper-1",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": 1800.0,
+          "tokens": null,
+          "summary": "verdict=request_changes: CHANGES (review-privileged-helper-1, round 1). Reviewed feat/privileged-helper-e"
+        },
+        {
+          "ts": "2026-09-25T12:00:37",
+          "agent": "finish-privileged-helper-engine",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "Finisher: merged feat/permanent-engine 517e17e (fee569d) and origin/main 76952e5 (87458da), finished the paused WIP 87cc0a2 in 73ff9c6. Review round 1: #1 HIGH fixed (identifier only for .appleAppStore; test + mutation), #2 fixed (notDeleted asAdministrator wording), #3 note carried to TrashReport.notes (display asked of T-0073), #4 bundle-app.sh signing default + either-shape check, #5 first unanswered item worded as possibly partly done, #6 canonical-spelling guard proven. 7 new mutations all killed. swift test 427/427 x2 (one earlier run truncated with exit 0, shared issue also on hardcore-ui). Criteria 1-7 met; criterion 6 certificate shape unexercised (no signing-identity.sh on this branch)."
+        }
+      ],
+      "verdict": "request_changes",
+      "verdictBy": "review-privileged-helper-1",
+      "verdictAt": "2026-09-24T10:44:08",
+      "verdictNotes": "CHANGES (review-privileged-helper-1, round 1). Reviewed feat/privileged-helper-engine 924cab5 (the merge target) plus the feat/privileged-helper diff, in a git-archive export. Full swift test on the export: 421/421 in 55 suites, summary line present. Spot-check mutations: first-component rule removed and post-rename identity check removed, both killed (8 and 3 failing expectations). Forked child in permanent mode with a LaunchDaemon item (read-only launchctl print of a label that exists nowhere): 25 of 25 runs finished, 75 of 75 items deleted. Probes: scratchpad review-privileged-helper-1/eng/Tests/{UninstallerTests,SafetyAttackTests}/ReviewProbeTests.swift. A probe that PASSES means the defect is there.\n1 HIGH (safety). The first-component exception trusts bundleIdentifier, and Uninstaller.prepare copies it from the uninstalled bundle's own Info.plist (Uninstaller.swift, item.bundleIdentifier = plan.app.bundleIdentifier; PrivilegedScope.belongs). A thirdParty fixture bundle that declares an Apple identifier gets Apple-named /Library/Preferences files as preselected needsAdministrator leftovers (isPreselected no longer excludes admin items). They are sent with that identifier, the scope allows them, and the executor trashes them. The rule from security review sec 3c is bypassed for any bundle. Repro: ReviewProbeUninstallTests.aSpoofedAppleIdentifierOpensTheFirstComponentRule (2 cases) and ReviewProbeHelperTests.theHelperTrashesLoginwindowForAClaimedIdentifier. Fix: send the identifier only for an app whose Apple signature was verified (AppBundle already computes it: kind .appleAppStore / anchor apple generic + Apple team), or only for catalog ids. Otherwise send nil. Invert the probe into a test and add its mutation proof.\n2 MEDIUM (honest copy, open since review-permanent-engine-2 at 10:20). PrivilegedExecutor.process maps an erase that removed nothing to TrashBatch.notDeleted: \"... Undo it from History, or empty the Trash to finish.\" The journal line is asAdministrator and History has no Undo for it (D12). Repro: ReviewProbeHelperTests.aFailedEraseOffersAnUndoThatDoesNotExist (message contains the Undo sentence; journalEntry.asAdministrator == true). Use the D12 wording (drag it back from the Trash in Finder).\n3 MEDIUM (honest copy, design 3.5 step 4 and Risk 7). When the bootout is skipped (print is status 0 without an exact path line, or the Label fails the regex), the file goes and the result is a plain trashed/deleted line with no note. The design requires the result to say the service keeps running until the next restart. grep \"restart\" in Sources/Safety and Sources/PrivilegedHelper: only a doc comment. launchDaemonIsBootedOutOnlyWhenLaunchdLoadedThisPlist asserts status only. Add a note field (or message) on those lines, show it, and test otherPath and badLabel for it.\n4 LOW (V5). fix-signing-ci-1 (09:36) has no disposition: bundle-app.sh still defaults SIGN_IDENTITY to \"-\" with the old header, and criterion 6 has no check that accepts the certificate-signed shape (flags=0x10000(runtime) and the fixed identifier). Wire it or say it is deferred to T-0081's merge.\n5 LOW (honest copy). After the helper dies, every unanswered item says \"stopped before it got to this\". The first unanswered item was in progress, so it can already be in the Trash or partly erased. Word that one item differently (for example, check the Trash).\n6 LOW (proof gap, code read, not run). The canonical-spelling guard can be proven. process() uses item.path, not the canonical path, so without the guard a case-variant spelling of a /Library/LaunchDaemons plist passes scope and policy (both canonical), but isLaunchDaemon(item.path) is false and the bootout check is skipped.\nMerge gate (not a defect of the integration branch): never merge feat/privileged-helper on its own. There, the in-process TrashBatch ignores requiresGone while the Uninstaller sends the bundle and its leftovers in one batch. Merge T-0074 (with 517e17e) first, then feat/privileged-helper-engine. DebloatFlowTests line 226 still needs its one-batch update on T-0076.\nResidual (design, for T-0078 and Risks): a drag-installed bundle is user-writable, so the helper run as root is only as trustworthy as the user account. Worth one line in the design's risks.\nChecked, no issue: argv as an Apple-event list and quoted form; hash over the in-memory bytes; O_EXCL result file; single-fd result reader (root, regular, nlink 1); fork after a thread check with no second read; requiresGone order across passes and the helper; the requesting user's home and journal in the policy; LaunchDaemon bootout only on an exact path line; no chflags or chmod in helper code; the release helper has no test flags (#if DEBUG); criteria 1-5 and 7 are met apart from the items above.",
+      "attachments": [
+        {
+          "file": "attachments/t0075-uninstall-light.png",
+          "label": "Uninstall, light, large (merged main 76952e5 + helper): admin leftover disabled without a helper, as before",
+          "addedAt": "2026-09-25T12:00:12"
         }
       ]
     },
@@ -11230,7 +11498,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-24T10:23:09",
+      "updatedAt": "2026-09-25T13:25:53",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -11303,6 +11571,18 @@
           "role": "engineer",
           "date": "2026-09-24T10:18:01",
           "text": "B2 from privileged-helper: a scratch merge of feat/privileged-helper with feat/debloat-catalog builds, and fails only DebloatFlowTests.cancelledDialogSaysXcodeIsStillInstalled(hardcore:) at line 226: 'Set(removed) == [xcode, garageBand]' ('a leftover was sent while its bundle stayed'). That expectation encodes v1's two batches. Per sec 3.6 the Uninstaller now makes ONE remove call: bundles AND leftovers are sent together, and every leftover carries requiresGone = its bundle, so Safety (permanent-engine's requiresGone check, and the helper's) leaves it untouched while the bundle stays. Your disk assertions (lines 223-224: leftovers still exist) passed in the merge, which is the safety property. Suggest replacing line 226 with: every sent path that is not a bundle carries requiresGone == its app's bundle (your log may need to keep the TrashItems), plus the existing exists() checks. Also, since the engine's fix round, items carry bundleIdentifier (the app's) so com.apple.* leftovers in /Library pass the helper's first-component rule; that wiring is on feat/privileged-helper-engine."
+        },
+        {
+          "author": "fix-debloat-catalog-2",
+          "role": "engineer",
+          "date": "2026-09-24T10:46:44",
+          "text": "Fix round 2 (fix-debloat-catalog-2), feat/debloat-catalog @ db86533 (one commit on bd32e8f). Full swift test: 368/368 in 49 suites, 1 known issue (appleContent, T-0075). Scratch merge with feat/privileged-helper 2ecb9af (no conflicts): 417 tests in 57 suites. The only failures there are the reviewer's 3 merge probes, which now fail as they should. cancelledDialogSaysXcodeIsStillInstalled and everyLibraryPathIsInPrivilegedScope pass on the merge, and its 3 known issues are PrivilegedExecutorTests' own. The branch probes R1 to R3 fail on the branch too. I made 15 deliberate-bug edits (M36 to M50) in a scratch export, in 5 batches. Each one failed its own test. SS11 is attached.\n\n1 HIGH, fixed in LeftoverFinder. A profile item that holds CoreSimulator's simctl (/Library/Developer/PrivateFrameworks) now starts its note with SimRuntimeTool.heldNote: \"Holds the only tool that deletes simulator runtimes. To delete them too, remove Xcode in Debloat.\" With that note, isPreselected is false on every screen. Merge probe R1 now shows isPreselected=false, and uninstall(plan, preselected) keeps PrivateFrameworks. Debloat replaces the note: its own \"stay until you reinstall\" note while runtimes stay unticked, and nothing when the runtimes go first or there are none. Tests: xcodePlanFollowsItsProfile (the plan note, not preselected) and coreSimulatorWaitsForTheRuntimes (no runtimes means preselected). Proofs M36 and M37. Still open, and not in my files: the Uninstall screen removes Xcode.app itself without saying that its runtimes stay (v1 did the same), and it has no git/clang note. Posted on T-0073.\n\n2 MEDIUM, fixed. Every ticked Xcode now gets a step before the uninstall, whether its runtimes are ticked or not. The step checks its identity, quits it, and runs `runtime list` again. If the list fails, or its set differs from the one the sheet opened with (minus what an earlier Xcode deleted in this run), Xcode is kept and nothing is deleted. The message is \"Xcode was skipped: its simulator runtimes changed after the list was made. Scan Again, then try again.\" or \"…couldn't be listed again…\". parse() now throws for an entry without a Bool `deletable`, and for a deletable entry without a UUID identifier and a size. Tests: runtimesThatChangedAfterTheListKeepXcode (added / added to none / list fails) and whatItCantReadFailsTheList (6 cases). Proofs M38a, M38b, M40, M41 and M49.\n\n3 MEDIUM, fixed. When some runtimes were deleted, the message is \"Deleted iOS 26.5 (8.49 GB) for good, but watchOS 26.5 (3.94 GB) couldn't be deleted, so Xcode was kept: without it, nothing can delete it.\" notMoved says \"some of its simulator runtimes couldn't be deleted.\" When none were deleted, the old message stays. aRuntimeFailureKeepsXcodeAndTheOthersGoOn now runs both cases (first or second runtime failing). Proof M42.\n\n4 MEDIUM, fixed. A note right after the quit note says \"The simulator runtimes left unticked (12.43 GB) stay on this Mac: once Xcode is gone, nothing can delete them.\" When another Xcode is installed and not ticked, it says \"…stay on this Mac for Xcode-beta.\" instead. Test: theSheetSaysWhichRuntimesStay. The snapshot suite renders debloat-confirm-trash-default (SS11). Proof M43.\n\n5 LOW, fixed. The check on what was sent now asks only that both bundles were sent. The checks on disk are unchanged. The test passes on the branch and on the merge.\n\n6 LOW, noted. I counted in `getconf DARWIN_USER_TEMP_DIR` by fixture signature (root/Applications/Xcode.app) and birth time. My two complete runs left 0 Debloat fixtures. Two runs of mine were stopped part way and left fixtures: a mutation crashed a test process (23 fixtures), and one merge run ended after 14 s with no summary, cause unknown (33 fixtures). I removed exactly those folders, selected by signature and by the run's time window. The crash came from notes[1] in a test; both index reads now come after a guard.\n\n7 LOW, fixed. The time bound is removed. The status check still catches a runner without the limit.\n\n8 LOW, fixed. The row now ends \"…Open Xcode once, then Scan Again.\" and the row allows 3 lines.\n\n9 LOW, fixed. DebloatConfirmation.showsResetCommand shows the line before the run when the removal would break git and clang. In the result, it shows the line only when an Xcode that xcode-select points into is gone. Tests: developerToolsNoteOnlyWhenXcodeSelectPointsInside (after confirm) and aRuntimeFailure… (Xcode kept means no line). Proofs M45 and M46.\n\n10 LOW. \"Kept by macOS\" is no longer in the sheet's notes. It stays in the row list with a lock icon (proof M44). The list height is set by TrashSheet (fixed at 640x540, notes above the rows), which T-0073 owns. Posted there.\n\n11 LOW, fixed. The refused roots now also cover ~/Library/Containers/com.apple.Safari and ~/Library/LaunchAgents. LaunchAgents and LaunchDaemons are no longer /Library folders that a profile may list, because the launchd search finds each job plist and boots it out first. 4 new validator cases, 29 in total. Proofs M47, M48 and M50.\n\nThe earlier comments are unchanged: build-privileged-helper B2 is item 5 above. review-sealed-apps-1's systemAppsSize and the admin notes are still merge notes. Criterion 4's `--dry-run` is still with T-0078. I ran no simctl and quit no app."
+        },
+        {
+          "author": "finish-debloat-catalog",
+          "role": "engineer",
+          "date": "2026-09-25T13:25:47",
+          "text": "Finisher (finish-debloat-catalog), feat/debloat-catalog @ b69acbb. Ready for review.\n\nMerge: origin/main 76952e5 (off-screen snapshot windows 224e152, product site, 0.1.1) merged at 1a7aed5 with no conflicts. `git merge-base --is-ancestor origin/main HEAD` holds after today's fetch. Every window in Sources and Tests goes through SnapshotRenderer.offscreenWindow (grep for NSWindow(/NSPanel(/orderFront/makeKey outside SnapshotRenderer.swift finds nothing).\n\nCommits on top of the merge:\n- 1fde161 Snapshot windows: animationBehavior = .none on the off-screen window. The MacontrolUITests run was hanging at 0% CPU with no summary. A sample showed 64 GCD threads blocked in -[NSAnimation _runBlocking] and 111 live _NSWindowTransformAnimation objects: every order in or out of a window placed outside every display starts an animation that never ends. New test OffscreenWindowAnimationTests orders 80 windows, then checks that GCD still runs a block. This is main's code (SnapshotRenderer): the orchestrator should take it to main on its own, since every UI branch that merges 224e152 can hang the same way.\n- b69acbb AppleProfileTests reads appleContent from the file that declares `static let appleContent`. On feat/privileged-helper, PrivilegedRouting.swift names both words too, and directory order is not fixed.\n\nTests: full swift test 370/370 in 51 suites, 1 known issue (appleContent waits for T-0075). Gated run with MACONTROL_SIMCTL=1 and MACONTROL_LSREGISTER=1: 9/9 in 2 suites. liveListReadsThisMac passed in 0.47 s and fixturesDoNotRegisterWithLaunchServices in 40.7 s. getconf DARWIN_USER_TEMP_DIR held 1144 macontrol-tests-* before the full run and 0 new after. No other swift test was running at the start.\n\nAcceptance:\n1. MET. 29 validator rule cases plus a positive control, and the shipped file passes. appleContent: on this branch it is still a withKnownIssue, because PrivilegedScope is not on main. Checked as text against both helper branches: all 12 catalog /Library paths appear quoted in PrivilegedScope.swift on feat/privileged-helper and on feat/privileged-helper-engine (0 missing). The test becomes a real check, and fails on any missing path, the moment T-0075 merges.\n2. MET (DebloatModelTests / AppleProfileTests: unticked rows, runtimes by mode, second Xcode, Containers in hardcore, sharedWith, unverified note, neverTouch, SF_RESTRICTED without a checkbox).\n3. MET (contentLibrariesAreGone).\n4. MET. The --dry-run probe is recorded here. It used the fixed binary /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl, the app's env allowlist (HOME, USER, LOGNAME, TMPDIR, PATH=/usr/bin:/bin:/usr/sbin:/sbin) and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer, with no xcrun and no shim.\n   - `simctl help runtime` documents `delete (\u003cidentifier>|--notUsedSinceDays \u003cdays>) [--dry-run] [--keep-asset]`, where `--dry-run | -n` is \"Print what images would be deleted without actually deleting anything\". The binary holds the string \"Would delete %@\".\n   - `runtime list -j` shows one deletable image on this Mac today: 9AC467AB-22DE-48A1-89DA-CB942B60CE83, iOS 26.5, 8,494,282,293 B, Ready. The watchOS runtime from the feasibility capture is gone.\n   - `runtime delete 9AC467AB-22DE-48A1-89DA-CB942B60CE83 --dry-run` printed \"Would delete P: 9AC467AB-22DE-48A1-89DA-CB942B60CE83 iOS (26.5 - 23F77) (Ready)\" and exited 0 within 1 s. No admin dialog blocked it.\n   - `runtime list -j` after the dry run is byte-identical to the one before (cmp).\n   - Still for T-0078 with the user: whether a REAL delete asks for administrator rights, and how long it takes (the runner's shared 120 s limit is marked ponytail for that).\n5. MET (DebloatFlowTests: runtimes first with the bundle-first proof M11, a runtime failure keeps Xcode, one uninstall(jobs) per run, cancel message in both modes, one app's failure does not stop the next).\n6. MET (developerToolsNoteOnlyWhenXcodeSelectPointsInside, 5 cases).\n7. MET. DebloatSnapshotTests renders first look, Xcode ticked in Trash and hardcore mode, loading and empty at 900x600 and 1600x1000, light and dark, plus the confirmations and the result (28 PNGs looked at). SS12 to SS16 are attached. The temp count is unchanged, and fixtures do not register with LaunchServices (gated test above).\n\nReview items: round 1 and round 2 highs are fixed (bd32e8f, db86533). Their tests pass in the run above, and nothing new is open at critical or high. These merge notes are still open, because their code is not on main: pass systemAppsSize to SealedAppPanel (DebloatScreen, review-sealed-apps-1) once feat/sealed-apps merges; switch to AdminText.notes and the mode-aware TrashSheet or RemovalRun once feat/hardcore-ui merges (Debloat must not ship before T-0073); the CHANGELOG line from fix round 1 #12.\n\nObserved in the loading snapshot, not changed: while measuring, the footer says \"Tick the apps you want to remove.\" with Remove disabled. 5ac859d chose this on purpose, so the footer never says \"Nothing to remove.\" before the list exists.\n\nI ran no real simctl delete, quit no app, and ran nothing as root."
         }
       ],
       "log": [
@@ -11503,6 +11783,84 @@
           "actor": "fix-debloat-catalog-2",
           "event": "claimed",
           "detail": "assignee: (none) -> fix-debloat-catalog-2"
+        },
+        {
+          "ts": "2026-09-24T10:45:53",
+          "actor": "fix-debloat-catalog-2",
+          "event": "attached",
+          "detail": "attachments/debloat-confirm-trash-default-light-r2.png (SS11: fix round 2, Trash-mode default (runtimes unticked): the runtimes that stay are a note; Kept by macOS left out)"
+        },
+        {
+          "ts": "2026-09-24T10:46:44",
+          "actor": "fix-debloat-catalog-2",
+          "event": "comment",
+          "detail": "Fix round 2 (fix-debloat-catalog-2), feat/debloat-catalog @ db86533 (one commit …"
+        },
+        {
+          "ts": "2026-09-24T10:47:04",
+          "actor": "fix-debloat-catalog-2",
+          "event": "updated",
+          "detail": "(no field changes; session logged)"
+        },
+        {
+          "ts": "2026-09-24T10:47:04",
+          "actor": "fix-debloat-catalog-2",
+          "event": "released",
+          "detail": "assignee was 'fix-debloat-catalog-2'"
+        },
+        {
+          "ts": "2026-09-25T11:56:08",
+          "actor": "finish-debloat-catalog",
+          "event": "claimed",
+          "detail": "assignee: (none) -> finish-debloat-catalog"
+        },
+        {
+          "ts": "2026-09-25T13:25:11",
+          "actor": "finish-debloat-catalog",
+          "event": "attached",
+          "detail": "attachments/debloat-first-900-light-fin.png (SS12: finisher @ b69acbb, first look at 900x600, nothing ticked, CoreSimulator held back (light))"
+        },
+        {
+          "ts": "2026-09-25T13:25:11",
+          "actor": "finish-debloat-catalog",
+          "event": "attached",
+          "detail": "attachments/debloat-trash-1600-dark-fin.png (SS13: finisher, Xcode + runtimes ticked in Trash mode, 1600x1000: 10,67 GB to the Trash + 12,43 GB deleted now (dark))"
+        },
+        {
+          "ts": "2026-09-25T13:25:11",
+          "actor": "finish-debloat-catalog",
+          "event": "attached",
+          "detail": "attachments/debloat-hardcore-900-dark-fin.png (SS14: finisher, hardcore mode at 900x600: frees up to 23,1 GB (dark))"
+        },
+        {
+          "ts": "2026-09-25T13:25:11",
+          "actor": "finish-debloat-catalog",
+          "event": "attached",
+          "detail": "attachments/debloat-confirm-trash-default-dark-fin.png (SS15: finisher, Trash-mode default confirmation: quit, runtimes-stay note, receipts, admin, reset line (dark))"
+        },
+        {
+          "ts": "2026-09-25T13:25:12",
+          "actor": "finish-debloat-catalog",
+          "event": "attached",
+          "detail": "attachments/debloat-empty-900-light-fin.png (SS16: finisher, empty state at 900x600: only locked apps (light))"
+        },
+        {
+          "ts": "2026-09-25T13:25:47",
+          "actor": "finish-debloat-catalog",
+          "event": "comment",
+          "detail": "Finisher (finish-debloat-catalog), feat/debloat-catalog @ b69acbb. Ready for rev…"
+        },
+        {
+          "ts": "2026-09-25T13:25:53",
+          "actor": "finish-debloat-catalog",
+          "event": "updated",
+          "detail": "(no field changes; session logged)"
+        },
+        {
+          "ts": "2026-09-25T13:25:53",
+          "actor": "finish-debloat-catalog",
+          "event": "released",
+          "detail": "assignee was 'finish-debloat-catalog'"
         }
       ],
       "sessions": [
@@ -11541,6 +11899,24 @@
           "durationSec": 1300.0,
           "tokens": null,
           "summary": "verdict=request_changes: CHANGES (round 2, feat/debloat-catalog @ bd32e8f). Export build cold; full swift"
+        },
+        {
+          "ts": "2026-09-24T10:47:04",
+          "agent": "fix-debloat-catalog-2",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": 1500.0,
+          "tokens": null,
+          "summary": "Fix round 2 @ db86533: plan holds CoreSimulator back on every screen (SimRuntimeTool.heldNote, Debloat lifts it); every ticked Xcode is quit and its runtimes listed again, a changed or failed list keeps it; unreadable deletable entries fail the list; partial runtime deletes named; runtimes-stay sheet note; reset line in the result; Kept by macOS out of sheet notes; validator refuses Safari container and launchd folders. 368/368 (1 known), merge with privileged-helper 417 tests, only the 3 reviewer probes fail. 15 mutations caught. Deferred: sheet height and Uninstall notes to T-0073."
+        },
+        {
+          "ts": "2026-09-25T13:25:53",
+          "agent": "finish-debloat-catalog",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "Finisher @ b69acbb: origin/main (off-screen windows, site, 0.1.1) merged clean at 1a7aed5; off-screen window animations off (the UI suite hung on 64 blocked GCD threads) + test; appleContent test reads the declaring file. 370/370 in 51 suites (1 known issue: appleContent until T-0075; 12/12 paths present on both helper branches), gated simctl+LaunchServices 9/9, 0 new temp fixtures. simctl runtime delete --dry-run probe recorded (exit 0, 1 s, no dialog, list unchanged). All 7 criteria met; merge notes (systemAppsSize, AdminText/TrashSheet) wait for their branches on main. SS12-SS16 attached."
         }
       ],
       "attachments": [
@@ -11593,13 +11969,42 @@
           "file": "attachments/debloat-confirm-trash-light-r1.png",
           "label": "SS10: fix round 1, Trash-mode confirmation: History/Finder message, notes in run order, simulator shutdown",
           "addedAt": "2026-09-24T09:57:16"
+        },
+        {
+          "file": "attachments/debloat-confirm-trash-default-light-r2.png",
+          "label": "SS11: fix round 2, Trash-mode default (runtimes unticked): the runtimes that stay are a note; Kept by macOS left out",
+          "addedAt": "2026-09-24T10:45:53"
+        },
+        {
+          "file": "attachments/debloat-first-900-light-fin.png",
+          "label": "SS12: finisher @ b69acbb, first look at 900x600, nothing ticked, CoreSimulator held back (light)",
+          "addedAt": "2026-09-25T13:25:11"
+        },
+        {
+          "file": "attachments/debloat-trash-1600-dark-fin.png",
+          "label": "SS13: finisher, Xcode + runtimes ticked in Trash mode, 1600x1000: 10,67 GB to the Trash + 12,43 GB deleted now (dark)",
+          "addedAt": "2026-09-25T13:25:11"
+        },
+        {
+          "file": "attachments/debloat-hardcore-900-dark-fin.png",
+          "label": "SS14: finisher, hardcore mode at 900x600: frees up to 23,1 GB (dark)",
+          "addedAt": "2026-09-25T13:25:11"
+        },
+        {
+          "file": "attachments/debloat-confirm-trash-default-dark-fin.png",
+          "label": "SS15: finisher, Trash-mode default confirmation: quit, runtimes-stay note, receipts, admin, reset line (dark)",
+          "addedAt": "2026-09-25T13:25:11"
+        },
+        {
+          "file": "attachments/debloat-empty-900-light-fin.png",
+          "label": "SS16: finisher, empty state at 900x600: only locked apps (light)",
+          "addedAt": "2026-09-25T13:25:12"
         }
       ],
       "verdict": "request_changes",
       "verdictBy": "review-debloat-catalog-2",
       "verdictAt": "2026-09-24T10:22:18",
-      "verdictNotes": "CHANGES (round 2, feat/debloat-catalog @ bd32e8f). Export build cold; full swift test 366/366 in 49 suites, 1 known issue (appleContent, T-0075). Scratch merge with feat/privileged-helper 2ecb9af (clean textual merge): 412 tests in 56 suites, 2 failures (item 5), everyLibraryPathIsInPrivilegedScope passes for real there. Probes: scratchpad review-debloat-catalog-2/export/Tests/MacontrolUITests/Review2ProbeTests.swift (branch) and review-debloat-catalog-2/merge/Tests/MacontrolUITests/Review2MergedProbeTests.swift (merge); each passes only while its defect is there. PNGs: review-debloat-catalog-2/png/.\n\n1. HIGH (reachable once T-0075 and T-0073 merge) - the Uninstall screen strands the runtimes. The profile now reaches every plan, and the Uninstall screen gets Xcode's /Library/Developer/PrivateFrameworks (CoreSimulator, the only simctl) preselected with no runtime step and no note. v1's Xcode plan had no /Library/Developer items, so this branch introduces it. On the merge, isPreselected no longer excludes needsAdministrator and a root-owned bundle is no blocker with the helper, and UninstallModel defaults to choices ?? isPreselected (hardcore-ui UninstallModel.swift:278). Probe R1 on the merge: Debloat holds PrivateFrameworks (runtimes=2, chosen=false). The same fixture's Uninstall plan has isPreselected=true and note=nil; uninstall(plan, preselected) removed Xcode.app, CoreSimulator/Caches and PrivateFrameworks with 0 runtime deletes. That is the 12.43 GB AssetsV2 outcome of review 1 #1, one screen over. Fix at the root, in LeftoverFinder/profile: a profile item that holds the runtime tool (PrivateFrameworks) is not preselected while runtimes exist outside a Debloat run (a note that Debloat replaces when its runtime step runs), or Uninstall sends simulatorRuntimes apps to Debloat. The git/clang note is missing there too.\n\n2. MEDIUM - the runtime list is taken at plan time and never taken again before Xcode goes. Probe R3 (branch and merge): a runtime added between beginRemove and confirm (a download finishing) was never deleted; Xcode.app went, PrivateFrameworks went too on the merge, and message=nil. Same class: parse() compactMaps away a deletable entry whose identifier or sizeBytes it can't read, silently. Fix: list again right before the runtime step (after the quit) and keep Xcode when the set differs from the confirmed one; count an unreadable deletable entry as a list failure.\n\n3. MEDIUM (honest copy) - a partly deleted runtime set is reported as not deleted. Probe R2 (runtimes[1] fails): iOS 26.5 (8.49 GB) was deleted (exit 0), then the message is \"Simulator runtimes couldn't be deleted, so Xcode was kept: without it, nothing can delete them.\" and notMoved says \"its simulator runtimes couldn't be deleted.\" Nothing says 8.49 GB are gone for good. aRuntimeFailureKeepsXcodeAndTheOthersGoOn asserts exactly this string. Name what was deleted and what wasn't.\n\n4. MEDIUM (honest copy) - the Trash-mode default sheet (Xcode ticked, runtimes unticked, the default) says \"Xcode and what it installed move to the Trash\" and none of its notes mentions the 12.43 GB of runtimes that stay (review2-confirm-trash-default-light.png). The only mention is the PrivateFrameworks row note in the list. Add a note: \"Its 12.43 GB of simulator runtimes stay on this Mac: only Xcode's tool can delete them.\"\n\n5. LOW (merge note) - cancelledDialogSaysXcodeIsStillInstalled fails 2/2 on the scratch merge: with one remove call, leftovers are sent with requiresGone, so Set(removed) is bundles + leftovers. The disk-state assertions still hold. Rewrite the \"sent\" check for the one-batch contract (each leftover carries its bundle as requiresGone).\n\n6. LOW (evidence) - the fix comment's \"private TMPDIR left 0\" proves nothing. TemporaryDirectory uses NSTemporaryDirectory(), which ignores TMPDIR here: with TMPDIR set to the scratch folder (ps eww shows it on the test process), a fixture printed /private/var/folders/.../T/macontrol-tests-.... My own two complete runs (366 and 412) left 0 Debloat fixture folders in the real $TMPDIR, so criterion 7 holds. The 37 Debloat fixture folders born 10:04 and 10:06 belong to runs that were not mine and are no longer running, so I can't attribute them. The M-0001 lesson from fix-debloat-catalog-1 needs correcting.\n\n7. LOW - aHungToolIsStoppedAndFails keeps the \"\u003c 10 s\" bound that fix-permanent-engine-1 saw fail under load (12.4 s). The status check alone kills the no-timeout mutation (sleep 20 exits 0).\n\n8. LOW (copy) - the list-failure row says \"Try Scan Again\". If the failure persists (the trigger is unverified; for example CoreSimulator is older than an App Store-updated Xcode that was never opened), Scan Again never helps and Xcode can't be removed here. Say what to do: \"Open Xcode once so it can finish installing its components, then Scan Again.\"\n\n9. LOW - the \"sudo xcode-select --reset\" Copy line hides once the result shows (DebloatScreen.swift:329, report == nil), which is when git and clang are broken. Keep it in the result when Xcode went.\n\n10. LOW (UI) - \"Kept by macOS: MobileDeviceDevelopment...\" sits under \"Also happens\", but nothing happens to it. At the sheet's height the list shows 1-2 of 10-11 items (SS10, and my render).\n\n11. LOW (defense in depth) - the validator still accepts ~/Library/Containers/com.apple.Safari/Data (D4 Safari data) and /Library/LaunchDaemons/com.apple.x/y. The shipped file is clean.\n\nVerified OK: the round-1 probes P1-P4, rerun on bd32e8f, all fail now (8 issues), so #1, #3, #5, #6 and #8 are fixed. #2 is fixed as a row note (visible in review2-trash-default-1600-light.png). #4, #7 and #9 are fixed. #10 is deferred to T-0078. #11 and #12 are merge notes. SimRuntime argv, the env allowlist, the UUID guard, live only under MACONTROL_SIMCTL. The demo and test doubles never quit a real app or run simctl (the demo tool returns 1, identity nil). Hardcore is off at launch. There is no Return-to-confirm (TrashSheet's confirm has no shortcut). Commits are Ege BULUT with no AI attribution. Criterion 4's --dry-run is still open (T-0078). I did not run simctl, quit any app, or touch anything outside scratch and temp.",
-      "assignee": "fix-debloat-catalog-2"
+      "verdictNotes": "CHANGES (round 2, feat/debloat-catalog @ bd32e8f). Export build cold; full swift test 366/366 in 49 suites, 1 known issue (appleContent, T-0075). Scratch merge with feat/privileged-helper 2ecb9af (clean textual merge): 412 tests in 56 suites, 2 failures (item 5), everyLibraryPathIsInPrivilegedScope passes for real there. Probes: scratchpad review-debloat-catalog-2/export/Tests/MacontrolUITests/Review2ProbeTests.swift (branch) and review-debloat-catalog-2/merge/Tests/MacontrolUITests/Review2MergedProbeTests.swift (merge); each passes only while its defect is there. PNGs: review-debloat-catalog-2/png/.\n\n1. HIGH (reachable once T-0075 and T-0073 merge) - the Uninstall screen strands the runtimes. The profile now reaches every plan, and the Uninstall screen gets Xcode's /Library/Developer/PrivateFrameworks (CoreSimulator, the only simctl) preselected with no runtime step and no note. v1's Xcode plan had no /Library/Developer items, so this branch introduces it. On the merge, isPreselected no longer excludes needsAdministrator and a root-owned bundle is no blocker with the helper, and UninstallModel defaults to choices ?? isPreselected (hardcore-ui UninstallModel.swift:278). Probe R1 on the merge: Debloat holds PrivateFrameworks (runtimes=2, chosen=false). The same fixture's Uninstall plan has isPreselected=true and note=nil; uninstall(plan, preselected) removed Xcode.app, CoreSimulator/Caches and PrivateFrameworks with 0 runtime deletes. That is the 12.43 GB AssetsV2 outcome of review 1 #1, one screen over. Fix at the root, in LeftoverFinder/profile: a profile item that holds the runtime tool (PrivateFrameworks) is not preselected while runtimes exist outside a Debloat run (a note that Debloat replaces when its runtime step runs), or Uninstall sends simulatorRuntimes apps to Debloat. The git/clang note is missing there too.\n\n2. MEDIUM - the runtime list is taken at plan time and never taken again before Xcode goes. Probe R3 (branch and merge): a runtime added between beginRemove and confirm (a download finishing) was never deleted; Xcode.app went, PrivateFrameworks went too on the merge, and message=nil. Same class: parse() compactMaps away a deletable entry whose identifier or sizeBytes it can't read, silently. Fix: list again right before the runtime step (after the quit) and keep Xcode when the set differs from the confirmed one; count an unreadable deletable entry as a list failure.\n\n3. MEDIUM (honest copy) - a partly deleted runtime set is reported as not deleted. Probe R2 (runtimes[1] fails): iOS 26.5 (8.49 GB) was deleted (exit 0), then the message is \"Simulator runtimes couldn't be deleted, so Xcode was kept: without it, nothing can delete them.\" and notMoved says \"its simulator runtimes couldn't be deleted.\" Nothing says 8.49 GB are gone for good. aRuntimeFailureKeepsXcodeAndTheOthersGoOn asserts exactly this string. Name what was deleted and what wasn't.\n\n4. MEDIUM (honest copy) - the Trash-mode default sheet (Xcode ticked, runtimes unticked, the default) says \"Xcode and what it installed move to the Trash\" and none of its notes mentions the 12.43 GB of runtimes that stay (review2-confirm-trash-default-light.png). The only mention is the PrivateFrameworks row note in the list. Add a note: \"Its 12.43 GB of simulator runtimes stay on this Mac: only Xcode's tool can delete them.\"\n\n5. LOW (merge note) - cancelledDialogSaysXcodeIsStillInstalled fails 2/2 on the scratch merge: with one remove call, leftovers are sent with requiresGone, so Set(removed) is bundles + leftovers. The disk-state assertions still hold. Rewrite the \"sent\" check for the one-batch contract (each leftover carries its bundle as requiresGone).\n\n6. LOW (evidence) - the fix comment's \"private TMPDIR left 0\" proves nothing. TemporaryDirectory uses NSTemporaryDirectory(), which ignores TMPDIR here: with TMPDIR set to the scratch folder (ps eww shows it on the test process), a fixture printed /private/var/folders/.../T/macontrol-tests-.... My own two complete runs (366 and 412) left 0 Debloat fixture folders in the real $TMPDIR, so criterion 7 holds. The 37 Debloat fixture folders born 10:04 and 10:06 belong to runs that were not mine and are no longer running, so I can't attribute them. The M-0001 lesson from fix-debloat-catalog-1 needs correcting.\n\n7. LOW - aHungToolIsStoppedAndFails keeps the \"\u003c 10 s\" bound that fix-permanent-engine-1 saw fail under load (12.4 s). The status check alone kills the no-timeout mutation (sleep 20 exits 0).\n\n8. LOW (copy) - the list-failure row says \"Try Scan Again\". If the failure persists (the trigger is unverified; for example CoreSimulator is older than an App Store-updated Xcode that was never opened), Scan Again never helps and Xcode can't be removed here. Say what to do: \"Open Xcode once so it can finish installing its components, then Scan Again.\"\n\n9. LOW - the \"sudo xcode-select --reset\" Copy line hides once the result shows (DebloatScreen.swift:329, report == nil), which is when git and clang are broken. Keep it in the result when Xcode went.\n\n10. LOW (UI) - \"Kept by macOS: MobileDeviceDevelopment...\" sits under \"Also happens\", but nothing happens to it. At the sheet's height the list shows 1-2 of 10-11 items (SS10, and my render).\n\n11. LOW (defense in depth) - the validator still accepts ~/Library/Containers/com.apple.Safari/Data (D4 Safari data) and /Library/LaunchDaemons/com.apple.x/y. The shipped file is clean.\n\nVerified OK: the round-1 probes P1-P4, rerun on bd32e8f, all fail now (8 issues), so #1, #3, #5, #6 and #8 are fixed. #2 is fixed as a row note (visible in review2-trash-default-1600-light.png). #4, #7 and #9 are fixed. #10 is deferred to T-0078. #11 and #12 are merge notes. SimRuntime argv, the env allowlist, the UUID guard, live only under MACONTROL_SIMCTL. The demo and test doubles never quit a real app or run simctl (the demo tool returns 1, identity nil). Hardcore is off at launch. There is no Return-to-confirm (TrashSheet's confirm has no shortcut). Commits are Ege BULUT with no AI attribution. Criterion 4's --dry-run is still open (T-0078). I did not run simctl, quit any app, or touch anything outside scratch and temp."
     },
     {
       "id": "T-0077",
@@ -11620,7 +12025,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-24T10:21:14",
+      "updatedAt": "2026-09-25T13:36:07",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -11663,6 +12068,24 @@
           "role": "engineer",
           "date": "2026-09-24T10:21:00",
           "text": "Fix round 2 on feat/sealed-apps: 311700b (one commit on 9da56c9). How I handled each item from review-sealed-apps-2:\n1. MEDIUM P1, fixed. Step 4 now says \"if either says enabled, stop here\". The mount step ends in a read-only `ls -d '\u003cmnt>/System/Applications/Chess.app' ...` that lists every app to be deleted, and it says: \"If any of these commands prints an error, such as \"No such file or directory\", stop here and run nothing else.\" The delete step says \"If one prints an error, stop here and don't run the next step.\" `mkdir` became `mkdir -p`, so a folder left over from an earlier try doesn't count as an error. The doc intro says to stop on any error and explains why (failed mount, then a silent rm -rf, then bless on the Data volume). Tests: protectionsOffSkipTheRecoverySteps checks the exact command list (fdesetup, mkdir -p, mount, ls -d, rm, bless) and \"stop here\" in steps 1-3. hostileNamesRoundTripThroughTheShell runs the ls line through /bin/sh and gets exactly the rm targets back. protectionsOnTurnThemOffInRecoveryFirst checks the enabled/stop sentence.\n2. LOW P3, fixed. With either protection on, the guide shows only steps 1-4 (csrutil only) plus the undo steps. Step 4 says the commands that remove the apps appear once the guide is opened again with both protections off. The mount, ls, rm and bless commands are generated only when allowsSealedRemoval is true. The doc now has \"## Steps\" 1-4 and \"## Once both protections are off\" 5-8 (numbered 1-4 in the sheet). protectionsOnTurnThemOffInRecoveryFirst checks that the command list is exactly the 4 csrutil lines.\n3. LOW P2, fixed. `!integrity.rootIsSealedSnapshot` makes the guide unavailable (\"This Mac isn't starting up from a system snapshot, which this guide expects, so macontrol shows no commands. Stop here.\"), so it has no steps and no undo. New test: aRootThatIsNotASnapshotShowsNoSteps (protections on and off).\n4. LOW, fixed in the doc as asked. The step 8 note says man bless lists --bootefi for Mount Mode only for Intel (EFI) Macs, that its Apple silicon section leaves the flag out and says bless may ask for an administrator's password beyond sudo, and that neither is tested, for undo step 1 too. The commands keep the flag and stay tagged Unverified. DESIGN 5.4 is T-0078's (reviewer already commented there).\n5. LOW, fixed. The panel's `.sheet` now presents `SealedAppPanel.guideSheet`, and theCommandsWaitForTheBox hosts `panel(integrity).guideSheet` (protections on and off) instead of building the sheet itself. The `acknowledged:` init parameter stays for snapshots and the Safari/SIP-off views. Mutating guideSheet to `acknowledged: true` fails the test.\n6. NIT, fixed. `git diff --check main...HEAD` is now clean (exit 0).\n7. NIT, fixed. `csr_check` is looked up with dlsym(RTLD_DEFAULT), and a nil lookup reads as protected (`csrCheck?(bit) != 0`). `nm -m .build/debug/Macontrol` no longer lists `_csr_check`, only `_dlsym`. New test: aMissingCsrCheckMeansProtected (a bogus name gives nil and reads as protected; the real lookup works on this Mac).\n8. NIT, fixed. Each Copy button has `.accessibilityLabel(\"Copy \u003ccommand>\")`. The gate test checks the button labels equal `commands.map { \"Copy \\($0)\" }`.\nMutation proofs, all killed, 2 builds: A = no ls check, no stop line in step 4, rootIsSealedSnapshot ignored, panel sheet pre-ticked, missing csr_check counted as allowed; B = no stop line in the mount step, disk commands shown with protections on, plain \"Copy\" label.\nTests: Sealed and SystemIntegrity suites pass without the offscreen patch (27 tests, 3 suites). Full swift test passes 337 tests in 46 suites, with the builder's placement-only offscreen patch applied and removed afterwards; the tree is clean. A private TMPDIR had 0 macontrol-tests-* folders left after the run. I viewed the snapshots at scratchpad fix-sealed-apps-2/shots: steps-all light shows steps 1-4 plus the undo steps, and the SIP-off large dark sheet shows the new mount text. Layout is fine."
+        },
+        {
+          "author": "finish-debloat-catalog",
+          "role": "engineer",
+          "date": "2026-09-25T12:33:38",
+          "text": "Heads-up from finish-debloat-catalog: since main's 224e152 (off-screen snapshot windows), a full swift test can hang at 0% CPU with no summary. Every order in/out of an off-screen window starts an NSAnimation (_NSWindowTransformAnimation) on a GCD thread that never ends outside every display; after 64 of them GCD's constrained threads are gone and the run stops. Sampled: 64 threads in -[NSAnimation _runBlocking] in my run and in the sealed-apps worktree's test process (pid 56616, started 12:03, 0% CPU, 65 such threads at 12:09). Fix on feat/debloat-catalog 1fde161: window.animationBehavior = .none in SnapshotRenderer.offscreenWindow (1 line) + OffscreenWindowAnimationTests (80 windows, then GCD must run a block in 10 s; fails without the line, 12.6 s timed out). Probe: 10 windows add ~10 threads without the line, 0 with it. Cherry-pick 1fde161 if your suite hangs; the orchestrator may want it on main first."
+        },
+        {
+          "author": "finish-sealed-apps",
+          "role": "engineer",
+          "date": "2026-09-25T13:23:59",
+          "text": "Finisher on feat/sealed-apps: 2b0fcb8 merges origin/main 76952e5 (0.1.1, the site, 224e152 offscreen windows). No conflicts; the only Sources change the branch meets is InstalledApp.dateAdded (defaulted, so no call site changed). 96bc399: fixes a hang the merge exposed. With every window now outside every display, each orderFrontRegardless/orderOut starts an _NSWindowTransformAnimation that never ends, and each one parks a dispatch thread in -[NSAnimation _runBlocking]. My first full run stalled after ~42 s with no summary, and a sample showed 64 such threads (the pool limit), with the main thread idle. SnapshotRenderer.offscreenWindow now sets animationBehavior = .none. Proof: an lldb breakpoint on -[NSAnimation startAnimation] over MinimumSizeTests hit 12 times before and 0 after. OffscreenWindowTests asserts .none, and with the line removed it fails 3 of 3 cases. feat/hardcore-ui's live run showed the same 65 threads (commented on T-0073). 8ab58ac: the Sealed test Host uses SnapshotRenderer.offscreenWindow, and its private OffscreenWindow copy is gone. Tests: full swift test 351 tests / 48 suites passed in 78 s, with no offscreen patch needed now. Sealed + SystemIntegrity + OffscreenWindow: 28 tests / 4 suites. My complete runs left 0 macontrol-tests-* folders. The 4 born in the killed run's first seconds were removed. Criteria 1-7 met, no change since 311700b: 1 SystemIntegrityTests; 2 sipOnPanelCopy... in both modes; 3 theCommandsWaitForTheBox via panel.guideSheet, hostileNamesRoundTrip, noLineHasAShellVariable, everyDeletionEnds...; 4 theRiskList...; 5 sipOffShows..., protectionsOffSkip...; 6 theDocMirrorsTheSheet; 7 snapshots re-rendered after the merge (28 PNGs, 900x600, large, sheet, narrow and all steps, light and dark), viewed, and SS8-SS11 attached. Review items: round 2 had 0 critical and 0 high, and all 8 were fixed in 311700b, which has not been re-reviewed yet. Still open, as before: Color.sealedWarning -> Theme.dangerText once T-0073 merges; DESIGN 5.1 still says @_silgen_name while the code uses dlsym (review 2 nit 7, T-0072's doc). .build stays in the worktree for the reviewer (29 GB free)."
+        },
+        {
+          "author": "finish-hardcore-ui",
+          "role": "engineer",
+          "date": "2026-09-25T13:36:07",
+          "text": "For your Color.sealedWarning note: Theme.dangerText (Sources/MacontrolUI/Shell/Theme.swift) is on feat/hardcore-ui and reaches main with the T-0073 PR; HardcoreModeTests.dangerTextOnTheBannerReachesAA measures it from pixels, light and dark. Also: feat/hardcore-ui now carries the same window.animationBehavior = .none hunk as your 96bc399 (identical lines and comment, so the second merge is clean), plus a test that counts NSAnimation starts for offscreen windows."
         }
       ],
       "log": [
@@ -11839,6 +12262,72 @@
           "actor": "fix-sealed-apps-2",
           "event": "released",
           "detail": "assignee was 'fix-sealed-apps-2'"
+        },
+        {
+          "ts": "2026-09-25T12:01:28",
+          "actor": "finish-sealed-apps",
+          "event": "claimed",
+          "detail": "assignee: (none) -> finish-sealed-apps"
+        },
+        {
+          "ts": "2026-09-25T12:33:38",
+          "actor": "finish-debloat-catalog",
+          "event": "comment",
+          "detail": "Heads-up from finish-debloat-catalog: since main's 224e152 (off-screen snapshot …"
+        },
+        {
+          "ts": "2026-09-25T12:35:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0077-finish-sealed-panel-900x600-light.png (SS8: locked panel 900x600 light, after merging main 0.1.1)"
+        },
+        {
+          "ts": "2026-09-25T12:35:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0077-finish-sealed-panel-900x600-dark.png (SS9: locked panel 900x600 dark, after merging main)"
+        },
+        {
+          "ts": "2026-09-25T12:35:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0077-finish-sealed-guide-steps-large-dark.png (SS10: guide after the box, 1180x760 dark (protections on: csrutil steps only))"
+        },
+        {
+          "ts": "2026-09-25T12:35:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0077-finish-sealed-guide-sip-off-900x600-light.png (SS11: guide with protections off (injected), 900x600 light)"
+        },
+        {
+          "ts": "2026-09-25T13:23:59",
+          "actor": "finish-sealed-apps",
+          "event": "comment",
+          "detail": "Finisher on feat/sealed-apps: 2b0fcb8 merges origin/main 76952e5 (0.1.1, the sit…"
+        },
+        {
+          "ts": "2026-09-25T13:24:00",
+          "actor": "finish-sealed-apps",
+          "event": "updated",
+          "detail": "(no field changes; session logged)"
+        },
+        {
+          "ts": "2026-09-25T13:24:00",
+          "actor": "finish-sealed-apps",
+          "event": "released",
+          "detail": "assignee was 'finish-sealed-apps'"
+        },
+        {
+          "ts": "2026-09-25T13:31:33",
+          "actor": "review-sealed-apps-1",
+          "event": "claimed",
+          "detail": "assignee: (none) -> review-sealed-apps-1"
+        },
+        {
+          "ts": "2026-09-25T13:36:07",
+          "actor": "finish-hardcore-ui",
+          "event": "comment",
+          "detail": "For your Color.sealedWarning note: Theme.dangerText (Sources/MacontrolUI/Shell/T…"
         }
       ],
       "sessions": [
@@ -11886,6 +12375,15 @@
           "durationSec": 1500.0,
           "tokens": null,
           "summary": "fix round 2: 311700b fixes all 8 review-2 items (P1 stop lines + ls -d check before rm, P3 disk commands only with both protections off, P2 no commands when / isn't a snapshot, bless --bootefi doc note, panel sheet via guideSheet under test, diff --check clean, csr_check via dlsym, Copy a11y labels). 2 new tests, 8 mutations killed in 2 builds. Full suite 337/46 green."
+        },
+        {
+          "ts": "2026-09-25T13:24:00",
+          "agent": "finish-sealed-apps",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "finisher: merged origin/main (2b0fcb8), fixed the full-suite hang from order-in/out animations of offscreen windows (96bc399, proof: lldb 12->0 NSAnimation starts, OffscreenWindowTests kills the mutant), Sealed Host via SnapshotRenderer.offscreenWindow (8ab58ac). Full swift test 351/48 green. Criteria 1-7 met; snapshots re-rendered and attached (SS8-SS11)."
         }
       ],
       "attachments": [
@@ -11923,12 +12421,33 @@
           "file": "attachments/t0077-sealed-panel-sip-off-900x600-light.png",
           "label": "SS7: locked panel with protections off (injected), light",
           "addedAt": "2026-09-24T08:54:05"
+        },
+        {
+          "file": "attachments/t0077-finish-sealed-panel-900x600-light.png",
+          "label": "SS8: locked panel 900x600 light, after merging main 0.1.1",
+          "addedAt": "2026-09-25T12:35:29"
+        },
+        {
+          "file": "attachments/t0077-finish-sealed-panel-900x600-dark.png",
+          "label": "SS9: locked panel 900x600 dark, after merging main",
+          "addedAt": "2026-09-25T12:35:29"
+        },
+        {
+          "file": "attachments/t0077-finish-sealed-guide-steps-large-dark.png",
+          "label": "SS10: guide after the box, 1180x760 dark (protections on: csrutil steps only)",
+          "addedAt": "2026-09-25T12:35:29"
+        },
+        {
+          "file": "attachments/t0077-finish-sealed-guide-sip-off-900x600-light.png",
+          "label": "SS11: guide with protections off (injected), 900x600 light",
+          "addedAt": "2026-09-25T12:35:29"
         }
       ],
       "verdict": "request_changes",
       "verdictBy": "review-sealed-apps-2",
       "verdictAt": "2026-09-24T10:08:43",
-      "verdictNotes": "review-sealed-apps-2 (round 2) of feat/sealed-apps 9da56c9. CHANGES: 0 critical, 0 high, 1 medium, 4 low, 3 nit.\nRan: main 5910c96 + the branch diff (git apply, clean) in a scratch export. swift build --build-tests OK. Full swift test: 348 tests / 47 suites passed, run with the builder's placement-only offscreen patch so the older suites put no windows on the user's screen. Sealed + SystemIntegrity suites (25) pass without it, and leave 0 macontrol-tests-* folders (before/after listing). Probes: scratchpad review-sealed-apps-2/probes/SealedReview2ProbeTests.swift (P1-P3 fail as described below); review-1's probe file re-run: R1, R3, R4 pass; R2 fails only on its literal \"put them back\" (the fixer's wording, accepted). No destructive path: macontrol only copies text; quoting, the $ ban, the gate and the device parser hold.\nRound-1 dispositions (V5, one comment after verdictAt): 1-7 fixed and checked (fdesetup status prints \"FileVault is Off.\" here, so its Verified tag is honest; the SIP-on sheet shows no Verified badge). 8 moved: the doc is clean, but SealedPanelTests.swift now ends in a blank line (NIT 6).\n1. MEDIUM (probe P1): nothing in the generated steps says \"stop if a command fails\", and nothing checks the mount. If `sudo mount ... '/dev/disk3s3' ~/sysmount` fails (Authenticated Root still on, a stale disk number, or the unverified mount refused on 26), ~/sysmount is an empty folder on the Data volume, `sudo rm -rf` exits 0 without a word, and `sudo bless --mount ~/sysmount --bootefi --create-snapshot` then points at the volume that folder is on. What bless does then is unknown (never run here). Step 4 says \"Both commands should say disabled\" but not \"if either says enabled, stop\". Fix: stop-on-error wording in steps 4-6 (and the doc), plus a read-only check before the rm, e.g. `ls '\u003cmnt>/System/Applications/Chess.app'` (\"if it says No such file, stop\"), or `sudo rm -r` without -f so a missing target shows an error.\n2. LOW (probe P3): with the protections on, the sheet already shows `sudo mount ... '/dev/disk3s3'`, rm and bless with Copy buttons, while its own step 4 says the disk can change after the Recovery restart. Safer default: generate steps 5-7 only when allowsSealedRemoval is true (the reopened guide), and show \"The next commands appear here once both protections are off\" before that. This also removes the P1 path of running them before Recovery.\n3. LOW (probe P2): rootIsSealedSnapshot is computed and never read. With a root that is not a snapshot (flags without MNT_SNAPSHOT, /dev/disk3s3), systemDevice is /dev/disk3s3 and the guide still writes `sudo mount -t apfs '/dev/disk3s3' ~/sysmount` for the volume already mounted at /, then rm and bless (the P1 path). Fix: unavailable when !rootIsSealedSnapshot (\"this Mac isn't starting up from a system snapshot; the guide doesn't cover that\").\n4. LOW: `man bless` on this Mac (Apple silicon) lists `--bootefi` only for EFI systems; its \"OPTIONS FOR APPLE SILICON DEVICES\" Mount Mode has no `--bootefi` and adds `--user`/`--passpromt` (owner credentials may be prompted). Feasibility S6 quoted the EFI section. Step 7 and undo 1 use `--bootefi`, and the doc cites man bless without saying this. Both are tagged Unverified, so: add one sentence to the doc's step 7 note and say bless may ask for a password too; comment posted on T-0078 because DESIGN 5.4's argv has the same flag.\n5. LOW (test coverage, mutation survived): changing SealedAppPanel's .sheet to `SealedGuideSheet(..., acknowledged: true)` passes all 25 Sealed tests. Criterion 3's gate is tested only on a sheet built directly, never on the one the panel presents. Fix: drop `acknowledged:` from the init (tests and snapshots press the box, as theCommandsWaitForTheBox already does), or build the panel's sheet through a static func the test asserts on.\n6. NIT: `git diff --check main...feat/sealed-apps` reports Tests/MacontrolUITests/SealedPanelTests.swift:231 \"new blank line at EOF\" (the fix comment said it was clean).\n7. NIT: `_csr_check` is a strong undefined symbol (nm -m: \"(undefined) external _csr_check (from libSystem)\"). If a macOS release drops the SPI, dyld stops the whole app at launch instead of reading \"protected\". `dlsym(RTLD_DEFAULT, \"csr_check\")` with nil meaning protected makes \"any failure means protected\" literal.\n8. NIT: every Copy button's accessibility label is just \"Copy\", so VoiceOver can't tell which command it copies; `.accessibilityLabel(\"Copy \\(command)\")`.\nSnapshots viewed (fix-sealed-apps-1/shots: panel 900x600 light, steps-all light, SIP-off sheet dark): layout, wrapping, badges and the red title are fine; nothing new to report."
+      "verdictNotes": "review-sealed-apps-2 (round 2) of feat/sealed-apps 9da56c9. CHANGES: 0 critical, 0 high, 1 medium, 4 low, 3 nit.\nRan: main 5910c96 + the branch diff (git apply, clean) in a scratch export. swift build --build-tests OK. Full swift test: 348 tests / 47 suites passed, run with the builder's placement-only offscreen patch so the older suites put no windows on the user's screen. Sealed + SystemIntegrity suites (25) pass without it, and leave 0 macontrol-tests-* folders (before/after listing). Probes: scratchpad review-sealed-apps-2/probes/SealedReview2ProbeTests.swift (P1-P3 fail as described below); review-1's probe file re-run: R1, R3, R4 pass; R2 fails only on its literal \"put them back\" (the fixer's wording, accepted). No destructive path: macontrol only copies text; quoting, the $ ban, the gate and the device parser hold.\nRound-1 dispositions (V5, one comment after verdictAt): 1-7 fixed and checked (fdesetup status prints \"FileVault is Off.\" here, so its Verified tag is honest; the SIP-on sheet shows no Verified badge). 8 moved: the doc is clean, but SealedPanelTests.swift now ends in a blank line (NIT 6).\n1. MEDIUM (probe P1): nothing in the generated steps says \"stop if a command fails\", and nothing checks the mount. If `sudo mount ... '/dev/disk3s3' ~/sysmount` fails (Authenticated Root still on, a stale disk number, or the unverified mount refused on 26), ~/sysmount is an empty folder on the Data volume, `sudo rm -rf` exits 0 without a word, and `sudo bless --mount ~/sysmount --bootefi --create-snapshot` then points at the volume that folder is on. What bless does then is unknown (never run here). Step 4 says \"Both commands should say disabled\" but not \"if either says enabled, stop\". Fix: stop-on-error wording in steps 4-6 (and the doc), plus a read-only check before the rm, e.g. `ls '\u003cmnt>/System/Applications/Chess.app'` (\"if it says No such file, stop\"), or `sudo rm -r` without -f so a missing target shows an error.\n2. LOW (probe P3): with the protections on, the sheet already shows `sudo mount ... '/dev/disk3s3'`, rm and bless with Copy buttons, while its own step 4 says the disk can change after the Recovery restart. Safer default: generate steps 5-7 only when allowsSealedRemoval is true (the reopened guide), and show \"The next commands appear here once both protections are off\" before that. This also removes the P1 path of running them before Recovery.\n3. LOW (probe P2): rootIsSealedSnapshot is computed and never read. With a root that is not a snapshot (flags without MNT_SNAPSHOT, /dev/disk3s3), systemDevice is /dev/disk3s3 and the guide still writes `sudo mount -t apfs '/dev/disk3s3' ~/sysmount` for the volume already mounted at /, then rm and bless (the P1 path). Fix: unavailable when !rootIsSealedSnapshot (\"this Mac isn't starting up from a system snapshot; the guide doesn't cover that\").\n4. LOW: `man bless` on this Mac (Apple silicon) lists `--bootefi` only for EFI systems; its \"OPTIONS FOR APPLE SILICON DEVICES\" Mount Mode has no `--bootefi` and adds `--user`/`--passpromt` (owner credentials may be prompted). Feasibility S6 quoted the EFI section. Step 7 and undo 1 use `--bootefi`, and the doc cites man bless without saying this. Both are tagged Unverified, so: add one sentence to the doc's step 7 note and say bless may ask for a password too; comment posted on T-0078 because DESIGN 5.4's argv has the same flag.\n5. LOW (test coverage, mutation survived): changing SealedAppPanel's .sheet to `SealedGuideSheet(..., acknowledged: true)` passes all 25 Sealed tests. Criterion 3's gate is tested only on a sheet built directly, never on the one the panel presents. Fix: drop `acknowledged:` from the init (tests and snapshots press the box, as theCommandsWaitForTheBox already does), or build the panel's sheet through a static func the test asserts on.\n6. NIT: `git diff --check main...feat/sealed-apps` reports Tests/MacontrolUITests/SealedPanelTests.swift:231 \"new blank line at EOF\" (the fix comment said it was clean).\n7. NIT: `_csr_check` is a strong undefined symbol (nm -m: \"(undefined) external _csr_check (from libSystem)\"). If a macOS release drops the SPI, dyld stops the whole app at launch instead of reading \"protected\". `dlsym(RTLD_DEFAULT, \"csr_check\")` with nil meaning protected makes \"any failure means protected\" literal.\n8. NIT: every Copy button's accessibility label is just \"Copy\", so VoiceOver can't tell which command it copies; `.accessibilityLabel(\"Copy \\(command)\")`.\nSnapshots viewed (fix-sealed-apps-1/shots: panel 900x600 light, steps-all light, SIP-off sheet dark): layout, wrapping, badges and the red title are fine; nothing new to report.",
+      "assignee": "review-sealed-apps-1"
     },
     {
       "id": "T-0078",
@@ -12722,7 +13241,7 @@
       "relatedTo": [],
       "owner": "",
       "createdAt": "2026-09-24T08:36:55",
-      "updatedAt": "2026-09-24T10:23:09",
+      "updatedAt": "2026-09-25T13:30:48",
       "comments": [
         {
           "author": "signing-ci",
@@ -12747,6 +13266,18 @@
           "role": "engineer",
           "date": "2026-09-24T10:23:09",
           "text": "From T-0080 fix round 2 (feat/site 1096c48), about docs/RELEASING.md 'Publishing the download' (your file, so not edited): deploy-site.sh no longer serves any tag with a suffix (v0.1.2-rc.1, v0.2.0-beta.1), whether it comes from gh or from --zip. It serves the newest unsuffixed v\u003cSITE_RELEASE>.x tag and prints a note naming the newer candidate. It no longer writes version.json (that was removed in fix round 1: version, size and SHA-256 are now in the HTML). It reads the screenshots and CHANGELOG.md from the served tag, so the tag must be in the local clone. The 'open decision / do not push a pre-release tag' lines can say that candidates are never served, unless the user decides otherwise (the default is flagged on T-0080). I kept the GitHub pre-release flag out of the filter because v0.1.0 carries it as a preview."
+        },
+        {
+          "author": "gh-templates-fix-1",
+          "role": "engineer",
+          "date": "2026-09-25T11:48:16",
+          "text": "Merge note from chore/github-templates (94e3ce1): CONTRIBUTING.md 'Signing' bullet still says to set SIGN_IDENTITY to an Apple Development identity, which matches bundle-app.sh on main today. When feat/signing-ci merges, point that bullet at the self-signed certificate from scripts/make-signing-cert.sh."
+        },
+        {
+          "author": "finish-signing-ci",
+          "role": "engineer",
+          "date": "2026-09-25T13:30:48",
+          "text": "finish-signing-ci, feat/signing-ci 0830960 (merge origin/main 76952e5) + 0c79671.\nMerge: no conflicts. The branch only adds files, and none of them are in main's diff.\nDispositions since verdictAt (09:56:44), V5:\n- review-2 #1, #2, #3, #5: fixed in 43496c0 (fix-2). Re-checked: test-signing.sh passes. The real keychain search list and the listing and hashes of ~/.config/macontrol are identical before and after.\n- review-2 #4 (merge note), plus fix-site-2 10:23: FIXED in 0c79671. RELEASING.md \"Publishing the download\" now matches main's deploy-site.sh. board-sync.sh runs it too. Only the SITE_RELEASE line (0.1) is served, and a suffixed tag never is. Version, size, date and SHA-256 go into the pages, and there is no version.json. Images and the changelog come from the served tag (git fetch --tags). For v0.2.0, the copy and SITE_RELEASE go in one commit, and until then 0.1.x is served with a note. The \"do not push a pre-release tag\" line is gone. Step 3 says the site never serves a suffixed tag. Proofs, offline: `deploy-site.sh --dry-run --zip Macontrol-0.2.0-beta.1.zip` exits 1 with \"candidates are never served\", and `--zip Macontrol-0.2.0.zip` exits 1 with \"not a 0.1.x release\". dist/ was removed afterwards.\n- New contract from the merge: release.yml's notes awk reads CHANGELOG.md, which came from main. test-signing.sh now extracts the awk from the YAML and runs it on the newest section (0.1.1): it checks that the notes are not empty, do not run into the next \"## \" heading and contain a \"###\" heading. Two mutations, each on a scratch copy of 5 files: exact-heading match gives empty notes, and no section end runs into the next section. Both killed. The unmutated copy passes.\n- signing-ci 08:53 (1), bundle-app.sh wiring: not changed here on purpose. feat/privileged-helper-engine (T-0075) rewrites lines 7-15 and already has `SIGN_IDENTITY=\"${SIGN_IDENTITY:-$([ -x scripts/signing-identity.sh ] && scripts/signing-identity.sh || echo -)}\"` at line 15. Changing the same lines here would only cause a conflict. Until T-0075 merges, RELEASING.md \"Local builds\" gives the explicit SIGN_IDENTITY line. release.yml sets SIGN_IDENTITY itself, so CI does not depend on it.\n- gh-templates-fix-1 11:48 (CONTRIBUTING signing bullet): CONTRIBUTING.md is not on main or on this branch, so there is nothing to edit here. Whichever of chore/github-templates and feat/signing-ci merges second points the bullet at scripts/make-signing-cert.sh. There is no board task for that branch.\n- Site/README copy that says \"signed ad hoc\" (install, full-disk-access, faq, build.html#signing, README:165/178/182): still true for the served 0.1.x. It belongs to T-0080 and T-0071 with the v0.2.0 SITE_RELEASE bump, as commented on 09:36.\nChecks: swift build --build-tests ok. swift test: 324 tests in 45 suites passed (summary line present), with 0 macontrol-tests-* folders born in the run window and no other test run at the time. test-signing.sh ok. This branch has no UI module, so no snapshots.\nStill OPEN, not closable by an agent: (a) the user decision on a separate dev certificate and a fresh release key, which must come before `gh secret set` (round-1 #1, remainder). (b) The checkout SHA 3d3c42e5... for v7.0.1 is not verified online. (c) The two secrets are not set. (d) ~/.config/macontrol still holds the .p12, .b64 and password until the maintainer runs --remove-export."
         }
       ],
       "log": [
@@ -12845,6 +13376,36 @@
           "actor": "fix-site-2",
           "event": "comment",
           "detail": "From T-0080 fix round 2 (feat/site 1096c48), about docs/RELEASING.md 'Publishing…"
+        },
+        {
+          "ts": "2026-09-25T11:48:16",
+          "actor": "gh-templates-fix-1",
+          "event": "comment",
+          "detail": "Merge note from chore/github-templates (94e3ce1): CONTRIBUTING.md 'Signing' bull…"
+        },
+        {
+          "ts": "2026-09-25T13:27:23",
+          "actor": "finish-signing-ci",
+          "event": "claimed",
+          "detail": "assignee: (none) -> finish-signing-ci"
+        },
+        {
+          "ts": "2026-09-25T13:30:48",
+          "actor": "finish-signing-ci",
+          "event": "comment",
+          "detail": "finish-signing-ci, feat/signing-ci 0830960 (merge origin/main 76952e5) + 0c79671…"
+        },
+        {
+          "ts": "2026-09-25T13:30:48",
+          "actor": "finish-signing-ci",
+          "event": "updated",
+          "detail": "(no field changes; session logged)"
+        },
+        {
+          "ts": "2026-09-25T13:30:48",
+          "actor": "finish-signing-ci",
+          "event": "released",
+          "detail": "assignee was 'finish-signing-ci'"
         }
       ],
       "sessions": [
@@ -12892,6 +13453,15 @@
           "durationSec": null,
           "tokens": null,
           "summary": "fix round 2, 43496c0: --remove-export writes, verifies (lock+unlock+find-identity) then deletes; -x import; ditto --norsrc --noextattr; RELEASING.md honest about keychain+password being a key copy; test-signing.sh +signing-identity, no-setup, A, B, -x, unzip round trip (7/8 mutations killed, survivor redundant rc check); swift test 310/310. Open: user decision on dev cert; integrator rewrites Publishing section on feat/site merge."
+        },
+        {
+          "ts": "2026-09-25T13:30:48",
+          "agent": "finish-signing-ci",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "finisher: merged origin/main 76952e5 (0830960, no conflicts); 0c79671 RELEASING 'Publishing the download' rewritten to main's deploy-site.sh (SITE_RELEASE line, suffixed tags never served, no version.json, tag images, board-sync) with offline dry-run proofs; test-signing.sh checks release.yml's notes awk on CHANGELOG.md (2/2 mutations killed). swift test 324/324, test-signing ok, real keychain state unchanged. Open: user decision on dev cert/fresh release key, checkout SHA online check, secrets not set."
         }
       ],
       "verdict": "request_changes",
