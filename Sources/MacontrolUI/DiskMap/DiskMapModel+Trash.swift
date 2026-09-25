@@ -34,6 +34,8 @@ struct ReviewOutcome: Hashable {
     enum Status: Hashable {
         case inTrash
         case deleted
+        /// A permanent removal stopped after the move to the Trash: off the map, with Safety's sentence.
+        case leftInTrash(String)
         case notMoved(String)
     }
 
@@ -114,7 +116,8 @@ extension DiskMapModel {
 
     /// Splices trashed and deleted items out of the tree in memory, without a rescan (F-0052). Each removal
     /// subtracts only the bytes that node was charged, so a hard link counted at 0 B takes 0 B with it (F-0063).
-    /// Refused and failed items stay on the map and in the pile, with the reason.
+    /// Refused and failed items stay on the map and in the pile, with the reason, unless the failure left the item
+    /// in the Trash.
     @discardableResult
     func apply(_ report: TrashReport, mode: DeletionMode = .trash) -> [ReviewOutcome] {
         guard var tree else { return [] }
@@ -131,15 +134,17 @@ extension DiskMapModel {
                 }
                 pile.remove(item.node)
                 outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: .inTrash))
-            case .deleted(let original):
-                // Gone for good: off the map like a trashed item, but not "In Trash".
+            case .deleted(let original), .failed(let original, _) where outcome.isLeftInTrash:
+                // Gone for good, or stopped halfway with the rest in the Trash: off the map like a trashed item, but
+                // not "In Trash", whose bytes it would overstate.
                 guard let item = stagedItem(at: original) else { continue }
                 if !tree.flags(of: item.node).contains(.removed), tree.parent(of: item.node) != nil {
                     tree.removeSubtree(at: item.node)
                     removedAny = true
                 }
                 pile.remove(item.node)
-                outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: .deleted))
+                let status: ReviewOutcome.Status = outcome.isDeleted ? .deleted : .leftInTrash(outcome.words(in: mode))
+                outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: status))
             case .refused(let url, let reason):
                 outcomes.append(notMoved(url, DiskMapText.refusal(reason)))
             case .failed(let url, let message):

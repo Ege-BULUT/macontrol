@@ -27,6 +27,16 @@ extension TrashOutcome {
         if case .failed(_, let message) = self { message.hasPrefix("Partly deleted") } else { false }
     }
 
+    /// A permanent removal that stopped after the item was moved to the Trash: "Partly deleted. …", "Moved to the
+    /// Trash, but not deleted: …" and "Moved to the Trash as "<name>", but nothing in it could be deleted …". The item
+    /// is no longer where it was, so lists and the map drop it; the row keeps Safety's sentence (DESIGN-debloat D3).
+    var isLeftInTrash: Bool {
+        if case .failed(_, let message) = self { message.hasPrefix("Partly deleted") || message.hasPrefix("Moved to the Trash") } else { false }
+    }
+
+    /// No longer at its path: in the Trash, deleted, or stopped halfway with the rest in the Trash.
+    var leftItsPlace: Bool { isRemoved || isLeftInTrash }
+
     /// What happened, in words a user can act on. A permanent batch's other failures are Safety's own sentences
     /// ("Moved to the Trash, but not deleted: …"), shown as they are.
     func words(in mode: DeletionMode) -> String {
@@ -64,8 +74,8 @@ extension RefusalReason {
 extension TrashReport {
     var trashedURLs: Set<URL> { Set(outcomes.filter(\.isTrashed).map(\.url)) }
     var deletedURLs: Set<URL> { Set(outcomes.filter(\.isDeleted).map(\.url)) }
-    /// In the Trash or deleted: either way the item left its place.
-    var removedURLs: Set<URL> { trashedURLs.union(deletedURLs) }
+    /// In the Trash, deleted, or stopped halfway with the rest in the Trash: either way the item left its place.
+    var removedURLs: Set<URL> { Set(outcomes.filter(\.leftItsPlace).map(\.url)) }
 
     /// "Moved 2 of 3 items to the Trash"
     func summary(of count: Int) -> String {

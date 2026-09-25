@@ -341,9 +341,9 @@ private struct TrashSheetRowView: View {
                 }
             }
             Spacer(minLength: 12)
-            // What stayed behind is reachable from here even after its app or row is gone. A partly deleted item's
-            // rest is in the Trash, not at its old path.
-            if isDone && outcome?.isRemoved != true && outcome?.isPartlyDeleted != true {
+            // What stayed behind is reachable from here even after its app or row is gone. An item stopped halfway
+            // is in the Trash, not at its old path.
+            if isDone && outcome?.leftItsPlace != true {
                 Button("Reveal in Finder") { row.url.revealInFinder() }
                     .controlSize(.small)
             }

@@ -256,6 +256,93 @@ import Uninstaller
         #expect(model.trashed.isEmpty && model.pile.items.isEmpty)
     }
 
+    /// Safety's three permanent failures that end with the item in the Trash (review-permanent-engine-2 on T-0073).
+    static func leftInTrash(_ url: URL) -> [TrashOutcome] {
+        let name = url.lastPathComponent
+        return [
+            .failed(url, message: "Partly deleted. 2 items inside could not be removed; the rest is in the Trash as \"\(name)\". "
+                + "Empty the Trash to finish. First: a: Operation not permitted"),
+            .failed(url, message: "Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish."),
+            .failed(url, message: "Moved to the Trash as \"\(name) 2\", but nothing in it could be deleted (a: Operation not permitted). "
+                + "Undo it from History, or empty the Trash to finish."),
+        ]
+    }
+
+    /// An item a permanent batch left in the Trash is off the map, out of the pile and not "In Trash"; its row keeps
+    /// Safety's sentence. A failure that removed nothing keeps the item where it is.
+    @Test(arguments: 0..<3)
+    func diskMapDropsItemsAPermanentBatchLeftInTheTrash(index: Int) {
+        var builder = DiskMapFixtures.Builder()
+        let file = builder.file(ScanTree.root, "a.bin", 4_000)
+        let kept = builder.file(ScanTree.root, "b.bin", 1_000)
+        let model = DiskMapFixtures.model(builder.finished())
+        model.stage(file)
+        model.stage(kept)
+        let (url, keptURL) = (model.pile.items[0].url, model.pile.items[1].url)
+        let outcome = Self.leftInTrash(url)[index]
+        let outcomes = model.apply(TrashReport(batch: UUID(), outcomes: [
+            outcome, .failed(keptURL, message: "It could not be deleted: Operation not permitted."),
+        ]), mode: .permanent)
+        #expect(outcomes.map(\.status) == [
+            .leftInTrash(outcome.words(in: .permanent)), .notMoved(TrashOutcome.failed(keptURL, message: "It could not be deleted: Operation not permitted.").words(in: .permanent)),
+        ])
+        #expect(model.tree?.isRemoved(file) == true && model.tree?.isRemoved(kept) == false)
+        #expect(model.tree?.allocatedSize(of: ScanTree.root) == 1_000)
+        #expect(model.pile.items.map(\.url) == [keptURL] && model.trashed.isEmpty)
+    }
+
+    /// The same outcomes take a row out of Clean's list without counting it "In Trash", and take an app off
+    /// Uninstall's list, with no Reveal in Finder for a path that is empty now.
+    @Test(arguments: 0..<3)
+    func cleanAndUninstallDropItemsAPermanentBatchLeftInTheTrash(index: Int) throws {
+        let rule = CleanModelTests.rule(.safe)
+        let item = CleanModelTests.item(rule, "/Users/demo/Library/Caches/com.example.Big")
+        let clean = CleanModel(cleaner: nil, trash: nil, engine: nil, items: [item])
+        let outcome = Self.leftInTrash(item.url)[index]
+        #expect(outcome.leftItsPlace && !outcome.isRemoved)
+        clean.apply(TrashReport(batch: UUID(), outcomes: [outcome]))
+        #expect(clean.items.isEmpty && clean.selection.isEmpty && clean.inTrash.isEmpty)
+
+        let uninstall = UninstallModel.demo()
+        let plan = try #require(uninstall.plan)
+        uninstall.apply(TrashReport(batch: UUID(), outcomes: Self.leftInTrash(plan.app.url)[index...index].map { $0 }), to: plan)
+        #expect(!uninstall.apps.contains { $0.id == plan.app.id } && uninstall.plan == nil)
+        // A plain failure leaves the app where it was.
+        let other = UninstallModel.demo()
+        other.apply(TrashReport(batch: UUID(), outcomes: [.failed(plan.app.url, message: "It could not be deleted: Busy.")]), to: plan)
+        #expect(other.apps.contains { $0.id == plan.app.id })
+    }
+
+    // MARK: Security 5: an app's containers in hardcore mode
+
+    /// In hardcore mode an app's Containers and Group Containers start unticked, with "May hold documents you made in
+    /// <App>."; other leftovers keep their default. A tick given in Trash mode does not carry over to hardcore mode, and
+    /// one given in hardcore mode, under the warning, stands.
+    @Test func hardcoreModeLeavesAnAppsContainersUnticked() throws {
+        let home = URL(fileURLWithPath: "/Users/demo/Library")
+        let size = ItemMeasurement(allocated: 4_096, logical: 4_096, fileCount: 1, newestModification: nil, isIncomplete: false)
+        let bundle = URL(fileURLWithPath: "/Applications/Probe.app")
+        let app = InstalledApp(url: bundle, name: "Probe", bundleIdentifier: "com.example.probe", version: "1", kind: .thirdParty, identity: nil)
+        func leftover(_ path: String) -> Leftover {
+            Leftover(url: home.appendingPathComponent(path), identity: nil, evidence: .bundleIdentifier, measurement: size, needsAdministrator: false, note: nil)
+        }
+        let container = leftover("Containers/com.example.probe")
+        let group = leftover("Group Containers/ABCDE.com.example.probe")
+        let cache = leftover("Caches/com.example.probe")
+        let model = UninstallModel(uninstaller: nil, apps: [app], plan: UninstallPlan(app: app, appMeasurement: size, leftovers: [container, group, cache], blocker: nil), engine: nil)
+        #expect([container, group, cache].allSatisfy { $0.isPreselected && model.isChosen($0) && model.note(for: $0) == nil })
+
+        model.setChosen(true, container)
+        model.hardcore.isOn = true
+        #expect(model.chosenLeftovers.map(\.url) == [cache.url], "a container was ticked in hardcore mode")
+        #expect(model.note(for: group) == "May hold documents you made in Probe." && model.note(for: cache) == nil)
+
+        model.setChosen(true, group)
+        #expect(model.isChosen(group) && !model.isChosen(container))
+        model.beginUninstall()
+        #expect(model.confirmation?.leftovers.map(\.url) == [group.url, cache.url])
+    }
+
     // MARK: Criterion 9: the restore point
 
     @Test func theRestorePointBoxStartsUncheckedAndNeedsAGigabyte() {

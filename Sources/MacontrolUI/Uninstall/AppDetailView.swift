@@ -119,7 +119,7 @@ struct AppDetailView: View {
                 let members = plan.leftovers.filter { $0.evidence == evidence }
                 Section {
                     ForEach(members) { leftover in
-                        LeftoverRow(leftover: leftover, canChoose: model.canUninstall, usesAdministrator: model.canUseAdministrator, isChosen: Binding(
+                        LeftoverRow(leftover: leftover, note: model.note(for: leftover), canChoose: model.canUninstall, usesAdministrator: model.canUseAdministrator, isChosen: Binding(
                             get: { model.isChosen(leftover) },
                             set: { model.setChosen($0, leftover) }
                         ))
@@ -211,6 +211,8 @@ private struct EvidenceHeader: View {
 
 private struct LeftoverRow: View {
     let leftover: Leftover
+    /// The plan's note, or hardcore mode's documents warning.
+    let note: String?
     /// False for an app that can't be uninstalled: nothing would act on the checkbox.
     let canChoose: Bool
     /// The administrator helper is there: a root-owned leftover gets a checkbox and the "Admin" badge (DESIGN-debloat
@@ -240,7 +242,7 @@ private struct LeftoverRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if let note = leftover.note {
+                if let note {
                     Label(note, systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(Theme.cautionText)

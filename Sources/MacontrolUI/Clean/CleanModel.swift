@@ -262,14 +262,15 @@ public final class CleanModel {
     }
 
     /// Trashed rows, and rows inside a trashed folder, leave the list and show under "In Trash".
-    /// Deleted rows leave the list for good.
+    /// Deleted rows, and permanent removals that stopped with the rest in the Trash, leave the list for good; the
+    /// sheet's row says what is left to empty.
     func apply(_ report: TrashReport) {
         func rows(under urls: Set<URL>) -> [CleanupItem] {
             let paths = urls.map(\.path)
             return items.filter { item in paths.contains { item.url.path == $0 || item.url.path.hasPrefix($0 + "/") } }
         }
         let trashed = rows(under: report.trashedURLs)
-        let goneURLs = Set((trashed + rows(under: report.deletedURLs)).map(\.url))
+        let goneURLs = Set(rows(under: report.removedURLs).map(\.url))
         // A cache recreated and trashed again is one row, not two with the same id.
         inTrash.removeAll { goneURLs.contains($0.url) }
         inTrash += trashed

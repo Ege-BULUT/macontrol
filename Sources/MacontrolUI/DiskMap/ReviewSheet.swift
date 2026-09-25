@@ -188,6 +188,8 @@ struct ReviewSheet: View {
                     switch outcome.status {
                     case .inTrash, .deleted:
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .leftInTrash:
+                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
                     case .notMoved:
                         Image(systemName: "hand.raised.circle.fill").foregroundStyle(.orange)
                     }
@@ -196,7 +198,7 @@ struct ReviewSheet: View {
                         switch outcome.status {
                         case .inTrash: Text("In Trash").font(.caption).foregroundStyle(.secondary)
                         case .deleted: Text("Deleted permanently").font(.caption).foregroundStyle(.secondary)
-                        case .notMoved(let reason): Text(reason).font(.caption).foregroundStyle(Theme.cautionText)
+                        case .leftInTrash(let words), .notMoved(let words): Text(words).font(.caption).foregroundStyle(Theme.cautionText)
                         }
                     }
                     Spacer()

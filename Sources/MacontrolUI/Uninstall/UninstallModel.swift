@@ -251,7 +251,7 @@ public final class UninstallModel {
         // a note ("Also used by X") or lost preselection goes back to the plan's default: unchecked.
         for leftover in plan.leftovers {
             guard let choice = choices[plan.app.url]?[leftover.url], choice.chosen else { continue }
-            if choice.note != leftover.note || choice.wasPreselected != leftover.isPreselected {
+            if choice.note != note(for: leftover) || choice.wasPreselected != leftover.isPreselected {
                 choices[plan.app.url]?[leftover.url] = nil
             }
         }
@@ -275,7 +275,23 @@ public final class UninstallModel {
     /// helper; without it, v1 offers Reveal in Finder for them.
     func isChosen(_ leftover: Leftover) -> Bool {
         guard canUninstall, canChoose(leftover), let plan else { return false }
-        return choices[plan.app.url]?[leftover.url]?.chosen ?? leftover.isPreselected
+        // A check given under another note (hardcore mode switched since) no longer stands.
+        if let choice = choices[plan.app.url]?[leftover.url], choice.note == note(for: leftover) { return choice.chosen }
+        return leftover.isPreselected && documentsNote(for: leftover) == nil
+    }
+
+    /// What the row says about a leftover: the plan's note, or in hardcore mode the documents warning.
+    func note(for leftover: Leftover) -> String? {
+        leftover.note ?? documentsNote(for: leftover)
+    }
+
+    /// In hardcore mode an app's containers are not preselected: they may hold what the user made in the app, and
+    /// nothing puts them back (DESIGN-debloat section 4.5, r2: sec 5).
+    private func documentsNote(for leftover: Leftover) -> String? {
+        guard hardcore.isOn, let plan else { return nil }
+        let path = leftover.url.path
+        let isContainer = path.contains("/Library/Containers/") || path.contains("/Library/Group Containers/")
+        return isContainer ? "May hold documents you made in \(plan.app.name)." : nil
     }
 
     func canChoose(_ leftover: Leftover) -> Bool {
@@ -285,7 +301,7 @@ public final class UninstallModel {
     func setChosen(_ chosen: Bool, _ leftover: Leftover) {
         guard canUninstall, canChoose(leftover), let plan else { return }
         choices[plan.app.url, default: [:]][leftover.url] =
-            LeftoverChoice(chosen: chosen, note: leftover.note, wasPreselected: leftover.isPreselected)
+            LeftoverChoice(chosen: chosen, note: note(for: leftover), wasPreselected: leftover.isPreselected)
     }
 
     func toggle(_ urls: Set<URL>) {
