@@ -47,6 +47,7 @@ body:
         - Disk Map
         - Clean
         - Uninstall
+        - Debloat
         - History
         - Other, or more than one
     validations:

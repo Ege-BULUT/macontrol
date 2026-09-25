@@ -1,14 +1,14 @@
 # Security policy
 
-macontrol moves files to the Trash on the user's behalf, so a bug that makes it touch the wrong file is a security problem, not only a bug.
+macontrol moves and deletes files on the user's behalf, and from 0.2 a helper does some of that as root. If someone other than the user can make it remove, move or expose a file the user did not choose, that is a security problem, not only a bug.
 
 ## Supported versions
 
-Only the latest 0.x preview gets fixes. Older previews are not patched: update to the newest release on the [releases page](https://github.com/Ege-BULUT/macontrol/releases).
+Only the latest 0.x preview gets fixes. Older previews are not patched: download the newest one from [macontrol.vercel.app](https://macontrol.vercel.app/).
 
 | Version | Supported |
 |---|---|
-| Latest 0.x preview (0.1.1 today) | Yes |
+| Latest 0.x preview (see [CHANGELOG.md](CHANGELOG.md)) | Yes |
 | Older previews | No |
 
 ## Reporting a vulnerability
@@ -27,7 +27,7 @@ Please include:
 
 ## What counts
 
-- Anything that can make macontrol delete, move or expose files it should not. For example: getting past the protected-path policy, a link or folder swap between scan and move that sends a different file to the Trash, a crafted file name or cleanup rule that reaches outside its folder, Undo putting an item back somewhere other than where it came from, or the undo journal becoming readable by another user.
+- Anything an attacker can use to make macontrol delete, move or expose files it should not. For example: getting past the protected-path policy, a link or folder swap between scan and move that sends a different file to the Trash, a crafted file name or cleanup rule that reaches outside its folder, Undo putting an item back somewhere other than where it came from, or the undo journal becoming readable by another user.
 - Privilege escalation through the privileged helper planned for 0.2 (`macontrol-priv`). For example: making it act on a path the user did not approve, or running code of your choice as root.
 - Anything that makes macontrol run a program or script it was not built to run.
 

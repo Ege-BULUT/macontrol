@@ -6,3 +6,6 @@ contact_links:
   - name: FAQ
     url: https://macontrol.vercel.app/docs/faq.html
     about: Free space that did not change, "not scanned" folders, skipped items, apps it cannot remove.
+  - name: Security vulnerability
+    url: https://github.com/Ege-BULUT/macontrol/blob/main/SECURITY.md
+    about: Report privately as SECURITY.md describes. Never in a public issue.

@@ -17,9 +17,9 @@ build/Macontrol.app/Contents/MacOS/Macontrol --snapshot /tmp/shots   # every scr
 ```
 
 - **Signing.** Full Disk Access is tied to the app's signature, and an ad-hoc signature changes with every build. Set `SIGN_IDENTITY` to an Apple Development identity to keep the grant across rebuilds.
-- **UI tests run headless.** Any test or tool that draws a window calls `SnapshotRenderer.runHeadless()` first, so it never appears in the Dock or takes focus from your work. The snapshot tests render every screen this way. Set `MACONTROL_SNAPSHOT_DIR=<folder>` to keep their PNGs.
+- **UI tests run headless.** A test or tool that draws a window creates it only through `SnapshotRenderer.offscreenWindow(size:styleMask:)`, never `NSWindow(...)` directly. It calls `runHeadless()` itself and keeps the window outside every display (`OffscreenWindowTests`). With `runHeadless()` alone, AppKit still moves titled windows onto your screen. The snapshot tests render every screen this way. Set `MACONTROL_SNAPSHOT_DIR=<folder>` to keep their PNGs.
 - **Opt-in tests.** A few suites need a fixture or extra time and only run when asked:
-  - `MACONTROL_BENCH_FIXTURE=research/bench/fixtures/tree swift test --filter BenchFixtureTests`
+  - `research/bench/make_fixture.sh && MACONTROL_BENCH_FIXTURE=research/bench/fixtures/tree swift test --filter BenchFixtureTests`. The fixture is gitignored, so a fresh clone builds it first (about 1.7 GB on an APFS volume).
   - `MACONTROL_FD_PRESSURE=1 swift test --filter DescriptorPressureTests`
   - `MACONTROL_DISK_IMAGE_TESTS=1` attaches a small disk image inside the test's own folder.
 

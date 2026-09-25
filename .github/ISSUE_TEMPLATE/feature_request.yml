@@ -29,6 +29,7 @@ body:
         - Disk Map
         - Clean
         - Uninstall
+        - Debloat
         - History
         - Scanning and performance
         - Install and permissions
