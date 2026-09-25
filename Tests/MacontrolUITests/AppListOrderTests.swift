@@ -175,10 +175,8 @@ import Uninstaller
 
     static func host(_ view: some View, size: CGSize = SnapshotRenderer.windowSize) -> NSWindow {
         SnapshotRenderer.runHeadless()
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        let window = SnapshotRenderer.offscreenWindow(size: size)
         window.contentView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         return window
     }

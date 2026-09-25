@@ -51,16 +51,9 @@ public enum SnapshotRenderer {
         let contentSize = size ?? hosting.fittingSize
         hosting.rootView = AnyView(view.frame(width: contentSize.width, height: contentSize.height).environment(\.controlActiveState, .key))
 
-        let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: contentSize),
-            styleMask: size == nil ? [.borderless] : [.titled, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
+        let window = offscreenWindow(size: contentSize, styleMask: size == nil ? [.borderless] : [.titled, .fullSizeContentView])
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = hosting
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         defer { window.orderOut(nil) }
         // Let SwiftUI finish its first passes: lists and split views fill in asynchronously.
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
@@ -72,6 +65,16 @@ public enum SnapshotRenderer {
     /// Keeps a rendering process out of the Dock and from ever taking focus from the user's work.
     public static func runHeadless() {
         NSApplication.shared.setActivationPolicy(.prohibited)
+    }
+
+    /// A window ordered in far off screen, so rendering never shows up over the user's work. Add the content view
+    /// after this call; the window is on screen for the window server but outside every display.
+    public static func offscreenWindow(size: CGSize, styleMask: NSWindow.StyleMask = [.titled]) -> NSWindow {
+        runHeadless()
+        let window = OffscreenWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: styleMask, backing: .buffered, defer: false)
+        window.setFrameOrigin(OffscreenWindow.origin)
+        window.orderFrontRegardless()
+        return window
     }
 
     /// The app icon as an `.iconset` folder for `iconutil` (scripts/bundle-app.sh).
@@ -132,4 +135,12 @@ extension AccessModel {
         }
         return access
     }
+}
+
+/// AppKit moves a titled window back onto a display when it is ordered front, which put every snapshot window
+/// in front of the user for a moment. Keeping the requested frame keeps it off screen.
+final class OffscreenWindow: NSWindow {
+    static let origin = CGPoint(x: -20_000, y: -20_000)
+
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }

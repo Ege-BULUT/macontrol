@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>macontrol: see where your disk space went</title>
+<meta name="description" content="A native macOS app that maps your disk and cleans it up, with every removal going to the Trash first. Free, macOS 14+, Apple Silicon.">
+<link rel="canonical" href="https://macontrol.vercel.app/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/">
+<meta property="og:title" content="macontrol">
+<meta property="og:description" content="See where your disk space went, and get it back safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="style.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="#features">Features</a>
+      <a class="opt" href="#safety">Safety</a>
+      <a href="docs/">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <img class="icon" src="assets/icon.png" width="88" height="88" alt="macontrol app icon">
+      <h1>See where your disk space went, and get it back safely.</h1>
+      <p class="lede">A native Mac app that maps your disk and cleans it up. Everything it removes goes to the Trash first, so you can put it back until you empty the Trash.</p>
+      <div class="get">
+        <a class="btn" href="/downloads/latest.zip">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/></svg>
+          Download for Mac
+        </a>
+        <span class="ver">Version {{version}} preview, {{size}}</span>
+      </div>
+      <p class="req">macOS 14+ · Apple Silicon · Free</p>
+    </div>
+    <figure class="shot">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/shots/disk-map-sunburst-dark.webp">
+        <img src="assets/shots/disk-map-sunburst-light.webp" width="1800" height="1240" fetchpriority="high" alt="The Disk Map: a sunburst of a home folder, with the inspector and the folder's contents on the right and two items waiting in the Discard Pile">
+      </picture>
+    </figure>
+  </div>
+</section>
+
+<section id="features" class="band">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>One window to see it and free it.</h2>
+      <p>Most disk tools either show you where the space went or offer to clean it up. macontrol does both, on one scan engine and one safety layer.</p>
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <h3>Find what takes up the space</h3>
+        <p>A sunburst or a treemap of your home folder, the startup disk or any folder, sized by what each item takes up on disk.</p>
+        <ul class="facts">
+          <li><b>Proportional to bytes.</b> Items too small to draw are grouped into one “smaller items” entry that lists them, so nothing silently disappears.</li>
+          <li><b>Honest numbers.</b> Hard links count once, and a folder macontrol can't read says “not scanned” instead of 0&nbsp;B.</li>
+          <li><b>A Discard Pile.</b> Stage items, then review them together. The review says how much emptying the Trash will actually free.</li>
+          <li><b>Keyboard first.</b> Arrows move, <kbd>Return</kbd> opens, <kbd>Esc</kbd> goes up, <kbd>⌘[</kbd> <kbd>⌘]</kbd> go back and forward, <kbd>Space</kbd> opens Quick Look.</li>
+        </ul>
+      </div>
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/disk-map-treemap-dark.webp">
+          <img src="assets/crops/disk-map-treemap-light.webp" width="505" height="570" loading="lazy" decoding="async" alt="The Disk Map as a treemap: Library, Pictures, Movies, projects, Downloads and Music as nested rectangles with their sizes">
+        </picture>
+      </figure>
+    </div>
+
+    <div class="feature flip">
+      <div class="text">
+        <h3>Clean caches and developer leftovers</h3>
+        <p>A vetted catalog of 27 rules: browser caches, Xcode build data, simulator caches, package manager caches (Homebrew, npm, pip, Cargo, Gradle and more), app caches and logs.</p>
+        <ul class="facts">
+          <li><b>Safe, Review, Manual.</b> Only Safe items start selected. Manual items, such as iPhone backups and Xcode archives, are never cleaned in bulk.</li>
+          <li><b>Hands off live data.</b> Anything changed in the last 10 minutes, or belonging to an app that is running, is skipped, and the reason is shown.</li>
+          <li><b>Rules fail closed.</b> A pattern that reaches outside the folders it is meant for drops its whole rule when the catalog loads.</li>
+        </ul>
+      </div>
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/clean-dark.webp">
+          <img src="assets/crops/clean-light.webp" width="732" height="526" loading="lazy" decoding="async" alt="Clean: app caches, logs and developer data grouped by category, each item labelled Safe, Review or Manual with its size">
+        </picture>
+      </figure>
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <h3>Remove apps with what they leave behind</h3>
+        <p>Leftovers are matched on evidence: the app's bundle identifier, the containers macOS records as its own, and the background jobs that start it. Each group says why it matched.</p>
+        <ul class="facts">
+          <li><b>Cautious by default.</b> Folders that only share the app's name are shown but not selected, and neither is data another app also uses.</li>
+          <li><b>In the right order.</b> The app is asked to quit, never forced. It goes to the Trash first, and the leftovers you chose follow once it is there.</li>
+          <li><b>Sort and filter.</b> Sort by name, date added or size, and show all apps, yours or Apple's. New in 0.1.1.</li>
+        </ul>
+      </div>
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/uninstall-dark.webp">
+          <img src="assets/crops/uninstall-light.webp" width="518" height="572" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
+        </picture>
+      </figure>
+    </div>
+
+    <div class="pair">
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/overview-dark.webp">
+          <img src="assets/crops/overview-light.webp" width="665" height="360" loading="lazy" decoding="async" alt="Overview: disk capacity, the largest folders in the home folder, and how much is safe to clean">
+        </picture>
+        <figcaption>
+          <h3>Overview</h3>
+          <p>Capacity, the largest folders in your home and how much is safe to clean. Purgeable space is shown as a dated note and never counted as free.</p>
+        </figcaption>
+      </figure>
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/history-dark.webp">
+          <img src="assets/crops/history-light.webp" width="665" height="360" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
+        </picture>
+        <figcaption>
+          <h3>History</h3>
+          <p>Every batch macontrol moved, what it frees once you empty the Trash, and an Undo button that puts the whole batch back.</p>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="performance">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Fast, and right to the byte.</h2>
+      <p>The scan engine reads folders in parallel with <code>getattrlistbulk</code> and backs off in Low Power Mode or when the Mac runs hot. Here it is against two fast command-line scanners.</p>
+    </div>
+    <div class="perf">
+      <div>
+        <figure class="bars">
+          <h3>Test tree, 311,437 items with hard links, clones and deep chains</h3>
+          <div class="bar us"><span>macontrol</span><div class="row"><div class="track" style="--w:0.432"><div class="fill"></div></div><span class="val">0.68 s</span></div><small>Exact total</small></div>
+          <div class="bar"><span>dua</span><div class="row"><div class="track" style="--w:0.38"><div class="fill"></div></div><span class="val">0.60 s</span></div><small>8.4&nbsp;MB short: misses hard-linked data</small></div>
+          <div class="bar"><span>ncdu -t8</span><div class="row"><div class="track" style="--w:1.0"><div class="fill"></div></div><span class="val">1.58 s</span></div><small>Exact total</small></div>
+        </figure>
+        <figure class="bars" style="margin-top:32px">
+          <h3>A real projects folder, about 850,000 items</h3>
+          <div class="bar us"><span>macontrol</span><div class="row"><div class="track" style="--w:0.732"><div class="fill"></div></div><span class="val">2.10 s</span></div></div>
+          <div class="bar"><span>dua</span><div class="row"><div class="track" style="--w:0.679"><div class="fill"></div></div><span class="val">1.95 s</span></div></div>
+          <div class="bar"><span>ncdu -t8</span><div class="row"><div class="track" style="--w:1.0"><div class="fill"></div></div><span class="val">2.88 s</span></div><small>All three agree to the byte here.</small></div>
+        </figure>
+      </div>
+      <ul class="figs">
+        <li><strong>2.3× faster</strong>than ncdu, the only other tool that got the test tree exactly right.</li>
+        <li><strong>75 bytes</strong>of memory per item on the test tree. macontrol keeps the whole tree so the map can draw it.</li>
+        <li><strong>No PATH_MAX limit</strong>Each folder is opened relative to its parent, so trees nested deeper than macOS's path limit are still measured.</li>
+      </ul>
+    </div>
+    <p class="fine">Apple M1, 8 cores, 8 GB, macOS 26.6. Warm cache, hyperfine, 5 timed runs, while another process kept one core busy, so compare the tools with each other rather than with your own Mac. macontrol was measured as <code>mcscan</code>, the app's scan engine as a command-line tool. <a href="docs/faq.html#benchmarks">How it was measured</a></p>
+  </div>
+</section>
+
+<section id="safety" class="band">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Built to be <span class="accent">careful</span> with your files.</h2>
+      <p>Nothing is deleted permanently in this version. Here is what happens to every item macontrol removes.</p>
+    </div>
+    <ol class="path">
+      <li><b>You choose it</b>In Clean only Safe items start selected. Every removal ends in a confirmation that lists exactly what will move.</li>
+      <li><b>It is checked again</b>Right before the move, the item is compared with what the scan saw. A file that was replaced, or swapped for a link, stays put.</li>
+      <li><b>Key folders are refused</b>Your home folder and its main folders, Applications, Library and system folders never move.</li>
+      <li><b>It goes to the Trash</b>Through macOS's own Move to Trash. macontrol never empties the Trash: the space comes back when you do.</li>
+      <li><b>You can undo it</b>Each batch is written to a journal. History puts it back while it is still in the Trash and its old place is free.</li>
+    </ol>
+    <div class="guards">
+      <div><h3>Off limits entirely</h3><p>Keychains, <code>~/.ssh</code>, Mail, Messages, photo libraries, privacy data, cloud sync state and <code>/System</code>, contents included.</p></div>
+      <div><h3>Cloud needs consent</h3><p>Items in iCloud Drive or another cloud folder need an extra confirmation, because removing them removes them on every device.</p></div>
+      <div><h3>No admin powers</h3><p>No privileged helper and no password prompt. Root-owned items are marked “Needs admin”, with Reveal in Finder.</p></div>
+      <div><h3>One door</h3><p>Only the Safety module can move files. A test fails if any other code deletes, moves or renames anything.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="next">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Coming next.</h2>
+      <p>Designed and planned, not in the current release. Each ships once it has been tested on real Macs.</p>
+    </div>
+    <ul class="next">
+      <li><h3>Hardcore mode <span class="tag">Planned for 0.2</span></h3><p>An opt-in switch for permanent deletion. It is off every time the app starts, and turning it on asks you to confirm the risk first.</p></li>
+      <li><h3>Admin removals <span class="tag">Planned for 0.2</span></h3><p>Root-owned apps and leftovers, removed after you enter your password, with the safety checks run again as root.</p></li>
+      <li><h3>Apple app debloat <span class="tag">Planned for 0.2</span></h3><p>A checklist of Apple's optional apps, such as GarageBand, iMovie and the iWork apps, with the content they install. Nothing starts selected.</p></li>
+      <li><h3>Live map <span class="tag">Planned for 0.3</span></h3><p>The Disk Map fills in while the scan runs, instead of appearing when it finishes.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section class="cta band">
+  <div class="wrap">
+    <img src="assets/icon.png" width="72" height="72" alt="" loading="lazy">
+    <h2>Try the preview.</h2>
+    <p>macontrol is not notarized yet, so the first launch takes one extra step in System Settings. The <a href="docs/install.html">install guide</a> shows where.</p>
+    <div class="get">
+      <a class="btn" href="/downloads/latest.zip">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/></svg>
+        Download for Mac
+      </a>
+    </div>
+    <p class="req">macOS 14+ · Apple Silicon · Free</p>
+    <p class="req-note">Open source is coming: the code will be published once licensing is finalized.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="docs/">Docs</a>
+      <a href="docs/changelog.html">Changelog</a>
+      <a href="docs/faq.html">FAQ</a>
+      <a href="board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
