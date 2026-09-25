@@ -28,9 +28,10 @@ import Testing
         func leftBehind(suffix: String = "abc123", pid: pid_t, done: Bool = false) throws -> URL {
             let folder = priv.appendingPathComponent("\(batch.uuidString).\(suffix)")
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
-            try PrivilegedRequest(op: .trash, items: items).encoded().write(to: folder.appendingPathComponent("request.json"))
+            let request = try PrivilegedRequest(op: .trash, items: items).encoded()
+            try request.write(to: folder.appendingPathComponent("request.json"))
             var lines = [
-                PrivilegedResultLine(pid: pid), .outcome(0, .trashed(to: "/Users/me/.Trash/Tool.app")),
+                PrivilegedResultLine(pid: pid, sha256: PrivilegedRequest.sha256(request)), .outcome(0, .trashed(to: "/Users/me/.Trash/Tool.app")),
                 .outcome(1, .refused(.identityChanged)),
             ]
             if done { lines.append(PrivilegedResultLine(done: true)) }

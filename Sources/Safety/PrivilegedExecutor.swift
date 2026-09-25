@@ -28,6 +28,8 @@ public struct PrivilegedExecutor: Sendable {
         let user: uid_t
         /// `result.jsonl`, created by this check (`O_EXCL`), open for appending.
         let result: Int32
+        /// The authorized SHA-256, which the child writes in its first line so the app can tell this result from another's.
+        let sha256: String
     }
 
     /// `/` in the helper. Tests point it at a temporary folder standing in for /Applications, /Library and the receipts.
@@ -94,7 +96,7 @@ public struct PrivilegedExecutor: Sendable {
 
         let result = openat(folder, "result.jsonl", O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_APPEND | O_CLOEXEC, 0o644)
         guard result >= 0 else { return .failure(.systemError) }
-        return .success(Checked(request: request, user: user, result: result))
+        return .success(Checked(request: request, user: user, result: result, sha256: sha256))
     }
 
     /// The whole file through its fd, at most one byte past the limit (which then fails to decode).
@@ -112,9 +114,9 @@ public struct PrivilegedExecutor: Sendable {
 
     // MARK: The detached child
 
-    /// Writes `{"pid":N}`, one result line per item in order, then `{"done":true}`, each fsync'd.
+    /// Writes `{"pid":N,"sha256":"…"}`, one result line per item in order, then `{"done":true}`, each fsync'd.
     public func run(_ checked: Checked) {
-        write(PrivilegedResultLine(pid: getpid()), to: checked.result)
+        write(PrivilegedResultLine(pid: getpid(), sha256: checked.sha256), to: checked.result)
         let items = checked.request.items
         // The requesting user's home, never this process's: as root that would be /var/root (section 3.5, sec 6).
         // Looked up after the fork, because the user database may start threads.

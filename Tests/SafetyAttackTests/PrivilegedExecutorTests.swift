@@ -56,7 +56,7 @@ final class RootFixture: @unchecked Sendable {
     }
 
     /// The foreground check, then the child's run, in-process. Returns one line per item, checking that the file starts
-    /// with this process's pid and ends with `done`.
+    /// with this process's pid and the request's SHA-256 (T-0089), and ends with `done`.
     func execute(
         _ items: [PrivilegedRequest.Item], op: DeletionMode = .trash, beforeRename: (@Sendable (String) -> Void)? = nil
     ) throws -> [PrivilegedResultLine] {
@@ -74,7 +74,7 @@ final class RootFixture: @unchecked Sendable {
         close(checked.result)
         let lines = try Data(contentsOf: folder.appendingPathComponent("result.jsonl")).split(separator: 0x0A)
             .map { try JSONDecoder().decode(PrivilegedResultLine.self, from: Data($0)) }
-        #expect(lines.first?.pid == getpid() && lines.last?.done == true)
+        #expect(lines.first == PrivilegedResultLine(pid: getpid(), sha256: PrivilegedRequest.sha256(data)) && lines.last?.done == true)
         let outcomes = lines.filter { $0.index != nil }
         #expect(outcomes.map(\.index) == Array(items.indices))
         return outcomes

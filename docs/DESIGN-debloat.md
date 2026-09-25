@@ -434,7 +434,11 @@ library. `swift run Macontrol` has no bundle, so `PrivilegedLauncher.bundled()` 
    (`O_RDONLY|O_NOFOLLOW`) and requires `fstat` to show a regular file with `st_uid == 0` and `st_nlink == 1` (DEBUG
    tests inject the expected uid). It then polls that fd, never the path, every 100 ms off the main actor, and turns
    each line into a `TrashOutcome` and a journal line (`asAdministrator: true` for helper-trashed items) as it arrives,
-   so the sheet shows progress. The child's first line is `{"pid":N}`; if it has not appeared within 5 s, or the pid
+   so the sheet shows progress. The child's first line is `{"pid":N,"sha256":"…"}`, the hash it was given in argv 3.
+   The app reads no line of a file whose first line names another hash: owner and link count only say root made the
+   file, and a same-user hard link kept from another run is back to one link once the app unlinks its own name
+   (T-0089). Every request carries a random `nonce`, so two runs of the same list never share a hash. If the first
+   line has not appeared within 5 s, or the pid
    is gone (`kill(pid, 0)` → `ESRCH`) before the `done` line, every unanswered item gets
    `.failed(url, "The administrator helper stopped before it got to this.")`. Then the request folder is removed.
 
@@ -443,7 +447,7 @@ library. `swift run Macontrol` has no bundle, so `PrivilegedLauncher.bundled()` 
 `request.json` (the helper is the authority; the app is not trusted):
 
 ```json
-{ "version": 1, "op": "trash" | "permanent",
+{ "version": 1, "op": "trash" | "permanent", "nonce": "<random UUID>",
   "items": [
     { "path": "/Applications/GarageBand.app", "device": 16777232, "inode": 123456, "allocated": 2100000000,
       "keep": [], "bundleIdentifier": "com.apple.garageband10" },
@@ -453,7 +457,8 @@ library. `swift run Macontrol` has no bundle, so `PrivilegedLauncher.bundled()` 
 
 No `restore` op and no `restores` *(r2: sec 2)*. `bundleIdentifier` is optional: the app the item belongs to, absent
 for Clean items *(r2: sec 3c)*. `requiresGone` is optional (§2.1) *(r2: ux 9, sec 4)*. JSON is enough: APFS names
-are valid UTF-8. Limits: 1 MiB, 10,000 items. `result.jsonl`, one fsync'd line each: `{"pid":123}` (from the child),
+are valid UTF-8. Limits: 1 MiB, 10,000 items. `result.jsonl`, one fsync'd line each: `{"pid":123,"sha256":"…"}` (from
+the child; the request's SHA-256, T-0089),
 then `{"index":0,"status":"trashed","to":"…"}` | `{"index":0,"status":"deleted"}` |
 `{"index":0,"status":"refused","reason":"identityChanged"}` | `{"index":0,"status":"failed","message":"…"}`, and last
 `{"done":true}`. Exit codes of the foreground check (`sysexits.h`): 0 detached; 65 `EX_DATAERR` malformed; 77
@@ -559,7 +564,8 @@ shorten the grace; the in-app confirmation is the per-batch gate. The dialog nam
 
 `public func recoverPrivilegedResults()` on `TrashService`, called once at launch by `AppModel.live()`: for every
 `priv/*` folder whose `result.jsonl` opens (`O_NOFOLLOW`) as a regular file with `st_uid == 0` and `st_nlink == 1`
-*(r2: sec 2)*, and whose helper pid is gone, journal every result line not yet in the journal (match on batch and
+*(r2: sec 2)* and whose first line names the SHA-256 of the folder's `request.json` (T-0089), and whose helper pid
+is gone, journal every result line not yet in the journal (match on batch and
 original path; helper-trashed lines with `asAdministrator: true`), then remove the folder. Any other result file is
 removed unread. Folders with a request and no result are removed. So a quit or crash during a root batch still
 leaves an accurate History, and a planted result file adds nothing.
@@ -587,7 +593,8 @@ leaves an accurate History, and a planted result file adds nothing.
   pid/result/done. **A hook rewrites `request.json` right after the foreground check; the outcomes still match the
   original request** *(sec 1)*. `kill -9` mid-batch → the app side reports `helperStopped` for the rest. A leftover
   folder with a root-owned result (injected uid) is merged by `recoverPrivilegedResults()` exactly once; a user-owned
-  or hard-linked result file is ignored *(sec 2)*.
+  or hard-linked result file is ignored *(sec 2)*, and so is a root result kept from another run, live and in
+  recovery, including one from a byte-identical list (T-0089, `PrivilegedAttackTests`).
 - The AppleScript source equals the constant in §3.3; `scrubEnvironment()` keeps exactly the allowlist; the launcher
   throws `.launchFailed` when the environment does not match.
 - A grep test: `Sources/PrivilegedHelper/**` and `Sources/Safety/Privileged*.swift` contain no

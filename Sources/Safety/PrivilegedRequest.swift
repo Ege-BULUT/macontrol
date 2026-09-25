@@ -9,6 +9,9 @@ public struct PrivilegedRequest: Codable, Sendable, Hashable {
     public var version: Int
     public var op: DeletionMode
     public var items: [Item]
+    /// New for every request, so no two requests hash alike: the helper's first result line names that hash, and a
+    /// result kept from an identical earlier request is not this one's (T-0089). The helper does not read it.
+    public var nonce: String?
 
     public struct Item: Codable, Sendable, Hashable {
         /// Canonical: the helper refuses a path that differs from its canonical form.
@@ -37,6 +40,7 @@ public struct PrivilegedRequest: Codable, Sendable, Hashable {
         version = 1
         self.op = op
         self.items = items
+        nonce = UUID().uuidString
     }
 
     static let maximumSize = 1 << 20
@@ -60,10 +64,13 @@ public struct PrivilegedRequest: Codable, Sendable, Hashable {
     }
 }
 
-/// One line of `result.jsonl`, written and fsync'd by the helper's detached child: `{"pid":N}` first, then one line per
-/// item by index, then `{"done":true}`.
+/// One line of `result.jsonl`, written and fsync'd by the helper's detached child: `{"pid":N,"sha256":"…"}` first, then
+/// one line per item by index, then `{"done":true}`.
 struct PrivilegedResultLine: Codable, Hashable {
     var pid: Int32?
+    /// In the first line: the SHA-256 of the request it answers, which the app checks before it reads any other line.
+    /// Owner and link count only say root made the file, not for which request (T-0089).
+    var sha256: String?
     var index: Int?
     /// `trashed`, `deleted`, `refused` or `failed`.
     var status: String?

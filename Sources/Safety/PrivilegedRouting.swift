@@ -60,16 +60,15 @@ public enum PrivilegedRouting {
             return fail(message(for: error as? PrivilegedError ?? .launchFailed(error.localizedDescription)))
         }
 
-        // Opened once and checked once: a file root created, with one link. The path is never read again.
-        guard var results = ResultReader(in: folder.descriptor, owner: resultOwner) else {
-            return fail("The administrator helper's results could not be read.")
-        }
+        // Opened once and checked once: a file root created, with one link, that answers this request. The path is
+        // never read again.
+        guard var results = ResultReader(in: folder.descriptor, owner: resultOwner, request: sha) else { return fail(unreadable) }
         defer { results.close() }
         let started = ContinuousClock.now
         var pid: pid_t?
         var finished = false
         while !finished {
-            let lines = results.lines()
+            guard let lines = results.lines() else { return fail(unreadable) }
             for line in lines {
                 pid = pid ?? line.pid
                 finished = finished || line.done == true
@@ -123,6 +122,8 @@ public enum PrivilegedRouting {
         }
     }
 
+    static let unreadable = "The administrator helper's results could not be read."
+
     static let stoppedOnIt = "The administrator helper stopped while it worked on this, so some or all of it may "
         + "already be gone or in the Trash."
 
@@ -157,8 +158,8 @@ public enum PrivilegedRouting {
     // MARK: Crash recovery (section 3.8)
 
     /// Journals what a helper finished while the app was gone, then removes its request folder. Only a result file that
-    /// root created (regular, `resultOwner`, one link) is read, and only once its helper is gone; any other is removed
-    /// unread. A line already in the journal (same batch and path) is not added again.
+    /// root created (regular, `resultOwner`, one link) for the `request.json` beside it is read, and only once its
+    /// helper is gone; any other is removed unread. A line already in the journal (same batch and path) is not added again.
     static func recover(journalURL: URL, resultOwner: uid_t = 0) {
         let priv = journalURL.deletingLastPathComponent().appendingPathComponent("priv")
         let journal = TrashJournal(url: journalURL)
@@ -166,15 +167,16 @@ public enum PrivilegedRouting {
         for name in (try? FileManager.default.contentsOfDirectory(atPath: priv.path)) ?? [] {
             guard let batch = UUID(uuidString: String(name.prefix(36))), let folder = RequestFolder(existing: name, in: priv) else { continue }
             defer { folder.remove() }
-            guard var results = ResultReader(in: folder.descriptor, owner: resultOwner) else { continue }
+            guard let data = folder.readRequest(), let request = PrivilegedRequest.decode(data),
+                  var results = ResultReader(in: folder.descriptor, owner: resultOwner, request: PrivilegedRequest.sha256(data))
+            else { continue }
             defer { results.close() }
-            let lines = results.lines()
+            guard let lines = results.lines() else { continue }
             if !lines.contains(where: { $0.done == true }), let pid = lines.first(where: { $0.pid != nil })?.pid,
                kill(pid, 0) == 0 || errno == EPERM {
                 folder.keep()
                 continue
             }
-            guard let request = folder.readRequest() else { continue }
             var known = journaled ?? Set(journal.entries().map { "\($0.batch)\n\($0.originalPath)" })
             let entries = lines.compactMap { line -> JournalEntry? in
                 guard let index = line.index, request.items.indices.contains(index) else { return nil }
@@ -230,11 +232,12 @@ final class RequestFolder {
         return data.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, $0.count) } == data.count
     }
 
-    func readRequest() -> PrivilegedRequest? {
+    /// `request.json`'s bytes, at most one past the limit (which then fails to decode).
+    func readRequest() -> Data? {
         let fd = openat(descriptor, "request.json", O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard fd >= 0 else { return nil }
         defer { Darwin.close(fd) }
-        return FileHandle(fileDescriptor: fd).readData(ofLength: PrivilegedRequest.maximumSize + 1).nonEmpty.flatMap(PrivilegedRequest.decode)
+        return FileHandle(fileDescriptor: fd).readData(ofLength: PrivilegedRequest.maximumSize + 1)
     }
 
     /// Leaves the folder for a later launch (its helper is still working).
@@ -250,12 +253,17 @@ final class RequestFolder {
 }
 
 /// `result.jsonl`, opened once: a regular file owned by `owner` (root), with one link, so a file a same-user process
-/// planted or hard-linked is never read. Read through that descriptor only, as the helper appends.
+/// planted or hard-linked is never read. Read through that descriptor only, as the helper appends. Owner and links only
+/// say root made it: a root result kept from another run passes both once the app unlinks its own name, so no line is
+/// believed until the first names the SHA-256 of this request (T-0089).
 struct ResultReader {
     private let descriptor: Int32
+    private let request: String
     private var pending = Data()
+    /// Nil until the first line is read, then whether it names `request`.
+    private var answers: Bool?
 
-    init?(in folder: Int32, owner: uid_t) {
+    init?(in folder: Int32, owner: uid_t, request sha256: String) {
         let fd = openat(folder, "result.jsonl", O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard fd >= 0 else { return nil }
         var info = stat()
@@ -264,10 +272,13 @@ struct ResultReader {
             return nil
         }
         descriptor = fd
+        request = sha256
     }
 
-    /// The complete lines appended since the last call; a line that does not decode is skipped.
-    mutating func lines() -> [PrivilegedResultLine] {
+    /// The complete lines appended since the last call; a line that does not decode is skipped. Nil once the first
+    /// line turns out not to name this request, or not to decode: the file answers another request.
+    mutating func lines() -> [PrivilegedResultLine]? {
+        guard answers != false else { return nil }
         var buffer = [UInt8](repeating: 0, count: 65_536)
         while true {
             let count = read(descriptor, &buffer, buffer.count)
@@ -277,12 +288,11 @@ struct ResultReader {
         guard let last = pending.lastIndex(of: 0x0A) else { return [] }
         let complete = pending[..<last]
         pending = Data(pending[pending.index(after: last)...])
-        return complete.split(separator: 0x0A).compactMap { try? JSONDecoder().decode(PrivilegedResultLine.self, from: Data($0)) }
+        let lines = complete.split(separator: 0x0A).map { try? JSONDecoder().decode(PrivilegedResultLine.self, from: Data($0)) }
+        if answers == nil, let first = lines.first { answers = first?.sha256 == request }
+        return answers == false ? nil : lines.compactMap { $0 }
     }
 
     func close() { Darwin.close(descriptor) }
 }
 
-private extension Data {
-    var nonEmpty: Data? { isEmpty ? nil : self }
-}

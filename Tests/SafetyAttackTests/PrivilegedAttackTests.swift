@@ -90,8 +90,8 @@ import Testing
     }
 
     /// Run B deletes its item permanently. Before the app opens B's result, the kept file of run A is renamed over it
-    /// (the user owns the folder). Nothing in a result file names the request it answers, so the app takes run A's
-    /// "refused: changed since the list" for B's item, which root really deleted, and journals nothing for it.
+    /// (the user owns the folder). Its first line names run A's request, so the app reads none of it and does not
+    /// report run A's "refused: changed since the list" for B's item, which root really deleted (T-0089).
     @Test func aResultKeptFromAnotherRunIsNotTakenForThisOne() async throws {
         let fx = try RootFixture()
         let kept = fx.url("kept/result.jsonl")
@@ -104,13 +104,34 @@ import Testing
         })
 
         #expect(!FileManager.default.fileExists(atPath: b.url.path), "the helper did delete it")
-        withKnownIssue("T-0089: result.jsonl is not bound to its request, so a kept root result of another run is believed") {
-            #expect(answer.outcomes.first?.refusal == nil, "reported \(answer.outcomes) for an item root deleted")
-        }
+        #expect(answer.outcomes == [.failed(b.url, message: PrivilegedRouting.unreadable)], "reported \(answer.outcomes) for an item root deleted")
     }
 
-    /// The same kept file in a request folder the user made, next to a `request.json` the user wrote: crash recovery
-    /// at the next launch journals root's line for whatever path that request names, as moved by the administrator.
+    /// The same replay between two byte-identical lists: run A fails its item because the app bundle it requires gone is
+    /// still there; the user deletes the bundle and runs the same list again, and root trashes it. Run A's kept result
+    /// names a request with the same items, so only the request's nonce tells the two apart (T-0089).
+    @Test func aResultKeptFromAnIdenticalRequestIsNotTakenForThisOne() async throws {
+        let fx = try RootFixture()
+        let kept = fx.url("kept/result.jsonl")
+        try fx.tmp.directory("kept")
+        try fx.file("root/Applications/Tool.app/Contents/Info.plist")
+        try fx.file("root/Library/Caches/com.vendor.tool/x")
+        let item = try PrivilegedHelperTests.item(fx, "root/Library/Caches/com.vendor.tool", requiresGone: "root/Applications/Tool.app")
+        _ = await PrivilegedHelperTests.run(fx, [item], launcher: try Self.launcher(fx) { result in _ = link(result.path, kept.path) })
+        let runA = try String(contentsOf: kept, encoding: .utf8)
+        #expect(runA.contains("Tool.app is still there"), "run A: \(runA)")
+        try FileManager.default.removeItem(at: fx.url("root/Applications/Tool.app"))
+
+        let outcomes = await PrivilegedHelperTests.run(fx, [item], launcher: try Self.launcher(fx) { result in
+            _ = rename(kept.path, result.path)
+        })
+
+        #expect(fx.trashNames == ["com.vendor.tool"], "run B trashed it")
+        #expect(outcomes == [.failed(item.url, message: PrivilegedRouting.unreadable)], "reported run A's outcome: \(outcomes)")
+    }
+
+    /// The same kept file in a request folder the user made, next to a `request.json` the user wrote: its first line
+    /// names run C's request, not this one, so crash recovery at the next launch journals nothing from it (T-0089).
     @Test func recoveryDoesNotJournalAKeptResultAgainstARequestTheUserWrote() async throws {
         let fx = try RootFixture()
         let kept = fx.url("kept/result.jsonl")
@@ -133,9 +154,8 @@ import Testing
 
         let claimed = TrashJournal(url: PrivilegedHelperTests.journal(fx)).entries().filter { $0.originalPath == thesis.path }
         #expect(FileManager.default.fileExists(atPath: thesis.path))
-        withKnownIssue("T-0089: recovery maps a kept root result onto a request.json the user wrote") {
-            #expect(claimed.isEmpty, "History says the administrator moved \(thesis.lastPathComponent): \(claimed)")
-        }
+        #expect(claimed.isEmpty, "History says the administrator moved \(thesis.lastPathComponent): \(claimed)")
+        #expect(PrivilegedHelperTests.requestFolders(fx).isEmpty, "the forged folder is removed unread")
     }
 
     // MARK: The shell line the dialog runs
