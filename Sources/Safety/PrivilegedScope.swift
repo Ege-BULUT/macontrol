@@ -29,6 +29,16 @@ public enum PrivilegedScope {
         "/Library/Developer/PrivateFrameworks",
     ]
 
+    /// macOS's own state below the allowed folders under names no Apple prefix gives away (Risk 8), refused like the
+    /// Apple-named ones. An app can claim any of them as its identifier or name: `org.cups.printers` would hand root
+    /// the printer list (T-0075 review 2). Lowercased first components, keyed by folder.
+    // ponytail: listed from /Library on macOS 26.6; another version may add names. The general guard is that admin
+    // leftovers of apps Apple's signature does not vouch for are never preselected (Uninstaller.plan).
+    static let macOSState: [String: Set<String>] = [
+        "Preferences": ["audio", "directoryservice", "logging", "xsan", "org.cups.printers.plist", "systemmigrationd.plist"],
+        "Application Support": ["app store", "btserver", "crashreporter", "ilifemediabrowser", "livefsd", "script editor"],
+    ]
+
     /// Why root must not act on `path`, or nil when it lies in the allowlist. `path` is canonical; `home` is the
     /// requesting user's canonical home; `bundleIdentifier` is the app the item belongs to, if any. `systemRoot` is `/`
     /// except in tests.
@@ -45,7 +55,8 @@ public enum PrivilegedScope {
         }
         for library in [root + "/Library", home + "/Library"] {
             guard let parts = components(of: path, below: library) else { continue }
-            guard parts.count >= 2, libraryFolders.contains(parts[0]) else { return .protectedLocation(path) }
+            guard parts.count >= 2, libraryFolders.contains(parts[0]),
+                  macOSState[parts[0]]?.contains(parts[1].lowercased()) != true else { return .protectedLocation(path) }
             let isAppleContent = appleContent.contains { path == root + $0 || path.hasPrefix(root + $0 + "/") }
             if !isAppleContent && looksLikeApple(parts[1]) && !belongs(parts[1], to: bundleIdentifier) {
                 return .protectedLocation(path)

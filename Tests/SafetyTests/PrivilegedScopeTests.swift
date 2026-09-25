@@ -46,6 +46,13 @@ import Testing
         ("/Library/Application Support/AppleHelper", nil),
         ("/Users/tester/Library/Caches/com.apple.bird/x", nil),
         ("/Users/tester/Documents/x", nil),
+        // macOS's own state under names without an Apple prefix, which any app can claim (T-0075 review 2, Risk 8).
+        ("/Library/Preferences/org.cups.printers.plist", nil),
+        ("/Library/Preferences/org.cups.printers.plist", "org.cups.printers"),
+        ("/Library/Preferences/Logging/Subsystems/x.plist", nil),
+        ("/Library/Application Support/CrashReporter", nil),
+        ("/Library/Application Support/App Store/x", nil),
+        ("/Library/Application Support/btserver", nil),
     ]
 
     @Test(arguments: allowed.indices) func allowedPath(index: Int) {

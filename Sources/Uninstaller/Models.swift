@@ -80,7 +80,8 @@ public struct Leftover: Sendable, Identifiable, Hashable {
         self.launchdLabel = launchdLabel
     }
 
-    /// Items that need an administrator are preselected too: the UI disables them when there is no helper.
+    /// Items that need an administrator are preselected too (the UI disables them when there is no helper), but only
+    /// for an Apple App Store app: `Uninstaller.plan` gives the others a note, since any app can claim a name.
     public var isPreselected: Bool { evidence.preselected && note == nil }
 }
 

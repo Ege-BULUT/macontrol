@@ -320,10 +320,14 @@ struct TrashBatch {
             current = error.userInfo[NSUnderlyingErrorKey] as? NSError
         }
         if current?.code == Int(EPERM) && (path as NSString).pathExtension.lowercased() == "app" {
-            return "macOS blocked this. Allow Macontrol in System Settings > Privacy & Security > App Management."
+            return appManagementBlocked
         }
         return error.localizedDescription
     }
+
+    /// Also the administrator helper's words for the same EPERM. Unverified which app System Settings lists for the
+    /// helper (T-0078).
+    static let appManagementBlocked = "macOS blocked this. Allow Macontrol in System Settings > Privacy & Security > App Management."
 
     /// The move went through a link swapped in on the way, so something else reached the Trash. It goes back where
     /// it came from, which the path still leads to; if that fails it is journaled, so Undo can put it back.

@@ -142,7 +142,7 @@ public struct PrivilegedExecutor: Sendable {
     func process(
         _ item: PrivilegedRequest.Item, op: DeletionMode, home: String, policy: ProtectionPolicy, trash: Int32, note: inout String?
     ) -> HelperOutcome {
-        if let refusal = refusal(of: item, home: home, policy: policy) { return refusal }
+        if let refusal = refusal(of: item, home: home, policy: policy) { return Self.asRoot(refusal) }
         let path = item.path
         var info = stat()
         let isFolder = lstat(path, &info) == 0 && info.st_mode & S_IFMT == S_IFDIR
@@ -150,7 +150,7 @@ public struct PrivilegedExecutor: Sendable {
         var erase = op == .permanent && policy.trashOnlyReason(canonical: path) == nil && info.st_flags & UInt32(SF_DATALESS) == 0
         // Root never clears a flag: a locked or system-protected entry inside keeps the whole item.
         switch ProtectionPolicy.removalBlocker(inside: path, forErase: erase) {
-        case .refused(let reason)?: return .refused(reason)
+        case .refused(let reason)?: return Self.asRoot(.refused(reason))
         case .dataless?: erase = false
         case nil: break
         }
@@ -164,6 +164,14 @@ public struct PrivilegedExecutor: Sendable {
         }
         return outcome
     }
+
+    /// "Needs an administrator" is false right after the password: as root only privacy protection (TCC) or SIP answers
+    /// EACCES or EPERM, so the item was out of the helper's reach too (T-0075 review 2).
+    static func asRoot(_ outcome: HelperOutcome) -> HelperOutcome {
+        outcome == .refused(.needsAdministrator) ? .failed(rootKeptOut) : outcome
+    }
+
+    static let rootKeptOut = "Not removed: macOS kept even the administrator out of part of it (privacy protection or System Integrity Protection)."
 
     /// The sink: the Trash, or a permanent delete (section 3.5 step 5).
     private func remove(_ path: String, identity: FileIdentity, erase: Bool, isFolder: Bool, home: String, trash: Int32) -> HelperOutcome {
@@ -231,7 +239,7 @@ public struct PrivilegedExecutor: Sendable {
     /// Boots out `system/<Label>` only when launchd says it loaded that job from this very file. A stale plist can carry
     /// the label of another daemon, and `launchctl print` "is NOT API", so anything else only skips the bootout: the file
     /// still goes, and the job stops at the next restart (section 3.5 step 4, Risk 7), which `note` then says whenever
-    /// launchd may be running it: a label it knows, or one this check cannot pass to launchctl. Nil when the item may go on.
+    /// launchd may be running it: unless launchctl said it has no such job. Nil when the item may go on.
     private func stopDaemon(_ path: String, note: inout String?) -> HelperOutcome? {
         // launchd loads no job from a plist without a Label.
         guard let data = FileManager.default.contents(atPath: path),
@@ -246,7 +254,8 @@ public struct PrivilegedExecutor: Sendable {
             $0.trimmingCharacters(in: .whitespaces) == "path = \(path)"
         }
         guard loadedFromHere else {
-            if printed.status == 0 { note = Self.untilRestart }
+            // 113: launchd has no such job. Anything else, launchctl failing to run included, may leave it running.
+            if printed.status != 113 { note = Self.untilRestart }
             return nil
         }
         let status = launchctl(["bootout", "system/\(label)"]).status
@@ -277,6 +286,8 @@ public struct PrivilegedExecutor: Sendable {
             let code = errno
             attempt += 1
             if code == EXDEV { return .failed("Only items on the startup disk can be moved to the Trash as administrator.") }
+            // App Management answers EPERM for an app bundle, root or not, as it does in-process (DESIGN 2.4).
+            if code == EPERM && (name as NSString).pathExtension.lowercased() == "app" { return .failed(TrashBatch.appManagementBlocked) }
             guard code == EEXIST, attempt < 20 else { return .failed(String(cString: strerror(code))) }
             trashed = Self.finderName(name, attempt: attempt)
         }

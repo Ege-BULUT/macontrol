@@ -59,10 +59,14 @@ public final class Uninstaller: Sendable {
         var leftovers: [Leftover] = []
         for candidate in found.candidates {
             try Task.checkCancellation()
+            // Any Info.plist can claim an identifier, `org.cups.printers` (the printer list) included, and only root
+            // would remove what matched it. So unless Apple's signature vouched for the app, the user ticks those
+            // themselves, and the note says why (T-0075 review 2, Risk 8).
+            let unvouched = candidate.needsAdministrator && candidate.evidence.preselected && app.kind != .appleAppStore
             leftovers.append(Leftover(
                 url: candidate.url, identity: FileIdentity(url: candidate.url), evidence: candidate.evidence,
                 measurement: await measure(candidate.url), needsAdministrator: candidate.needsAdministrator,
-                note: candidate.note, launchdLabel: candidate.launchdLabel
+                note: candidate.note ?? (unvouched ? Self.unvouchedNote(app.name) : nil), launchdLabel: candidate.launchdLabel
             ))
         }
         try Task.checkCancellation()
@@ -74,6 +78,10 @@ public final class Uninstaller: Sendable {
             bundleLaunchdLabels: found.bundleLaunchdLabels,
             notes: found.notes
         )
+    }
+
+    static func unvouchedNote(_ app: String) -> String {
+        "Needs an administrator, and macontrol can't confirm it belongs to \(app). Check it before you remove it."
     }
 
     /// One app: `uninstall(jobs)` with one job, whose skip reason is thrown. The report carries the one batch.

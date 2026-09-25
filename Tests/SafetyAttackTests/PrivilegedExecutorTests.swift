@@ -184,6 +184,7 @@ extension PrivilegedResultLine {
     @Test(arguments: [
         ("match", "trashed", true, false), ("otherPath", "trashed", false, true), ("notLoaded", "trashed", false, false),
         ("bootoutFails", "failed", true, false), ("bootoutNotLoaded", "trashed", true, false), ("badLabel", "trashed", false, true),
+        ("noLaunchctl", "trashed", false, true), ("printFails", "trashed", false, true),
     ])
     func launchDaemonIsBootedOutOnlyWhenLaunchdLoadedThisPlist(scenario: String, status: String, bootsOut: Bool, noted: Bool) throws {
         let fx = try RootFixture()
@@ -195,6 +196,9 @@ extension PrivilegedResultLine {
         switch scenario {
         case "otherPath": fx.printed = (0, loaded.replacingOccurrences(of: plist.path, with: plist.path + ".old"))
         case "notLoaded", "badLabel": fx.printed = (113, "Could not find service")
+        // launchctl did not start, or print failed for another reason: launchd may still run the job (review 2 item 3).
+        case "noLaunchctl": fx.printed = (-1, "")
+        case "printFails": fx.printed = (5, "")
         default: fx.printed = (0, loaded)
         }
         fx.bootoutStatus = scenario == "bootoutFails" ? 5 : scenario == "bootoutNotLoaded" ? 3 : 0
@@ -304,6 +308,42 @@ extension PrivilegedResultLine {
         #expect(Sandbox.difference(fx.tree(), before) == [])
     }
 
+    /// App Management answers EPERM when an app bundle it guards is moved, which is the helper's main job (Apple's App
+    /// Store apps in /Applications). The helper says what the in-process move says, in both modes; other items keep
+    /// the system's words. A user-set UF_IMMUTABLE after the checks gives the same EPERM (T-0075 review 2 item 1).
+    @Test(arguments: [DeletionMode.trash, .permanent])
+    func anAppMacOSWillNotLetGoSaysAppManagement(op: DeletionMode) throws {
+        let fx = try RootFixture()
+        try fx.file("root/Applications/Tool.app/Contents/MacOS/Tool")
+        try fx.file("root/Library/Application Support/Vendor/X/state")
+        let paths = ["root/Applications/Tool.app", "root/Library/Application Support/Vendor/X"].map { fx.url($0).path }
+        defer { withExtendedLifetime(fx) { paths.forEach { _ = chflags($0, 0) } } }
+        let before = fx.tree()
+
+        let lines = try fx.execute(try ["root/Applications/Tool.app", "root/Library/Application Support/Vendor/X"].map { try fx.item($0) },
+                                   op: op, beforeRename: { _ = chflags($0, UInt32(UF_IMMUTABLE)) })
+
+        #expect(lines.map(\.status) == ["failed", "failed"], "\(lines)")
+        #expect(lines.map(\.message) == [TrashBatch.appManagementBlocked, "Operation not permitted"])
+        paths.forEach { _ = chflags($0, 0) }
+        #expect(Sandbox.difference(fx.tree(), before) == [])
+    }
+
+    /// As root, "needs an administrator" can only mean privacy protection or SIP, so after the password the helper
+    /// never says it (T-0075 review 2 item 4). A folder this user cannot write stands in for one root cannot reach.
+    @Test func whatRootCannotReachIsNotCalledAdminOnly() throws {
+        let fx = try RootFixture()
+        let sub = try fx.file("root/Library/Application Support/Vendor/X/sub/state").deletingLastPathComponent()
+        #expect(chmod(sub.path, 0o555) == 0)
+        defer { withExtendedLifetime(fx) { _ = chmod(sub.path, 0o755) } }
+        let before = fx.tree()
+
+        let lines = try fx.execute([try fx.item("root/Library/Application Support/Vendor/X")], op: .permanent)
+
+        #expect(lines.first?.status == "failed" && lines.first?.message == PrivilegedExecutor.rootKeptOut, "\(lines)")
+        #expect(Sandbox.difference(fx.tree(), before) == [])
+    }
+
     /// Without a Trash the user owns, nothing moves.
     @Test func noUsableTrashMovesNothing() throws {
         let fx = try RootFixture()
@@ -377,6 +417,8 @@ extension PrivilegedResultLine {
     @Test(arguments: [
         ("/Library/Preferences/SystemConfiguration/preferences.plist", "/Library/Preferences/SystemConfiguration", true),
         ("/Library/Application Support/Apple/ParentalControls", "/Library/Application Support/Apple/ParentalControls", false),
+        // macOS's printer list: root-owned, no flags, no rootless attribute, and an app may claim its name (review 2).
+        ("/Library/Preferences/org.cups.printers.plist", "/Library/Preferences/org.cups.printers.plist", false),
     ])
     func liveConfigurationIsAProtectedLocation(path: String, place: String, waitsForTheEngine: Bool) throws {
         let fx = try RootFixture()

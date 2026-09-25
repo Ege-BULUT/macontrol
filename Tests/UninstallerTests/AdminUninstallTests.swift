@@ -50,7 +50,7 @@ import Testing
         var jobs: [UninstallJob] = []
         for name in ["Alpha", "Beta", "Gamma"] {
             let plan = try await Self.plan(fx, name)
-            jobs.append(UninstallJob(plan: plan, leftovers: Set(plan.leftovers.filter(\.isPreselected).map(\.url))))
+            jobs.append(UninstallJob(plan: plan, leftovers: Set(plan.leftovers.map(\.url))))
         }
 
         let result = await Self.uninstaller(fx).uninstall(jobs, mode: .trash)
@@ -109,7 +109,8 @@ import Testing
         let plan = try await Self.plan(fx, "Suite")
         #expect(plan.blocker == nil)
         let chosen = try #require(plan.leftovers.first { $0.url == leftover.deletingLastPathComponent() })
-        #expect(chosen.needsAdministrator && chosen.isPreselected)
+        // A third-party app: the user ticks its admin leftovers (T-0075 review 2).
+        #expect(chosen.needsAdministrator && !chosen.isPreselected && chosen.note == Uninstaller.unvouchedNote("Suite"))
         _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: [chosen.url])
 
         let sent = Self.items(fx.recorder.events.last)
@@ -177,9 +178,9 @@ import Testing
     }
 
     /// sec 3c (T-0075 review 1): the first-component rule opens only for an identifier Apple's signature vouched for.
-    /// A bundle that merely claims `com.apple.loginwindow` in its Info.plist gets macOS's own preferences as preselected
-    /// admin leftovers, but they go without the identifier, so the root allowlist refuses them before any dialog. The
-    /// same plan as an Apple App Store app sends it.
+    /// A bundle that merely claims `com.apple.loginwindow` in its Info.plist gets macOS's own preferences as admin
+    /// leftovers (not preselected, review 2), and if the user ticks them they go without the identifier, so the root
+    /// allowlist refuses them before any dialog. The same plan as an Apple App Store app sends it.
     @Test(arguments: [
         ("com.apple.loginwindow", ["com.apple.loginwindow.plist"]),
         ("com.apple.networkextension", ["com.apple.networkextension.control.plist", "com.apple.networkextension.necp.plist"]),
@@ -192,7 +193,7 @@ import Testing
             let targets = files.map { fx.root.appendingPathComponent("Library/Preferences/\($0)") }
             var plan = try await Self.plan(fx, "Junk")
             #expect(plan.app.kind == .thirdParty)
-            #expect(targets.allSatisfy { target in plan.leftovers.contains { $0.url == target && $0.isPreselected && $0.needsAdministrator } })
+            #expect(targets.allSatisfy { target in plan.leftovers.contains { $0.url == target && !$0.isPreselected && $0.needsAdministrator } })
             plan.app.kind = kind
 
             _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: Set(targets))
@@ -210,6 +211,32 @@ import Testing
                 )
                 #expect((refusal == nil) == (kind == .appleAppStore), "\(kind) \(name)")
             }
+        }
+    }
+
+    /// Review 2 item 2 (Risk 8): a third-party Info.plist that claims `org.cups.printers` gets macOS's printer list as an
+    /// admin leftover. It is not preselected, with a note, because nothing vouches for the claim; only an app Apple's
+    /// signature vouched for keeps it ticked. Ticked anyway, the root allowlist refuses it, identifier or not.
+    @Test func aClaimedSystemNameIsNeitherPreselectedNorAllowed() async throws {
+        let fx = try Fixture()
+        try fx.app("Printers", id: "org.cups.printers")
+        let printers = try fx.file("root/Library/Preferences/org.cups.printers.plist")
+        let uninstaller = Self.uninstaller(fx)
+        var app = try #require(try await uninstaller.installedApps().first { $0.name == "Printers" })
+        #expect(app.kind == .thirdParty)
+
+        let plan = try await uninstaller.plan(for: app)
+        let listed = try #require(plan.leftovers.first { $0.url == printers })
+        #expect(listed.evidence == .bundleIdentifier && listed.needsAdministrator)
+        #expect(!listed.isPreselected && listed.note == Uninstaller.unvouchedNote("Printers"))
+        app.kind = .appleAppStore
+        #expect(try await uninstaller.plan(for: app).leftovers.first { $0.url == printers }?.isPreselected == true)
+
+        let root = try ProtectedPaths.canonicalPath(of: fx.root)
+        let home = try ProtectedPaths.canonicalPath(of: fx.home)
+        for id in [nil, "org.cups.printers"] {
+            let refusal = PrivilegedScope.refusal(canonical: root + "/Library/Preferences/org.cups.printers.plist", home: home, bundleIdentifier: id, systemRoot: root)
+            #expect(refusal != nil, "\(id ?? "-")")
         }
     }
 

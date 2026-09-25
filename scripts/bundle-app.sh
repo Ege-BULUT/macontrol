@@ -12,7 +12,17 @@ cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
 BUNDLE_ID="${BUNDLE_ID:-dev.macontrol.Macontrol}"
-SIGN_IDENTITY="${SIGN_IDENTITY:-$([ -x scripts/signing-identity.sh ] && scripts/signing-identity.sh || echo -)}"
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+    SIGN_IDENTITY=-
+    # A lookup that fails must not turn into a silent ad-hoc build: that loses Full Disk Access with no signal.
+    if [ -e scripts/signing-identity.sh ]; then
+        SIGN_IDENTITY="$(scripts/signing-identity.sh)" && [ -n "$SIGN_IDENTITY" ] \
+            || { echo "scripts/signing-identity.sh failed. Fix it, or set SIGN_IDENTITY=- to sign ad hoc." >&2; exit 1; }
+    fi
+fi
+if [ "$SIGN_IDENTITY" = - ]; then
+    echo "Signing ad hoc: Full Disk Access must be granted again after this build (docs/RELEASING.md)." >&2
+fi
 VERSION="0.1.1"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
