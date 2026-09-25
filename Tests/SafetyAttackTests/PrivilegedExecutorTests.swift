@@ -179,12 +179,13 @@ extension PrivilegedResultLine {
     }
 
     /// sec 11: `system/<Label>` is booted out only when `launchctl print` names this very plist. Anything else skips the
-    /// bootout and still removes the file; a failed bootout keeps it.
+    /// bootout and still removes the file; a failed bootout keeps it. Where launchd may still run the job (it knows the
+    /// label, or the label cannot be asked about), the line says it runs until the next restart (3.5 step 4, Risk 7).
     @Test(arguments: [
-        ("match", "trashed", true), ("otherPath", "trashed", false), ("notLoaded", "trashed", false),
-        ("bootoutFails", "failed", true), ("bootoutNotLoaded", "trashed", true), ("badLabel", "trashed", false),
+        ("match", "trashed", true, false), ("otherPath", "trashed", false, true), ("notLoaded", "trashed", false, false),
+        ("bootoutFails", "failed", true, false), ("bootoutNotLoaded", "trashed", true, false), ("badLabel", "trashed", false, true),
     ])
-    func launchDaemonIsBootedOutOnlyWhenLaunchdLoadedThisPlist(scenario: String, status: String, bootsOut: Bool) throws {
+    func launchDaemonIsBootedOutOnlyWhenLaunchdLoadedThisPlist(scenario: String, status: String, bootsOut: Bool, noted: Bool) throws {
         let fx = try RootFixture()
         let label = scenario == "badLabel" ? "com.vendor.helper;reboot" : "com.vendor.helper"
         let plist = try fx.tmp.file("root/Library/LaunchDaemons/com.vendor.helper.plist")
@@ -205,6 +206,41 @@ extension PrivilegedResultLine {
         let bootout = ["bootout", "system/com.vendor.helper"]
         #expect(fx.launchctlCalls == (scenario == "badLabel" ? [] : bootsOut ? [print, bootout] : [print]))
         #expect(FileManager.default.fileExists(atPath: plist.path) == (status == "failed"))
+        #expect(lines.first?.note == (noted ? "Its background service may keep running until the next restart." : nil))
+    }
+
+    /// The same skipped bootout in permanent mode: the plist is deleted in place and the line still says so.
+    @Test func aDeletedDaemonWhoseBootoutWasSkippedSaysItStillRuns() throws {
+        let fx = try RootFixture()
+        let plist = try fx.tmp.file("root/Library/LaunchDaemons/com.vendor.helper.plist")
+        try PropertyListSerialization.data(fromPropertyList: ["Label": "com.vendor.helper"], format: .xml, options: 0).write(to: plist)
+        fx.printed = (0, "system/com.vendor.helper = {\n\tstate = running\n}\n")
+
+        let lines = try fx.execute([try fx.item("root/Library/LaunchDaemons/com.vendor.helper.plist")], op: .permanent)
+
+        #expect(lines.map(\.status) == ["deleted"])
+        #expect(lines.first?.note == PrivilegedExecutor.untilRestart)
+        #expect(fx.launchctlCalls == [["print", "system/com.vendor.helper"]])
+    }
+
+    /// The app sends canonical paths, and the executor acts on the path it was sent. Another spelling of the same
+    /// object (here the case of `LaunchDaemons`, on this case-insensitive disk) passes the scope and the policy, which
+    /// read the canonical path, but not the LaunchDaemon check, which would skip the bootout. So it is refused.
+    @Test func anotherSpellingOfADaemonIsRefused() throws {
+        let fx = try RootFixture()
+        let plist = try fx.tmp.file("root/Library/LaunchDaemons/com.vendor.helper.plist")
+        try PropertyListSerialization.data(fromPropertyList: ["Label": "com.vendor.helper"], format: .xml, options: 0).write(to: plist)
+        fx.printed = (0, "system/com.vendor.helper = {\n\tpath = \(plist.path)\n}\n")
+        var item = try fx.item("root/Library/LaunchDaemons/com.vendor.helper.plist")
+        item.path = fx.url("root/Library/launchdaemons/com.vendor.helper.plist").path
+        try #require(FileIdentity(url: URL(fileURLWithPath: item.path)) == FileIdentity(url: plist), "needs a case-insensitive disk")
+        let before = fx.tree()
+
+        let lines = try fx.execute([item])
+
+        #expect(lines.first?.refusalReason == .identityChanged, "\(lines)")
+        #expect(fx.launchctlCalls.isEmpty)
+        #expect(Sandbox.difference(fx.tree(), before) == [])
     }
 
     /// The root allowlist stops what the v1 policy lets a root process through: /private/etc (here a fixture file the
@@ -293,6 +329,28 @@ extension PrivilegedResultLine {
         #expect(Sandbox.difference(fx.tree(), Sandbox.expected(before, without: ["root/Library/Application Support/Vendor/X"])) == [])
         #expect(lines.first?.status == "deleted", "\(lines)")
         #expect(fx.trashNames.isEmpty)
+    }
+
+    /// D12: an erase that removed nothing leaves the item whole in the Trash. Root moved it, so its History line has no
+    /// Undo: the message sends the user to Finder, never to History's Undo (v1's `TrashBatch.notDeleted`).
+    @Test func aFailedEraseSendsTheUserToFinderNotToUndo() throws {
+        let fx = try RootFixture()
+        try fx.file("root/Library/Caches/Vendor/sub/file")
+        let item = try fx.item("root/Library/Caches/Vendor")
+        let trashed = fx.trash.appendingPathComponent("Vendor")
+        defer { _ = chmod(trashed.appendingPathComponent("sub").path, 0o755) }
+
+        // After every check, before the rename: the erase of the trashed copy then cannot remove anything.
+        let lines = try fx.execute([item], op: .permanent, beforeRename: { [sub = fx.url("root/Library/Caches/Vendor/sub").path] _ in
+            _ = chmod(sub, 0o555)
+        })
+
+        let line = try #require(lines.first)
+        #expect(line.status == "failed" && line.to == trashed.path, "\(line)")
+        #expect(line.message?.contains("drag it back from the Trash in Finder") == true, "\(line)")
+        #expect(line.message?.contains("Undo") == false)
+        let entry = try #require(PrivilegedRouting.journalEntry(line, item, batch: UUID(), restorePoint: nil))
+        #expect(entry.asAdministrator && entry.trashedPath == trashed.path)
     }
 
     /// D3: a file is one unlinkat in place, never a Trash move; D4: a personal database goes to the Trash even in

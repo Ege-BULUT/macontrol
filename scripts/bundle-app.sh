@@ -4,15 +4,15 @@
 #   scripts/bundle-app.sh [release|debug]
 #   build/Macontrol.app/Contents/MacOS/Macontrol --snapshot <dir>   # screen PNGs with demo data
 #
-# SIGN_IDENTITY defaults to ad-hoc ("-"). An ad-hoc signature changes on every build, and
-# Full Disk Access is tied to the signature, so FDA must be granted again after each rebuild.
-# Set SIGN_IDENTITY to an "Apple Development: ..." identity to keep the grant across builds.
+# SIGN_IDENTITY defaults to "macontrol Self-Signed" when this Mac has it (scripts/signing-identity.sh,
+# docs/RELEASING.md), else ad hoc ("-"). An ad-hoc signature changes on every build, and Full Disk
+# Access is tied to the signature, so FDA must be granted again after each ad-hoc rebuild.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
 BUNDLE_ID="${BUNDLE_ID:-dev.macontrol.Macontrol}"
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_IDENTITY="${SIGN_IDENTITY:-$([ -x scripts/signing-identity.sh ] && scripts/signing-identity.sh || echo -)}"
 VERSION="0.1.1"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
@@ -61,4 +61,9 @@ PLIST
 codesign --force --options runtime --identifier "${BUNDLE_ID}.priv" --sign "$SIGN_IDENTITY" "$APP/Contents/Helpers/macontrol-priv"
 codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
 codesign --verify --strict --deep "$APP"
+# DESIGN-debloat 6.3 criterion 6: the helper keeps its own identifier and the hardened runtime, ad hoc or signed.
+HELPER_SIGNATURE="$(codesign -dv "$APP/Contents/Helpers/macontrol-priv" 2>&1)"
+[ "$SIGN_IDENTITY" = "-" ] && HELPER_FLAGS="flags=0x10002(adhoc,runtime)" || HELPER_FLAGS="flags=0x10000(runtime)"
+grep -qx "Identifier=${BUNDLE_ID}.priv" <<<"$HELPER_SIGNATURE" && grep -qF "$HELPER_FLAGS" <<<"$HELPER_SIGNATURE" \
+    || { echo "macontrol-priv is not signed as ${BUNDLE_ID}.priv with $HELPER_FLAGS:" >&2; echo "$HELPER_SIGNATURE" >&2; exit 1; }
 echo "$APP"

@@ -68,6 +68,12 @@ import Testing
     }
 
     static func run(_ fx: RootFixture, _ items: [TrashItem], mode: DeletionMode = .trash, launcher: PrivilegedLauncher, batch: UUID = UUID()) async -> [TrashOutcome] {
+        await answer(fx, items, mode: mode, launcher: launcher, batch: batch).outcomes
+    }
+
+    static func answer(
+        _ fx: RootFixture, _ items: [TrashItem], mode: DeletionMode = .trash, launcher: PrivilegedLauncher, batch: UUID = UUID()
+    ) async -> PrivilegedRouting.Answer {
         await PrivilegedRouting.run(
             items, mode: mode, launcher: launcher, batch: batch, journalURL: journal(fx), home: fx.home,
             restorePoint: nil, resultOwner: getuid(), systemRoot: fx.root.path
@@ -166,7 +172,8 @@ import Testing
         #expect(Self.requestFolders(fx).isEmpty)
     }
 
-    /// `kill -9` mid-batch: what it finished is reported and journaled; the rest is "stopped", untouched.
+    /// `kill -9` mid-batch: what it finished is reported and journaled. The item it was on may be partly done, and says
+    /// so; the rest are "stopped before it got to this". Nothing past the one it finished moved.
     @Test func aHelperKilledMidBatchLeavesTheRestAsStopped() async throws {
         let fx = try RootFixture()
         for name in ["A", "B", "C"] { try fx.file("root/Library/Caches/Vendor\(name)/x") }
@@ -188,7 +195,7 @@ import Testing
         let stopped = "The administrator helper stopped before it got to this."
         #expect(outcomes == [
             .trashed(original: items[0].url, trashedTo: fx.trash.appendingPathComponent("VendorA")),
-            .failed(items[1].url, message: stopped), .failed(items[2].url, message: stopped),
+            .failed(items[1].url, message: PrivilegedRouting.stoppedOnIt), .failed(items[2].url, message: stopped),
         ])
         #expect(FileManager.default.fileExists(atPath: items[1].url.path) && FileManager.default.fileExists(atPath: items[2].url.path))
         #expect(TrashJournal(url: Self.journal(fx)).entries().map(\.originalPath) == [items[0].url.path])
@@ -244,6 +251,22 @@ import Testing
             .refused(loginwindow.url, .protectedLocation(loginwindow.url.path)),
         ])
         #expect(prompts.withLock { $0 } == ["macontrol needs your administrator password to move 1 item owned by the system to the Trash."])
+    }
+
+    /// 3.5 step 4 end to end, through the built helper: a LaunchDaemon whose label launchctl cannot be asked about (so
+    /// launchctl never runs) is trashed, and its note reaches the app.
+    @Test func aSkippedBootoutsNoteReachesTheApp() async throws {
+        let fx = try RootFixture()
+        let plist = try fx.tmp.file("root/Library/LaunchDaemons/com.vendor.helper.plist")
+        try PropertyListSerialization.data(fromPropertyList: ["Label": "com.vendor.helper;reboot"], format: .xml, options: 0).write(to: plist)
+        let daemon = try Self.item(fx, "root/Library/LaunchDaemons/com.vendor.helper.plist")
+        try fx.file("root/Library/Caches/Vendor/a")
+        let other = try Self.item(fx, "root/Library/Caches/Vendor")
+
+        let answer = await Self.answer(fx, [daemon, other], launcher: try Self.launcher(fx))
+
+        #expect(answer.outcomes.map(\.isDone) == [true, true], "\(answer.outcomes)")
+        #expect(answer.notes == [daemon.url: PrivilegedExecutor.untilRestart])
     }
 
     /// A cancelled dialog, a helper that never started: every item keeps a clear failure, nothing moves.

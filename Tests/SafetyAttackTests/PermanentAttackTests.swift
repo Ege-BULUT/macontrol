@@ -29,7 +29,7 @@ import Testing
             precondition(item.hasPrefix(root), "a permanent delete outside the sandbox: \(item)")
             hook?(item, relative)
         }
-        let unrouted: TrashService.Route = { items, _, _, _, _, _, _ in items.map { .refused($0.url, .needsAdministrator) } }
+        let unrouted: TrashService.Route = { items, _, _, _, _, _, _ in (items.map { .refused($0.url, .needsAdministrator) }, [:]) }
         return TrashService(journalURL: box.journal, backend: await box.service().backend, home: box.home, engine: engine, route: route ?? unrouted)
     }
 
@@ -503,7 +503,7 @@ import Testing
             // What the helper does as root, done here as the owner: the bundle leaves its place.
             chmod(bundle.path, 0o755)
             try? FileManager.default.moveItem(at: bundle, to: box.trashFolder.appendingPathComponent("Example.app"))
-            return routed.map { .deleted(original: $0.url) }
+            return (routed.map { .deleted(original: $0.url) }, [:])
         }
         let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent")) { _, _, _, _ in }
         let before = box.tree()
@@ -534,7 +534,7 @@ import Testing
         let route: TrashService.Route = { routed, _, _, _, _, _, _ in
             calls.record(routed.map(\.url.lastPathComponent))
             // What root does, item by item: one that waits for another goes only once that one is gone.
-            return routed.map { item in
+            let outcomes: [TrashOutcome] = routed.map { item in
                 if cancelled { return .failed(item.url, message: "cancelled") }
                 if let required = item.requiresGone, FileIdentity(url: required) != nil { return .failed(item.url, message: "still there") }
                 let parent = item.url.deletingLastPathComponent().path
@@ -543,6 +543,7 @@ import Testing
                 chmod(parent, 0o555)
                 return .deleted(original: item.url)
             }
+            return (outcomes, [:])
         }
         let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent")) { _, _, _, _ in }
         let before = box.tree()
@@ -578,9 +579,9 @@ import Testing
             calls.record(routed.map(\.url.lastPathComponent))
             do {
                 try await MainActor.run { try launcher.start(launcher.helperURL, URL(fileURLWithPath: "/nonexistent"), "", "") }
-                return routed.map { .deleted(original: $0.url) }
+                return (routed.map { .deleted(original: $0.url) }, [:])
             } catch {
-                return routed.map { .failed($0.url, message: "\(error)") }
+                return (routed.map { .failed($0.url, message: "\(error)") }, [:])
             }
         }
         let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent")) { _, _, _, _ in throw PrivilegedError.cancelled }

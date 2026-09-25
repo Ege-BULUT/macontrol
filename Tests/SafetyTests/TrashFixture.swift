@@ -59,7 +59,7 @@ final class TrashFixture: @unchecked Sendable {
             precondition(item.hasPrefix(root), "a permanent delete outside the fixture: \(item)")
             hook?(item, relative)
         }
-        let unrouted: TrashService.Route = { items, _, _, _, _, _, _ in items.map { .refused($0.url, .needsAdministrator) } }
+        let unrouted: TrashService.Route = { items, _, _, _, _, _, _ in (items.map { .refused($0.url, .needsAdministrator) }, [:]) }
         return TrashService(journalURL: journal, backend: backend, home: home, engine: engine, route: route ?? unrouted)
     }
 

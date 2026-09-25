@@ -5,13 +5,16 @@ import MacontrolCore
 /// Pass 2 of `TrashService.remove` (DESIGN-debloat section 3.6): the items pass 1 refused with `.needsAdministrator`
 /// go to the helper in one request, in order, behind one administrator dialog. The app side of section 3.3.
 public enum PrivilegedRouting {
-    /// One outcome per item, in the order of `items`; each replaces that item's refusal.
+    /// One outcome per item, in the order of `items`; each replaces that item's refusal. `notes` holds what the user
+    /// should know about an item that went (`TrashReport.notes`).
+    public typealias Answer = (outcomes: [TrashOutcome], notes: [URL: String])
+
     /// `batch`, `journalURL` and `restorePoint` are the calling batch's, for the journal lines written as results
     /// arrive (section 3.3 step 5); `home` is the requesting user's.
     public static func run(
         _ items: [TrashItem], mode: DeletionMode, launcher: PrivilegedLauncher,
         batch: UUID, journalURL: URL, home: URL, restorePoint: String?
-    ) async -> [TrashOutcome] {
+    ) async -> Answer {
         await run(items, mode: mode, launcher: launcher, batch: batch, journalURL: journalURL, home: home,
                   restorePoint: restorePoint, resultOwner: 0, systemRoot: "/")
     }
@@ -20,7 +23,7 @@ public enum PrivilegedRouting {
     static func run(
         _ items: [TrashItem], mode: DeletionMode, launcher: PrivilegedLauncher, batch: UUID, journalURL: URL, home: URL,
         restorePoint: String?, resultOwner: uid_t, systemRoot: String, pidTimeout: Duration = .seconds(5)
-    ) async -> [TrashOutcome] {
+    ) async -> Answer {
         let homePath = (try? ProtectedPaths.canonicalPath(of: home)) ?? home.path
         var outcomes = items.map { refusal(of: $0, home: homePath, systemRoot: systemRoot) }
         let sent = items.indices.filter { outcomes[$0] == nil }
@@ -31,8 +34,9 @@ public enum PrivilegedRouting {
                 bundleIdentifier: item.bundleIdentifier, requiresGone: item.requiresGone?.path
             )
         })
-        func fail(_ message: String) -> [TrashOutcome] {
-            items.indices.map { outcomes[$0] ?? .failed(items[$0].url, message: message) }
+        var notes: [URL: String] = [:]
+        func fail(_ message: String) -> Answer {
+            (items.indices.map { outcomes[$0] ?? .failed(items[$0].url, message: message) }, notes)
         }
         guard !sent.isEmpty else { return fail("") }
 
@@ -72,6 +76,7 @@ public enum PrivilegedRouting {
                 guard let index = line.index, sent.indices.contains(index), outcomes[sent[index]] == nil,
                       let outcome = line.outcome(for: items[sent[index]].url) else { continue }
                 outcomes[sent[index]] = outcome
+                notes[items[sent[index]].url] = line.note
                 if let entry = journalEntry(line, request.items[index], batch: batch, restorePoint: restorePoint) {
                     // ponytail: root cannot be stopped mid-batch like v1's journalError; a lost line only leaves History short.
                     try? TrashJournal.append(entry, to: journal)
@@ -82,6 +87,11 @@ public enum PrivilegedRouting {
             // A last read catches the lines it wrote just before it ended.
             if !alive && lines.isEmpty { break }
             try? await Task.sleep(for: .milliseconds(100))
+        }
+        // The helper works in order, so the first item it did not answer is the one it was on: some or all of it may
+        // have gone. The rest were never touched.
+        if !finished, let current = sent.first(where: { outcomes[$0] == nil }) {
+            outcomes[current] = .failed(items[current].url, message: Self.stoppedOnIt)
         }
         return fail(message(for: .helperStopped))
     }
@@ -112,6 +122,9 @@ public enum PrivilegedRouting {
         case .permanent: "macontrol needs your administrator password to delete \(items) owned by the system permanently."
         }
     }
+
+    static let stoppedOnIt = "The administrator helper stopped while it worked on this, so some or all of it may "
+        + "already be gone or in the Trash."
 
     static func message(for error: PrivilegedError) -> String {
         switch error {

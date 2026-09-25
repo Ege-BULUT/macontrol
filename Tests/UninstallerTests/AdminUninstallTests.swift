@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 import MacontrolCore
-import Safety
+@testable import Safety
 import Testing
 @testable import Uninstaller
 
@@ -115,7 +115,8 @@ import Testing
         let sent = Self.items(fx.recorder.events.last)
         #expect(sent.map(\.url) == [plan.app.url, chosen.url])
         #expect(sent.last?.requiresGone == plan.app.url)
-        #expect(sent.allSatisfy { $0.bundleIdentifier == "com.example.Suite" })
+        // A third-party app's identifier comes from its own Info.plist, so it is never sent.
+        #expect(sent.allSatisfy { $0.bundleIdentifier == nil })
     }
 
     /// Package receipts (`pkgutil --forget`'s two files) are a removable area with the helper; anything deeper is not.
@@ -173,6 +174,43 @@ import Testing
         _ = await uninstaller.uninstall([UninstallJob(plan: plan, leftovers: [])])
 
         #expect(points.all == ["com.apple.TimeMachine.2026-09-24-101500.local", nil])
+    }
+
+    /// sec 3c (T-0075 review 1): the first-component rule opens only for an identifier Apple's signature vouched for.
+    /// A bundle that merely claims `com.apple.loginwindow` in its Info.plist gets macOS's own preferences as preselected
+    /// admin leftovers, but they go without the identifier, so the root allowlist refuses them before any dialog. The
+    /// same plan as an Apple App Store app sends it.
+    @Test(arguments: [
+        ("com.apple.loginwindow", ["com.apple.loginwindow.plist"]),
+        ("com.apple.networkextension", ["com.apple.networkextension.control.plist", "com.apple.networkextension.necp.plist"]),
+    ])
+    func aClaimedAppleIdentifierIsNotSent(id: String, files: [String]) async throws {
+        for kind in [AppKind.thirdParty, .appleAppStore] {
+            let fx = try Fixture()
+            try fx.app("Junk", id: id)
+            for name in files { try fx.file("root/Library/Preferences/\(name)") }
+            let targets = files.map { fx.root.appendingPathComponent("Library/Preferences/\($0)") }
+            var plan = try await Self.plan(fx, "Junk")
+            #expect(plan.app.kind == .thirdParty)
+            #expect(targets.allSatisfy { target in plan.leftovers.contains { $0.url == target && $0.isPreselected && $0.needsAdministrator } })
+            plan.app.kind = kind
+
+            _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: Set(targets))
+
+            let sent = Self.items(fx.recorder.events.last)
+            #expect(sent.map(\.url) == [plan.app.url] + targets)
+            let expected = kind == .appleAppStore ? id : nil
+            #expect(sent.allSatisfy { $0.bundleIdentifier == expected }, "\(kind)")
+            // The root allowlist, on the canonical spelling (the recorder has moved the files by now).
+            let root = try ProtectedPaths.canonicalPath(of: fx.root)
+            let home = try ProtectedPaths.canonicalPath(of: fx.home)
+            for (item, name) in zip(sent.dropFirst(), files) {
+                let refusal = PrivilegedScope.refusal(
+                    canonical: root + "/Library/Preferences/" + name, home: home, bundleIdentifier: item.bundleIdentifier, systemRoot: root
+                )
+                #expect((refusal == nil) == (kind == .appleAppStore), "\(kind) \(name)")
+            }
+        }
     }
 
     /// Without the helper, v1 unchanged: a chosen admin leftover stops everything before any step.

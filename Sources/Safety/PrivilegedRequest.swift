@@ -75,6 +75,8 @@ struct PrivilegedResultLine: Codable, Hashable {
     var message: String?
     /// A failed permanent delete that removed some of it: History records it as deleted.
     var partial: Bool?
+    /// A trashed or deleted LaunchDaemon plist whose job the helper did not boot out: it may run until the next restart.
+    var note: String?
     var done: Bool?
 
     static func outcome(_ index: Int, _ outcome: HelperOutcome) -> PrivilegedResultLine {

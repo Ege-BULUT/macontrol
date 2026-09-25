@@ -118,7 +118,11 @@ public final class Uninstaller: Sendable {
         if !canUseAdministrator, let administrative = chosen.first(where: \.needsAdministrator) {
             throw UninstallError.needsAdministrator(administrative.url)
         }
-        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: plan.app.bundleIdentifier)
+        // The helper's first-component rule lets `com.apple.dt.Xcode.plist` go only for the app it belongs to, so the
+        // identifier goes only where Apple's signature vouched for it (`.appleAppStore`): any bundle's Info.plist can
+        // claim `com.apple.loginwindow`. A third-party app has nothing Apple-named to claim (T-0075 review 1).
+        let identifier = plan.app.kind == .appleAppStore ? plan.app.bundleIdentifier : nil
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: identifier)
         try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
@@ -137,8 +141,7 @@ public final class Uninstaller: Sendable {
         return [bundle] + chosen.map { leftover in
             var item = Self.itemToTrash(for: leftover)
             item.requiresGone = plan.app.url
-            // The helper's first-component rule lets `com.apple.dt.Xcode.plist` go only for the app it belongs to.
-            item.bundleIdentifier = plan.app.bundleIdentifier
+            item.bundleIdentifier = identifier
             return item
         }
     }

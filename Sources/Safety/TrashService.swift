@@ -73,10 +73,14 @@ public enum RestoreOutcome: Sendable, Hashable {
 public struct TrashReport: Sendable {
     public var batch: UUID
     public var outcomes: [TrashOutcome]
+    /// What the user should know about an item that went, shown with its outcome: a LaunchDaemon the administrator
+    /// helper removed without stopping, "Its background service may keep running until the next restart."
+    public var notes: [URL: String]
 
-    public init(batch: UUID, outcomes: [TrashOutcome]) {
+    public init(batch: UUID, outcomes: [TrashOutcome], notes: [URL: String] = [:]) {
         self.batch = batch
         self.outcomes = outcomes
+        self.notes = notes
     }
 }
 
@@ -117,7 +121,7 @@ public actor TrashService {
     typealias Route = @Sendable (
         _ items: [TrashItem], _ mode: DeletionMode, _ launcher: PrivilegedLauncher, _ batch: UUID, _ journalURL: URL,
         _ home: URL, _ restorePoint: String?
-    ) async -> [TrashOutcome]
+    ) async -> PrivilegedRouting.Answer
 
     public init(
         journalURL: URL = TrashService.defaultJournalURL,
@@ -173,13 +177,15 @@ public actor TrashService {
             return Self.unjournaled(items, error)
         }
         var passes = run.firstPass(items)
+        var notes: [URL: String] = [:]
         if let administrator, !passes.setAside.isEmpty {
             let routed = await route(passes.setAside.map { items[$0] }, mode, administrator, run.id, journalURL, home, restorePoint)
             // An item the route did not answer keeps its refusal.
-            for (index, outcome) in zip(passes.setAside, routed) { passes.outcomes[index] = [outcome] }
+            for (index, outcome) in zip(passes.setAside, routed.outcomes) { passes.outcomes[index] = [outcome] }
+            notes = routed.notes
         }
         run.lastPass(items, &passes)
-        return TrashReport(batch: run.id, outcomes: passes.outcomes.flatMap { $0 })
+        return TrashReport(batch: run.id, outcomes: passes.outcomes.flatMap { $0 }, notes: notes)
     }
 
     private func start(_ mode: DeletionMode, cloudConfirmed: Bool, restorePoint: String?) throws -> TrashBatch {

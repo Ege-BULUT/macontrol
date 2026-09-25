@@ -129,14 +129,19 @@ public struct PrivilegedExecutor: Sendable {
         let policy = Self.policy(home: home)
         for (index, item) in items.enumerated() {
             beforeItem?(index)
-            let outcome = process(item, op: checked.request.op, home: home, policy: policy, trash: trash)
-            write(.outcome(index, outcome), to: checked.result)
+            var note: String?
+            var line = PrivilegedResultLine.outcome(index, process(item, op: checked.request.op, home: home, policy: policy, trash: trash, note: &note))
+            line.note = note
+            write(line, to: checked.result)
         }
         write(PrivilegedResultLine(done: true), to: checked.result)
     }
 
-    /// Section 3.5 "per item", in order; nothing changes before the last check.
-    func process(_ item: PrivilegedRequest.Item, op: DeletionMode, home: String, policy: ProtectionPolicy, trash: Int32) -> HelperOutcome {
+    /// Section 3.5 "per item", in order; nothing changes before the last check. `note` is set when the item went but
+    /// its LaunchDaemon may still run.
+    func process(
+        _ item: PrivilegedRequest.Item, op: DeletionMode, home: String, policy: ProtectionPolicy, trash: Int32, note: inout String?
+    ) -> HelperOutcome {
         if let refusal = refusal(of: item, home: home, policy: policy) { return refusal }
         let path = item.path
         var info = stat()
@@ -149,25 +154,44 @@ public struct PrivilegedExecutor: Sendable {
         case .dataless?: erase = false
         case nil: break
         }
-        if isLaunchDaemon(path), let failure = stopDaemon(path) { return failure }
+        var skipped: String?
+        if isLaunchDaemon(path), let failure = stopDaemon(path, note: &skipped) { return failure }
+        let outcome = remove(path, identity: item.identity, erase: erase, isFolder: isFolder, home: home, trash: trash)
+        // Only a plist that left its place leaves a job running without it.
+        switch outcome {
+        case .trashed, .deleted: note = skipped
+        case .refused, .failed: break
+        }
+        return outcome
+    }
+
+    /// The sink: the Trash, or a permanent delete (section 3.5 step 5).
+    private func remove(_ path: String, identity: FileIdentity, erase: Bool, isFolder: Bool, home: String, trash: Int32) -> HelperOutcome {
         // D3, the code the app uses: a file is one unlinkat in place; a folder goes to the Trash first, then the
         // trashed copy is erased, so a stop halfway leaves the rest in the Trash, never half an app in place.
         if erase && !isFolder {
-            switch RemovalEngine().deleteFile(canonical: path, identity: item.identity) {
+            switch RemovalEngine().deleteFile(canonical: path, identity: identity) {
             case .removed: return .deleted
             case .changed: return .refused(.identityChanged)
             case .failed(let failures), .partly(let failures):
                 return .failed("It could not be deleted: \(failures.first?.reason ?? "unknown error").")
             }
         }
-        let moved = moveToTrash(path, identity: item.identity, home: home, trash: trash)
+        let moved = moveToTrash(path, identity: identity, home: home, trash: trash)
         guard erase, case .trashed(let to) = moved else { return moved }
-        switch RemovalEngine().erase(trashed: URL(fileURLWithPath: to), identity: item.identity) {
+        switch RemovalEngine().erase(trashed: URL(fileURLWithPath: to), identity: identity) {
         case .removed: return .deleted
         case .changed: return .failed("Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.", to: to)
         case .failed(let failures):
-            // Nothing was removed: it is whole in the Trash.
-            return .failed(TrashBatch.notDeleted(failures, trashName: (to as NSString).lastPathComponent), to: to)
+            // Nothing was removed: it is whole in the Trash. Not v1's "Undo it from History": History has no Undo for
+            // what root moved (D12).
+            let name = (to as NSString).lastPathComponent
+            let first = failures.first.map { ($0.path.isEmpty ? name : $0.path) + ": " + $0.reason } ?? ""
+            return .failed(
+                "Moved to the Trash as \"\(name)\", but nothing in it could be deleted (\(first)). It belongs to the system, "
+                    + "so History can't put it back: drag it back from the Trash in Finder, or empty the Trash to finish.",
+                to: to
+            )
         case .partly(let failures):
             return .failed(TrashBatch.partlyDeleted(failures, trashName: (to as NSString).lastPathComponent), partial: true)
         }
@@ -213,16 +237,25 @@ public struct PrivilegedExecutor: Sendable {
 
     /// Boots out `system/<Label>` only when launchd says it loaded that job from this very file. A stale plist can carry
     /// the label of another daemon, and `launchctl print` "is NOT API", so anything else only skips the bootout: the file
-    /// still goes, and the job stops at the next restart (section 3.5 step 4). Nil when the item may go on.
-    private func stopDaemon(_ path: String) -> HelperOutcome? {
+    /// still goes, and the job stops at the next restart (section 3.5 step 4, Risk 7), which `note` then says whenever
+    /// launchd may be running it: a label it knows, or one this check cannot pass to launchctl. Nil when the item may go on.
+    private func stopDaemon(_ path: String, note: inout String?) -> HelperOutcome? {
+        // launchd loads no job from a plist without a Label.
         guard let data = FileManager.default.contents(atPath: path),
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let label = plist["Label"] as? String, label.wholeMatch(of: /[A-Za-z0-9._-]+/) != nil else { return nil }
+              let label = plist["Label"] as? String else { return nil }
+        guard label.wholeMatch(of: /[A-Za-z0-9._-]+/) != nil else {
+            note = Self.untilRestart
+            return nil
+        }
         let printed = launchctl(["print", "system/\(label)"])
         let loadedFromHere = printed.status == 0 && printed.output.split(separator: "\n").contains {
             $0.trimmingCharacters(in: .whitespaces) == "path = \(path)"
         }
-        guard loadedFromHere else { return nil }
+        guard loadedFromHere else {
+            if printed.status == 0 { note = Self.untilRestart }
+            return nil
+        }
         let status = launchctl(["bootout", "system/\(label)"]).status
         // 3: not loaded (ESRCH), nothing left to stop.
         guard status == 0 || status == 3 else {
@@ -230,6 +263,8 @@ public struct PrivilegedExecutor: Sendable {
         }
         return nil
     }
+
+    static let untilRestart = "Its background service may keep running until the next restart."
 
     // MARK: The Trash sink
 
