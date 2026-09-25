@@ -72,7 +72,7 @@ import Uninstaller
         model.hardcore.isOn = true
         model.beginReview()
         model.review?.run.wantsRestorePoint = true
-        let confirm = Task { await model.confirmReview() }
+        let confirm = Task { await model.confirmReview(); tmutil.callerEnded() }
         await tmutil.waitUntilReached()
         model.review = nil
         model.hardcore.isOn = false
@@ -99,7 +99,7 @@ import Uninstaller
         model.hardcore.isOn = true
         model.beginUninstall()
         model.confirmation?.run.wantsRestorePoint = true
-        let confirm = Task { await model.confirmUninstall() }
+        let confirm = Task { await model.confirmUninstall(); tmutil.callerEnded() }
         await tmutil.waitUntilReached()
         model.confirmation = nil
         model.hardcore.isOn = false
@@ -120,7 +120,7 @@ import Uninstaller
         let batch = Gate()
         let (model, _) = try await fixture.uninstallModel(hold: batch)
         model.beginUninstall()
-        let confirm = Task { await model.confirmUninstall() }
+        let confirm = Task { await model.confirmUninstall(); batch.callerEnded() }
         await batch.waitUntilReached()
         model.confirmation = nil
         model.beginUninstall()
@@ -142,7 +142,7 @@ import Uninstaller
         model.hardcore.isOn = true
         model.beginReview()
         model.review?.run.wantsRestorePoint = true
-        let confirm = Task { await model.confirmReview() }
+        let confirm = Task { await model.confirmReview(); tmutil.callerEnded() }
         await tmutil.waitUntilReached()
         model.review = nil
         model.hardcore.isOn = false
@@ -732,16 +732,26 @@ import Uninstaller
 /// Holds an async step (tmutil, a batch) until the test opens it, so the test can act while the step runs.
 nonisolated final class Gate: Sendable {
     static let snapshot = "com.apple.TimeMachine.2026-09-25-120000.local"
-    private let reached = AsyncStream<Void>.makeStream()
+    /// true: the step was reached; false: its caller ended first.
+    private let reached = AsyncStream<Bool>.makeStream()
     private let opened = AsyncStream<Void>.makeStream()
 
     func pass() async {
-        reached.continuation.yield()
+        reached.continuation.yield(true)
         for await _ in opened.stream {}
     }
 
+    /// The confirm that should have reached the step returned. A wait still pending then fails the test instead of
+    /// stalling the whole run with no summary (a confirm that skips the restore point never reaches tmutil).
+    func callerEnded() {
+        reached.continuation.yield(false)
+    }
+
     func waitUntilReached() async {
-        for await _ in reached.stream { return }
+        for await wasReached in reached.stream {
+            if !wasReached { Issue.record("the held step was never reached") }
+            return
+        }
     }
 
     /// Every pass from now on goes straight through.
