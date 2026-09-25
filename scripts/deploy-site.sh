@@ -4,7 +4,8 @@
 #
 #   scripts/deploy-site.sh [--dry-run] [--zip PATH]
 #
-#   --dry-run   assemble dist/site and print what would be deployed; no `vercel deploy`
+#   --dry-run   assemble dist/site and print what would be deployed; no `vercel deploy`. Before the release is
+#               tagged, the images and the changelog come from HEAD instead of the tag, to preview the next copy
 #   --zip PATH  serve this local release zip (Macontrol-<version>.zip) instead of downloading the newest
 #               GitHub release; skips every network call except the deploy itself
 #
@@ -76,12 +77,16 @@ case "$VERSION" in
     *) echo "release $VERSION is not a $SITE_RELEASE.x release, and the page describes $SITE_RELEASE." \
         "Update the copy and SITE_RELEASE together." >&2; exit 1 ;;
 esac
-git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null ||
-    { echo "tag v$VERSION is not in this clone (git fetch --tags), and the images come from it" >&2; exit 1; }
-: "${PUBLISHED:=$(git log -1 --format=%cI "v$VERSION")}"
+REF="v$VERSION"
+if ! git rev-parse -q --verify "refs/tags/$REF" >/dev/null; then
+    [ "$DRY" = 1 ] || { echo "tag $REF is not in this clone (git fetch --tags), and the images come from it" >&2; exit 1; }
+    REF="$(git rev-parse --short HEAD)"
+    echo "note: no tag v$VERSION, so this dry run takes the images and the changelog from HEAD ($REF)" >&2
+fi
+: "${PUBLISHED:=$(git log -1 --format=%cI "$REF")}"
 TAGGED="$(mktemp -d)"
 trap '/bin/rm -rf "$TAGGED"' EXIT
-git archive "v$VERSION" CHANGELOG.md docs/assets | tar -x -C "$TAGGED"
+git archive "$REF" CHANGELOG.md docs/assets | tar -x -C "$TAGGED"
 
 # Landing-page crops: the part of the window each section talks about, as "x y width height" in
 # screenshot pixels. The screenshots are 2x, so the <img> width/height in site/index.html are half of these:
