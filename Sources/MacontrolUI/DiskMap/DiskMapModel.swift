@@ -47,6 +47,10 @@ public final class DiskMapModel {
     var review: ReviewState?
     /// Items this session moved to the Trash. Their bytes are "In Trash", never "freed" (F-0042).
     var trashed: [TrashedItem] = []
+    /// The app's one switch; `AppModel` hands every screen the same instance. There is no administrator launcher
+    /// here: Disk Map keeps "Needs admin" and Reveal in Finder for root-owned items (DESIGN-debloat D8, r2: sec 3a).
+    var hardcore = HardcoreMode()
+    var support = RemovalSupport()
 
     /// The layout on screen. It stays until its replacement is ready, so the map never flashes empty.
     private(set) var layout: MapLayout?
@@ -284,7 +288,6 @@ struct TrashedItem: Identifiable, Hashable, Sendable {
     let parent: Int
     let name: String
     let bytes: UInt64
-    let trashedTo: URL
 
     var id: Int { node }
 }

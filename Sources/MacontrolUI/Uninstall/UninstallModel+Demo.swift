@@ -12,6 +12,7 @@ extension UninstallModel {
         for plan in DemoApps.plans { model.plans[plan.app.url] = plan }
         model.sizes = DemoApps.sizes
         model.runningBundleIDs = ["com.example.Editor"]
+        model.support = .demo
         return model
     }
 }

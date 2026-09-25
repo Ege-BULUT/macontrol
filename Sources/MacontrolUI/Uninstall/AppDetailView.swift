@@ -119,7 +119,7 @@ struct AppDetailView: View {
                 let members = plan.leftovers.filter { $0.evidence == evidence }
                 Section {
                     ForEach(members) { leftover in
-                        LeftoverRow(leftover: leftover, canChoose: model.canUninstall, isChosen: Binding(
+                        LeftoverRow(leftover: leftover, note: model.note(for: leftover), canChoose: model.canUninstall, usesAdministrator: model.canUseAdministrator, isChosen: Binding(
                             get: { model.isChosen(leftover) },
                             set: { model.setChosen($0, leftover) }
                         ))
@@ -143,7 +143,7 @@ struct AppDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(chosen.isEmpty ? "\(plan.app.name) only" : "\(plan.app.name) and \(chosen.count == 1 ? "1 item" : "\(chosen.count) items")")
                     .font(.headline)
-                Text("\(total.formattedBytes) on disk, moved to the Trash")
+                Text("\(total.formattedBytes) on disk, \(model.hardcore.isOn ? "deleted permanently" : "moved to the Trash")")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -211,14 +211,21 @@ private struct EvidenceHeader: View {
 
 private struct LeftoverRow: View {
     let leftover: Leftover
+    /// The plan's note, or hardcore mode's documents warning.
+    let note: String?
     /// False for an app that can't be uninstalled: nothing would act on the checkbox.
     let canChoose: Bool
+    /// The administrator helper is there: a root-owned leftover gets a checkbox and the "Admin" badge (DESIGN-debloat
+    /// section 1.4). Without it, v1: a lock, "Needs admin" and Reveal in Finder.
+    let usesAdministrator: Bool
     @Binding var isChosen: Bool
+
+    private var isLocked: Bool { leftover.needsAdministrator && !usesAdministrator }
 
     var body: some View {
         HStack(spacing: 12) {
             Group {
-                if leftover.needsAdministrator {
+                if isLocked {
                     Image(systemName: "lock.fill").foregroundStyle(.secondary)
                 } else {
                     Toggle("Remove \(leftover.url.lastPathComponent)", isOn: $isChosen)
@@ -235,14 +242,16 @@ private struct LeftoverRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if let note = leftover.note {
+                if let note {
                     Label(note, systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(Theme.cautionText)
                 }
             }
             Spacer(minLength: 12)
-            if leftover.needsAdministrator {
+            if leftover.needsAdministrator && usesAdministrator {
+                AdminBadge()
+            } else if isLocked {
                 Text("Needs admin")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)

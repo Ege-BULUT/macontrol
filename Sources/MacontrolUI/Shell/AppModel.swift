@@ -58,6 +58,10 @@ public final class AppModel {
         self.hardcore = hardcore
         self.debloat = debloat
         self.administrator = administrator
+        // One switch for every screen: a confirmation reads the mode from here when it opens.
+        clean.hardcore = hardcore
+        uninstall.hardcore = hardcore
+        diskMap.hardcore = hardcore
     }
 
     /// Starts a Disk Map scan of `scope`, replacing any scan in flight.
@@ -104,8 +108,9 @@ public final class AppModel {
         return AppModel(
             fullDiskAccess: access.status,
             volume: try? VolumeSummary.of(URL(fileURLWithPath: "/")),
+            // No launcher for Disk Map: root-owned items there stay "Needs admin" (DESIGN-debloat D8, r2: sec 3a).
             diskMap: DiskMapModel(engine: engine, trash: trash),
-            clean: CleanModel(cleaner: Cleaner(catalog: catalog, engine: engine), trash: trash),
+            clean: CleanModel(cleaner: Cleaner(catalog: catalog, engine: engine), trash: trash, administrator: administrator),
             uninstall: UninstallModel(uninstaller: uninstaller),
             history: HistoryModel(trash: trash),
             access: access,

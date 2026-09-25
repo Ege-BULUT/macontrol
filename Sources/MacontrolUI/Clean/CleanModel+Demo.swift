@@ -6,7 +6,9 @@ extension CleanModel {
     /// Sample results covering every row state: safe, review, manual, skipped, caution, unreadable inside.
     /// Paths are fictional and nothing is read or moved.
     static func demo() -> CleanModel {
-        CleanModel(cleaner: nil, trash: nil, engine: nil, items: DemoCleanup.items)
+        let model = CleanModel(cleaner: nil, trash: nil, engine: nil, items: DemoCleanup.items)
+        model.support = .demo
+        return model
     }
 }
 

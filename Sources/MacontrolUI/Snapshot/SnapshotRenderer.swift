@@ -65,7 +65,34 @@ public enum SnapshotRenderer {
     /// Keeps a rendering process out of the Dock and from ever taking focus from the user's work.
     public static func runHeadless() {
         NSApplication.shared.setActivationPolicy(.prohibited)
+        keepMainLoopRunning
     }
+
+    /// `swift test` drives the main thread with a bare `CFRunLoopRun()` (Swift's async-main drain) and calls `exit(0)`
+    /// when it returns. Once AppKit has windows, its event thread stops the main run loop for each window-server event,
+    /// to wake NSApplication's event loop. A stop that reached that bare loop ended the run midway with status 0 and no
+    /// summary (T-0073, traced to HIToolbox `PushToCGEventQueue`). So the bare loop's first idle moment starts an inner
+    /// loop that simply runs again after each stop; the jobs and the tests' own waits run inside it. The app and
+    /// `--snapshot` have a synchronous main: their outermost loop starts after this, so it is never depth 0 here.
+    private static let keepMainLoopRunning: Void = {
+        // Loops entered after this point, such as a test's `RunLoop.main.run(until:)`. Depth 0 is a loop that was
+        // already running: the bare one, between jobs.
+        var depth = 0
+        let activities: CFRunLoopActivity = [.entry, .exit, .beforeTimers, .beforeWaiting, .afterWaiting]
+        let observer = CFRunLoopObserverCreateWithHandler(nil, activities.rawValue, true, .max) { observer, activity in
+            switch activity {
+            case .entry: depth += 1
+            case .exit: depth -= 1
+            default:
+                guard depth == 0 else { return }
+                CFRunLoopObserverInvalidate(observer)
+                // A synchronous stack here, unlike in the async caller: take over only from Swift's async-main drain.
+                guard Thread.callStackSymbols.contains(where: { $0.contains("swift_task_asyncMainDrainQueue") }) else { return }
+                while CFRunLoopRunInMode(.defaultMode, 1e10, false) != .finished {}
+            }
+        }
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+    }()
 
     /// A window ordered in far off screen, so rendering never shows up over the user's work. Add the content view
     /// after this call; the window is on screen for the window server but outside every display.

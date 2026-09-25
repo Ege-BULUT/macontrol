@@ -9,9 +9,9 @@ struct HistoryScreen: View {
         Group {
             if model.entries.isEmpty {
                 ContentUnavailableView(
-                    "Nothing moved to the Trash yet",
+                    "Nothing removed yet",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Everything Macontrol moves to the Trash shows up here, with Undo.")
+                    description: Text("Everything macontrol removes shows up here. Items moved to the Trash can be put back.")
                 )
             } else {
                 ScrollView {
@@ -59,9 +59,8 @@ private struct BatchCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: batch.canUndo ? "trash.fill" : "arrow.uturn.backward.circle.fill")
+                icon
                     .font(.title2)
-                    .foregroundStyle(batch.canUndo ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .frame(width: 28)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
@@ -87,12 +86,30 @@ private struct BatchCard: View {
                 .padding(.top, 6)
             }
             .foregroundStyle(.secondary)
+            ForEach([batch.ownedBySystemNote, batch.restorePointNote].compactMap { $0 }, id: \.self) { note in
+                Label(note, systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
             ForEach(problems, id: \.self) { problem in
                 Label("Not put back: \(problem)", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Theme.cautionText)
             }
         }
         .card()
+    }
+
+    /// Red for a permanent batch, the tint while anything can be put back, gray once everything is back.
+    @ViewBuilder
+    private var icon: some View {
+        if !batch.deleted.isEmpty {
+            Image(systemName: "xmark.bin.fill").foregroundStyle(Theme.danger)
+        } else if !batch.inTrash.isEmpty {
+            Image(systemName: "trash.fill").foregroundStyle(.tint)
+        } else {
+            Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -108,6 +125,10 @@ private struct EntryRow: View {
             Spacer()
             if entry.restored {
                 Text("Put back").foregroundStyle(.secondary)
+            } else if entry.isPermanent {
+                Text("Deleted permanently").foregroundStyle(Theme.dangerText)
+            } else if entry.asAdministrator {
+                Text("In the Trash, owned by the system").foregroundStyle(.secondary)
             }
             Text(entry.allocated.formattedBytes).monospacedDigit()
         }
