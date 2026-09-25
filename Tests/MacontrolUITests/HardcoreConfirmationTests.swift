@@ -68,7 +68,7 @@ import Uninstaller
         let model = try await fixture.cleanModel()
         let tmutil = Gate()
         model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginReview()
         model.review?.run.wantsRestorePoint = true
@@ -95,7 +95,7 @@ import Uninstaller
         let (model, _) = try await fixture.uninstallModel()
         let tmutil = Gate()
         model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginUninstall()
         model.confirmation?.run.wantsRestorePoint = true
@@ -138,7 +138,7 @@ import Uninstaller
         let model = try await fixture.diskMapModel()
         let tmutil = Gate()
         model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginReview()
         model.review?.run.wantsRestorePoint = true
@@ -161,7 +161,7 @@ import Uninstaller
         let fixture = try RemovalFixture()
         let (model, _) = try await fixture.uninstallModel()
         model.support.createRestorePoint = { Gate.snapshot }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginUninstall()
         model.confirmation?.run.wantsRestorePoint = true
@@ -205,6 +205,8 @@ import Uninstaller
     }
 
 
+    // MERGE NOTE (T-0076): add returnInTheDebloatSheetRemovesNothing(mode:), hosting DebloatSheet over a fixture
+    // DebloatModel, once debloat-catalog brings DebloatSheet; it does not exist on this branch (fix-debloat-catalog-1).
     @Test(arguments: modes)
     func returnInTheCleanSheetRemovesNothing(mode: DeletionMode) async throws {
         let fixture = try RemovalFixture()
@@ -312,6 +314,32 @@ import Uninstaller
         #expect(!sheet(.permanent, run, report: TrashReport(batch: UUID(), outcomes: [])).showsStrip)
     }
 
+    /// A permanent confirmation whose items all go to the Trash anyway (D4) opens as a Trash one, with each row's
+    /// reason. Otherwise it asked "Delete 1 item permanently?", said "Frees up to Zero KB", then reported "Nothing was
+    /// deleted" under a green check (T-0073 review 2, R3). One item that is deleted keeps it permanent.
+    @Test func aSelectionThatAllGoesToTheTrashOpensInTrashMode() throws {
+        let safari = HardcoreSnapshotTests.safari
+        let model = HardcoreSnapshotTests.cleanModel()
+        model.selection = [safari.url]
+        model.beginReview()
+        let run = try #require(model.review?.run)
+        #expect(run.mode == .trash && run.trashOnly == [safari.url: "holds your Safari data"] && !run.canMakeRestorePoint)
+        model.review = nil
+        model.selection.insert(try #require(model.items.first { $0.canClean && $0.url != safari.url }).url)
+        model.beginReview()
+        #expect(model.review?.run.mode == .permanent)
+    }
+
+    /// An uninstall that stopped before removing anything says so in its own mode's words.
+    @Test(arguments: modes)
+    func aStoppedUninstallSaysNothingWasRemoved(mode: DeletionMode) throws {
+        let model = UninstallModel.demo()
+        model.hardcore.isOn = mode == .permanent
+        model.beginUninstall()
+        let message = try #require(model.confirmation).failureMessage(for: UninstallError.stillRunning("Editor"))
+        #expect(message.hasPrefix(mode == .permanent ? "Nothing was removed, but " : "Nothing was moved to the Trash, but "), "\(message)")
+    }
+
     /// The footer's "frees up to X" leaves out what still goes to the Trash.
     @Test func cleanEstimateLeavesOutTrashOnlyItemsInHardcoreMode() async {
         let rule = CleanModelTests.rule(.safe)
@@ -388,6 +416,10 @@ import Uninstaller
         // Without Safety's name, the item's own name.
         #expect(TrashOutcome.failed(url, message: "Partly deleted.").words(in: .permanent) == PermanentText.partlyDeleted("com.example.Big"))
         #expect(TrashOutcome.failed(url, message: "Busy").words(in: .trash) == "Could not move it: Busy")
+        // The helper route's sentences already say nothing moved (T-0073 review 1, 5b).
+        for message in ["Not removed: the administrator password was not given.", "Not removed, because Editor.app is still there."] {
+            #expect(TrashOutcome.failed(url, message: message).words(in: .trash) == message)
+        }
     }
 
     /// A deleted item leaves the map like a trashed one, but is not "In Trash".
@@ -416,8 +448,9 @@ import Uninstaller
         ]
     }
 
-    /// An item a permanent batch left in the Trash is off the map, out of the pile and not "In Trash"; its row keeps
-    /// Safety's sentence. A failure that removed nothing keeps the item where it is.
+    /// An item a permanent batch left in the Trash is off the map and out of the pile; its row keeps Safety's sentence.
+    /// It is "In Trash" only when nothing of it was deleted (indexes 1 and 2), as History counts it. A failure that
+    /// removed nothing keeps the item where it is.
     @Test(arguments: 0..<3)
     func diskMapDropsItemsAPermanentBatchLeftInTheTrash(index: Int) {
         var builder = DiskMapFixtures.Builder()
@@ -436,10 +469,11 @@ import Uninstaller
         ])
         #expect(model.tree?.isRemoved(file) == true && model.tree?.isRemoved(kept) == false)
         #expect(model.tree?.allocatedSize(of: ScanTree.root) == 1_000)
-        #expect(model.pile.items.map(\.url) == [keptURL] && model.trashed.isEmpty)
+        #expect(model.pile.items.map(\.url) == [keptURL])
+        #expect(model.trashed.map(\.node) == (index == 0 ? [] : [file]), "\(model.trashed)")
     }
 
-    /// The same outcomes take a row out of Clean's list without counting it "In Trash", and take an app off
+    /// The same outcomes take a row out of Clean's list, "In Trash" when nothing of it was deleted, and take an app off
     /// Uninstall's list, with no Reveal in Finder for a path that is empty now.
     @Test(arguments: 0..<3)
     func cleanAndUninstallDropItemsAPermanentBatchLeftInTheTrash(index: Int) throws {
@@ -449,7 +483,8 @@ import Uninstaller
         let outcome = Self.leftInTrash(item.url)[index]
         #expect(outcome.leftItsPlace && !outcome.isRemoved)
         clean.apply(TrashReport(batch: UUID(), outcomes: [outcome]))
-        #expect(clean.items.isEmpty && clean.selection.isEmpty && clean.inTrash.isEmpty)
+        #expect(clean.items.isEmpty && clean.selection.isEmpty)
+        #expect(clean.inTrash.map(\.url) == (index == 0 ? [] : [item.url]), "a partly deleted row counted, or a whole one not")
 
         let uninstall = UninstallModel.demo()
         let plan = try #require(uninstall.plan)
@@ -497,7 +532,7 @@ import Uninstaller
         var support = RemovalSupport.demo
         #expect(!RemovalRun(mode: .permanent, urls: [], support: support).wantsRestorePoint)
         #expect(RemovalRun(mode: .permanent, urls: [], support: support).canMakeRestorePoint)
-        support.available = { _ in RemovalRun.restorePointMinimum - 1 }
+        support.startupAvailable = { RemovalRun.restorePointMinimum - 1 }
         var low = RemovalRun(mode: .permanent, urls: [], support: support)
         #expect(!low.canMakeRestorePoint)
         low.wantsRestorePoint = true
@@ -510,7 +545,7 @@ import Uninstaller
     @Test(arguments: [(UInt64(2_000_000_000), true), (UInt64(900_000_000), false)])
     func theRestorePointCheckboxInTheSheet(available: UInt64, enabled: Bool) throws {
         var support = RemovalSupport.demo
-        support.available = { _ in available }
+        support.startupAvailable = { available }
         let run = RemovalRun(mode: .permanent, urls: [], support: support)
         let sheet = TrashSheet(
             title: "t", message: "m", rows: [TrashSheetRow(url: URL(fileURLWithPath: "/nonexistent-macontrol-fixture/a"), bytes: 1)],
@@ -525,13 +560,78 @@ import Uninstaller
         #expect(boxes.first?.state == .off && boxes.first?.isEnabled == enabled)
     }
 
+    /// `tmutil localsnapshot` snapshots only the volumes in the Time Machine backup, so a restore point can't bring back
+    /// an item on another disk. The box is off for any such item, and its 1 GB is read on the startup disk, not on the
+    /// items' volumes (T-0073 review 2, R1: a 3 GB disk image enabled the box).
+    @Test func theRestorePointBoxIsForItemsOnTheStartupDiskOnly() {
+        let (inside, outside) = (URL(fileURLWithPath: "/Users/demo/a"), URL(fileURLWithPath: "/Volumes/Backup/b"))
+        var support = RemovalSupport.demo
+        support.isOnStartupDisk = { $0 != outside }
+        support.available = { _ in 0 }
+        support.startupAvailable = { 5_000_000_000 }
+        #expect(RemovalRun(mode: .permanent, urls: [inside], support: support).canMakeRestorePoint)
+        var mixed = RemovalRun(mode: .permanent, urls: [inside, outside], support: support)
+        #expect(!mixed.canMakeRestorePoint && mixed.restorePointUnavailable == PermanentText.restorePointOtherDisk)
+        mixed.wantsRestorePoint = true
+        #expect(!mixed.needsRestorePoint && !mixed.promisesRestorePoint)
+
+        support.available = { _ in 5_000_000_000 }
+        support.startupAvailable = { RemovalRun.restorePointMinimum - 1 }
+        let low = RemovalRun(mode: .permanent, urls: [inside], support: support)
+        #expect(!low.canMakeRestorePoint && low.restorePointUnavailable == PermanentText.restorePointTooFull)
+    }
+
+    /// Each screen hands its items to that check, and the real check finds a fixture in the temporary folder on the
+    /// startup disk. Something on another file system, /dev's, is not.
+    @Test func everyScreenAsksWhetherItsItemsAreOnTheStartupDisk() async throws {
+        let fixture = try RemovalFixture()
+        let clean = try await fixture.cleanModel()
+        let (uninstall, _) = try await fixture.uninstallModel()
+        let diskMap = try await fixture.diskMapModel()
+        clean.support.isOnStartupDisk = { _ in false }
+        uninstall.support.isOnStartupDisk = { _ in false }
+        diskMap.support.isOnStartupDisk = { _ in false }
+        for hardcore in [clean.hardcore, uninstall.hardcore, diskMap.hardcore] { hardcore.isOn = true }
+        clean.beginReview()
+        uninstall.beginUninstall()
+        diskMap.beginReview()
+        #expect(clean.review?.run.isOffStartupDisk == true && uninstall.confirmation?.run.isOffStartupDisk == true)
+        #expect(diskMap.review?.run.isOffStartupDisk == true)
+
+        #expect(RemovalSupport.isOnStartupDisk(fixture.home.appendingPathComponent("Documents/blob.bin")))
+        #expect(!RemovalSupport.isOnStartupDisk(URL(fileURLWithPath: "/dev/null")))
+        #expect(!RemovalSupport.isOnStartupDisk(URL(fileURLWithPath: "/nonexistent-macontrol-fixture/a")))
+    }
+
+    /// "Space comes back when the restore point is removed." only while one is still coming: not after it failed, and
+    /// not once the user chose to go on without one (T-0073 review 2, R2 and SS8).
+    @Test func theSpaceLineNeedsARestorePointStillComing() {
+        var run = RemovalRun(mode: .permanent, urls: [], support: .demo)
+        run.wantsRestorePoint = true
+        func explanation() -> String {
+            TrashSheet(
+                title: "t", message: "m", rows: [], confirmTitle: "c", report: nil, isWorking: false, mode: .permanent,
+                restorePoint: .constant(run.wantsRestorePoint), run: run, onConfirm: {}, onClose: {}
+            ).explanation
+        }
+        #expect(explanation() == "m " + PermanentText.restorePointSpace)
+        run.restorePointProblem = "tmutil could not create a local snapshot"
+        #expect(explanation() == "m")
+        run.restorePointProblem = nil
+        run.goesOnWithoutRestorePoint = true
+        #expect(explanation() == "m")
+        run.goesOnWithoutRestorePoint = false
+        run.wantsRestorePoint = false
+        #expect(explanation() == "m")
+    }
+
     @Test(arguments: [false, true])
     func aRestorePointIsMadeOnlyWhenTicked(ticked: Bool) async throws {
         let fixture = try RemovalFixture()
         let model = try await fixture.cleanModel()
         let made = OSAllocatedUnfairLock(initialState: 0)
         model.support.createRestorePoint = { made.withLock { $0 += 1 }; return "com.apple.TimeMachine.2026-09-24-120000.local" }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginReview()
         model.review?.run.wantsRestorePoint = ticked
@@ -546,7 +646,7 @@ import Uninstaller
         let fixture = try RemovalFixture()
         let (model, _) = try await fixture.uninstallModel()
         model.support.createRestorePoint = { throw CocoaError(.fileWriteOutOfSpace) }
-        model.support.available = { _ in 5_000_000_000 }
+        model.support.startupAvailable = { 5_000_000_000 }
         model.hardcore.isOn = true
         model.beginUninstall()
         model.confirmation?.run.wantsRestorePoint = true
