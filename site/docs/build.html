@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build from source: macontrol docs</title>
+<meta name="description" content="Build from source. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/build.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/build.html">
+<meta property="og:title" content="Build from source: macontrol docs">
+<meta property="og:description" content="Build from source. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html" aria-current="page">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Build from source</h1>
+<p class="lede">macontrol is a Swift package with no third-party dependencies. Five commands take you from source to a signed app.</p>
+<div class="note">
+  <p>The GitHub repository is private while macontrol is in preview. These steps work once you have the source.</p>
+</div>
+
+<h2 id="requirements">Requirements</h2>
+<p>Xcode 26 (Swift 6.2) or later. There are no third-party dependencies to install.</p>
+
+<h2 id="build">Build, test and bundle</h2>
+<pre><code>git clone https://github.com/Ege-BULUT/macontrol.git
+cd macontrol
+swift build              # the app and the mcscan tool
+swift test               # the test suite
+scripts/bundle-app.sh    # release build, wrapped and signed as build/Macontrol.app</code></pre>
+<p>Then open <code>build/Macontrol.app</code> from Finder. The tests build their files in temporary folders and never touch your own data or your Trash.</p>
+
+<h2 id="signing">Keep Full Disk Access across rebuilds</h2>
+<p>By default the bundle script signs ad hoc, and an ad hoc signature changes with every build, so Full Disk Access has to be granted again each time. Set <code>SIGN_IDENTITY</code> to an Apple Development identity to keep it:</p>
+<pre><code>SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/bundle-app.sh</code></pre>
+
+<h2 id="tools">Extras</h2>
+<p><code>mcscan</code> prints the allocated size of a folder in bytes, from the same engine the app uses:</p>
+<pre><code>swift run -c release mcscan ~/Downloads</code></pre>
+<p>The app can render every screen to PNG, in light and dark, with demo data. The screenshots on this site come from it:</p>
+<pre><code>build/Macontrol.app/Contents/MacOS/Macontrol --snapshot /tmp/shots</code></pre>
+<p>How the pieces fit together, and why, is in <code>docs/ARCHITECTURE.md</code> in the repository.</p>
+<nav class="pager" aria-label="Pages"><a href="faq.html" rel="prev">Previous: FAQ</a><a href="changelog.html" rel="next">Next: Changelog</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
