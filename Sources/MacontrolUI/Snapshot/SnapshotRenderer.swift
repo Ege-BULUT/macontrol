@@ -72,6 +72,9 @@ public enum SnapshotRenderer {
     public static func offscreenWindow(size: CGSize, styleMask: NSWindow.StyleMask = [.titled]) -> NSWindow {
         runHeadless()
         let window = OffscreenWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: styleMask, backing: .buffered, defer: false)
+        // Ordering a window in or out animates it on a GCD thread, and outside every display that animation never
+        // ends. 64 of them used up GCD's threads and the test run stopped with no summary.
+        window.animationBehavior = .none
         window.setFrameOrigin(OffscreenWindow.origin)
         window.orderFrontRegardless()
         return window
