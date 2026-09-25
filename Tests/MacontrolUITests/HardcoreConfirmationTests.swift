@@ -623,6 +623,9 @@ import Uninstaller
     @Test func everyScreenSharesTheAppsSwitch() {
         let app = AppModel.demo()
         #expect(app.clean.hardcore === app.hardcore && app.uninstall.hardcore === app.hardcore && app.diskMap.hardcore === app.hardcore)
+        withKnownIssue("T-0076: demo Debloat keeps its own switch. Once debloat-catalog merges, AppModel.demo passes hardcore and .demo(hardcore:)") {
+            #expect(app.debloat.hardcore === app.hardcore)
+        }
     }
 }
 
