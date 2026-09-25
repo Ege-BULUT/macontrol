@@ -54,19 +54,20 @@ struct TrashSheet: View {
             if showsStrip { PermanentStrip() }
             Divider()
             // Notes scroll with the items: in the fixed header, a long list of them squeezed the items to a sliver.
+            // They come after the items, so what the sheet removes is on screen without scrolling.
             List {
-                if report == nil && !notes.isEmpty {
-                    Section("Also happens") {
-                        ForEach(notes, id: \.self) { note in
-                            Label(note, systemImage: "info.circle").foregroundStyle(.secondary)
-                        }
-                    }
-                }
                 ForEach(sections, id: \.title) { section in
                     if let title = section.title {
                         Section(title) { rowViews(section.rows) }
                     } else {
                         rowViews(section.rows)
+                    }
+                }
+                if report == nil && !notes.isEmpty {
+                    Section("Also happens") {
+                        ForEach(notes, id: \.self) { note in
+                            Label(note, systemImage: "info.circle").foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -78,6 +79,8 @@ struct TrashSheet: View {
             footer.padding(16)
         }
         .frame(width: 640, height: 540)
+        // Esc closes a sheet even while Cancel is disabled; a confirm at work would then lose its result.
+        .interactiveDismissDisabled(isWorking)
     }
 
     private func isTrashOnly(_ row: TrashSheetRow) -> Bool { isPermanent && run.trashOnly[row.url] != nil }

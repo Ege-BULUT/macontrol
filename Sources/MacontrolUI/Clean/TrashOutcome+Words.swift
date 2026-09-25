@@ -44,12 +44,17 @@ extension TrashOutcome {
         case .trashed: "Moved to the Trash"
         case .deleted: "Deleted permanently"
         case .refused(_, let reason): reason.words
-        case .failed(let url, let message) where isPartlyDeleted:
-            // Safety names the copy in the Trash: `… the rest is in the Trash as "<name>". …`
-            PermanentText.partlyDeleted(message.components(separatedBy: "as \"").dropFirst().first?
-                .components(separatedBy: "\"").first ?? url.lastPathComponent)
+        case .failed(let url, _) where isPartlyDeleted: PermanentText.partlyDeleted(nameInTrash ?? url.lastPathComponent)
         case .failed(_, let message): mode == .permanent ? message : "Could not move it: \(message)"
         }
+    }
+
+    /// The name Safety gives the copy in the Trash: `… the rest is in the Trash as "<name>". Empty the Trash …`. It
+    /// runs to that closing phrase, not to the next quote: a name can hold quotes.
+    private var nameInTrash: String? {
+        guard case .failed(_, let message) = self, let start = message.range(of: "as \"")?.upperBound,
+              let end = message.range(of: "\". Empty the Trash", range: start..<message.endIndex)?.lowerBound else { return nil }
+        return String(message[start..<end])
     }
 
     var words: String { words(in: .trash) }

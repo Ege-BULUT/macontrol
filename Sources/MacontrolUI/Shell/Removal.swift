@@ -45,7 +45,19 @@ struct RemovalRun: Equatable {
 
 /// An open confirmation that carries a `RemovalRun`: Clean's review, the uninstall sheet, Disk Map's review.
 protocol RemovalConfirmation {
+    /// New for every sheet: a confirm that awaited writes back only to the sheet it started from.
+    var id: UUID { get }
     var run: RemovalRun { get set }
+}
+
+extension Optional where Wrapped: RemovalConfirmation {
+    /// Changes the confirmation only while it is still the one `id` names. While a confirm awaits (the restore point,
+    /// the recheck, the batch), its sheet can close and another open, even in the other mode (T-0073 review 1).
+    mutating func ifStill(_ id: UUID, _ change: (inout Wrapped) -> Void) {
+        guard var confirmation = self, confirmation.id == id else { return }
+        change(&confirmation)
+        self = confirmation
+    }
 }
 
 /// What a confirmation needs besides TrashService in hardcore mode; each part is injected in tests.
@@ -70,23 +82,25 @@ struct RemovalSupport {
         return readings.isEmpty ? nil : readings.reduce(0, +)
     }
 
-    /// Makes the restore point the confirmation at `path` asks for, showing progress there. False when it failed,
-    /// or the confirmation closed meanwhile: the reason is then in the run, and nothing may be deleted until the
-    /// user answers.
+    /// Makes the restore point the confirmation at `path` asks for, showing progress there, and returns that
+    /// confirmation's run to delete with: its mode, and the restore point's name. Nil when it failed (the reason is then
+    /// in the run, and nothing may be deleted until the user answers) or when that confirmation closed meanwhile. Only
+    /// that confirmation is written to: another one may be open by the time tmutil returns.
     func makeRestorePoint<Model: AnyObject, Confirmation: RemovalConfirmation>(
         in model: Model, _ path: ReferenceWritableKeyPath<Model, Confirmation?>
-    ) async -> Bool {
-        guard model[keyPath: path]?.run.needsRestorePoint == true else { return true }
+    ) async -> RemovalRun? {
+        guard let opened = model[keyPath: path] else { return nil }
+        guard opened.run.needsRestorePoint else { return opened.run }
         model[keyPath: path]?.run.isCreatingRestorePoint = true
-        defer { model[keyPath: path]?.run.isCreatingRestorePoint = false }
-        do {
-            let name = try await createRestorePoint()
-            model[keyPath: path]?.run.restorePoint = name
-            return model[keyPath: path] != nil
-        } catch {
-            model[keyPath: path]?.run.restorePointProblem = error.localizedDescription
-            return false
+        var name: String?, problem: String?
+        do { name = try await createRestorePoint() } catch { problem = error.localizedDescription }
+        model[keyPath: path].ifStill(opened.id) {
+            $0.run.isCreatingRestorePoint = false
+            $0.run.restorePoint = name
+            $0.run.restorePointProblem = problem
         }
+        guard name != nil, let now = model[keyPath: path], now.id == opened.id else { return nil }
+        return now.run
     }
 
     /// Runs `remove`; for a permanent batch, reads free space right before and after it and returns the change.

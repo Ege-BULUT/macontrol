@@ -59,6 +59,120 @@ import Uninstaller
         #expect(fixture.inTrash == (opened == .trash ? ["blob.bin"] : []), "fixture Trash: \(fixture.inTrash)")
     }
 
+    // MARK: Criterion 5: a confirm that outlives its sheet acts and writes for that sheet only (T-0073 review 1)
+
+    /// P1: while tmutil runs, the permanent review closes, the switch goes off and a Trash review opens. The first
+    /// confirm then deletes nothing, least of all in Trash mode, and leaves the new review as it was.
+    @Test func cleanConfirmThatOutlivesItsReviewTouchesNothingElse() async throws {
+        let fixture = try RemovalFixture()
+        let model = try await fixture.cleanModel()
+        let tmutil = Gate()
+        model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
+        model.support.available = { _ in 5_000_000_000 }
+        model.hardcore.isOn = true
+        model.beginReview()
+        model.review?.run.wantsRestorePoint = true
+        let confirm = Task { await model.confirmReview() }
+        await tmutil.waitUntilReached()
+        model.review = nil
+        model.hardcore.isOn = false
+        model.beginReview()
+        let second = try #require(model.review)
+        tmutil.open()
+        await confirm.value
+
+        #expect(fixture.inTrash.isEmpty, "the permanent confirm ran in Trash mode: \(fixture.inTrash)")
+        try fixture.expectUntouched(["home/Library/Caches/com.example.a/blob"])
+        let now = try #require(model.review)
+        #expect(now.id == second.id && now.report == nil && now.run.restorePoint == nil && !now.run.isCreatingRestorePoint)
+        // The new review still works, in its own mode.
+        await model.confirmReview()
+        #expect(fixture.inTrash == ["com.example.a"] && model.review?.report != nil)
+    }
+
+    @Test func uninstallConfirmThatOutlivesItsSheetTouchesNothingElse() async throws {
+        let fixture = try RemovalFixture()
+        let (model, _) = try await fixture.uninstallModel()
+        let tmutil = Gate()
+        model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
+        model.support.available = { _ in 5_000_000_000 }
+        model.hardcore.isOn = true
+        model.beginUninstall()
+        model.confirmation?.run.wantsRestorePoint = true
+        let confirm = Task { await model.confirmUninstall() }
+        await tmutil.waitUntilReached()
+        model.confirmation = nil
+        model.hardcore.isOn = false
+        model.beginUninstall()
+        let second = try #require(model.confirmation)
+        tmutil.open()
+        await confirm.value
+
+        #expect(fixture.modes.withLock { $0 }.isEmpty, "the closed sheet's uninstall ran")
+        try fixture.expectUntouched(["Applications/Probe/Contents/Info.plist"])
+        let now = try #require(model.confirmation)
+        #expect(now.id == second.id && now.report == nil && now.run.restorePoint == nil && !now.run.isCreatingRestorePoint)
+    }
+
+    /// The batch itself outlives the sheet: it finishes, and its report stays off the sheet opened meanwhile.
+    @Test func uninstallResultLandsOnlyOnItsOwnSheet() async throws {
+        let fixture = try RemovalFixture()
+        let batch = Gate()
+        let (model, _) = try await fixture.uninstallModel(hold: batch)
+        model.beginUninstall()
+        let confirm = Task { await model.confirmUninstall() }
+        await batch.waitUntilReached()
+        model.confirmation = nil
+        model.beginUninstall()
+        let second = try #require(model.confirmation)
+        batch.open()
+        await confirm.value
+
+        #expect(fixture.inTrash == ["Probe", "com.example.macontrol-probe"], "fixture Trash: \(fixture.inTrash)")
+        let now = try #require(model.confirmation)
+        #expect(now.id == second.id && now.report == nil && now.errorMessage == nil)
+    }
+
+    @Test func diskMapConfirmThatOutlivesItsReviewTouchesNothingElse() async throws {
+        let fixture = try RemovalFixture()
+        let model = try await fixture.diskMapModel()
+        let tmutil = Gate()
+        model.support.createRestorePoint = { await tmutil.pass(); return Gate.snapshot }
+        model.support.available = { _ in 5_000_000_000 }
+        model.hardcore.isOn = true
+        model.beginReview()
+        model.review?.run.wantsRestorePoint = true
+        let confirm = Task { await model.confirmReview() }
+        await tmutil.waitUntilReached()
+        model.review = nil
+        model.hardcore.isOn = false
+        model.beginReview()
+        let second = try #require(model.review)
+        tmutil.open()
+        await confirm.value
+
+        #expect(fixture.inTrash.isEmpty, "the permanent confirm ran in Trash mode: \(fixture.inTrash)")
+        let now = try #require(model.review)
+        #expect(now.id == second.id && now.phase == .confirm && now.run.restorePoint == nil && !now.run.isCreatingRestorePoint)
+    }
+
+    /// Criterion 8, D11: History shows an uninstall's restore point only if its name reaches the remove step.
+    @Test func uninstallHandsItsRestorePointToTheRemoveStep() async throws {
+        let fixture = try RemovalFixture()
+        let (model, _) = try await fixture.uninstallModel()
+        model.support.createRestorePoint = { Gate.snapshot }
+        model.support.available = { _ in 5_000_000_000 }
+        model.hardcore.isOn = true
+        model.beginUninstall()
+        model.confirmation?.run.wantsRestorePoint = true
+        await model.confirmUninstall()
+        #expect(model.confirmation?.run.restorePoint == Gate.snapshot && model.confirmation?.report != nil)
+        let journaled = await fixture.service().history().map(\.restorePoint)
+        withKnownIssue("T-0075: this branch's Uninstaller takes no restorePoint and deletes nothing permanently. After the merge, pass run.restorePoint in confirmUninstall and in the fixture's remove step") {
+            #expect(!journaled.isEmpty && journaled.allSatisfy { $0 == Gate.snapshot }, "journal: \(journaled)")
+        }
+    }
+
     // MARK: Criterion 4: Return never confirms, Esc cancels, in every sheet and both modes
 
     @Test(arguments: modes)
@@ -237,6 +351,10 @@ import Uninstaller
             + "\"com.example.Big 2\". Empty the Trash to finish. First: a/b: Operation not permitted")
         #expect(outcome.isPartlyDeleted && !outcome.isRemoved)
         #expect(outcome.words(in: .permanent) == "Partly deleted. The rest is in the Trash as \"com.example.Big 2\"; empty the Trash to finish.")
+        // The name runs to Safety's closing phrase: it may hold quotes (T-0073 review 1, P4).
+        let quoted = TrashOutcome.failed(url, message: "Partly deleted. 1 item inside could not be removed; the rest is in the Trash as "
+            + "\"My \"Best\" Cut\". Empty the Trash to finish. First: a: Operation not permitted")
+        #expect(quoted.words(in: .permanent) == PermanentText.partlyDeleted("My \"Best\" Cut"))
         // Without Safety's name, the item's own name.
         #expect(TrashOutcome.failed(url, message: "Partly deleted.").words(in: .permanent) == PermanentText.partlyDeleted("com.example.Big"))
         #expect(TrashOutcome.failed(url, message: "Busy").words(in: .trash) == "Could not move it: Busy")
@@ -478,6 +596,25 @@ import Uninstaller
     }
 }
 
+/// Holds an async step (tmutil, a batch) until the test opens it, so the test can act while the step runs.
+nonisolated final class Gate: Sendable {
+    static let snapshot = "com.apple.TimeMachine.2026-09-25-120000.local"
+    private let reached = AsyncStream<Void>.makeStream()
+    private let opened = AsyncStream<Void>.makeStream()
+
+    func pass() async {
+        reached.continuation.yield()
+        for await _ in opened.stream {}
+    }
+
+    func waitUntilReached() async {
+        for await _ in reached.stream { return }
+    }
+
+    /// Every pass from now on goes straight through.
+    func open() { opened.continuation.finish() }
+}
+
 /// A home, a Trash folder and a journal in one temporary folder. The Trash backend renames into the fixture Trash and
 /// refuses anything outside the fixture.
 final class RemovalFixture {
@@ -522,10 +659,13 @@ final class RemovalFixture {
     /// extension, so LaunchServices never registers it (listing fixture apps left fake apps in the user's
     /// LaunchServices database, T-0076). Quit and bootout are stand-ins; the remove step records its mode and then
     /// either runs the fixture's TrashService for real or answers `outcome` for every item.
-    func uninstallModel(outcome: (@Sendable (TrashItem) -> TrashOutcome)? = nil) async throws -> (UninstallModel, UninstallPlan) {
+    func uninstallModel(
+        outcome: (@Sendable (TrashItem) -> TrashOutcome)? = nil, hold: Gate? = nil
+    ) async throws -> (UninstallModel, UninstallPlan) {
         let service = service()
         let modes = modes
         let actions = UninstallActions(quit: { _ in true }, bootout: { _ in }, remove: { items, mode in
+            await hold?.pass()
             modes.withLock { $0.append(mode) }
             if let outcome { return TrashReport(batch: UUID(), outcomes: items.map(outcome)) }
             return await service.remove(items, mode: mode)

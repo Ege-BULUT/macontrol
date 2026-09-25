@@ -342,27 +342,30 @@ public final class UninstallModel {
     /// Runs exactly the confirmed uninstall, in the mode the sheet opened with, then applies each outcome.
     func confirmUninstall() async {
         guard let pending = confirmation, pending.report == nil, !pending.isWorking, pending.run.restorePointProblem == nil else { return }
+        // From here on only this sheet is written to: the next one can be another app's.
         confirmation?.isWorking = true
-        defer { confirmation?.isWorking = false }
-        guard await support.makeRestorePoint(in: self, \.confirmation) else { return }
+        defer { confirmation.ifStill(pending.id) { $0.isWorking = false } }
+        guard let run = await support.makeRestorePoint(in: self, \.confirmation) else { return }
         let chosen = Set(pending.leftovers.map(\.url))
-        let mode = pending.run.mode
         do {
-            // ponytail: the restore point's name is not recorded on uninstall journal lines yet: Uninstaller.uninstall
-            // takes no restorePoint (asked on T-0075). The snapshot is still made before anything is deleted.
-            let (report, freed) = try await support.measuring(mode, pending.rows.map(\.url)) {
+            // MERGE NOTE (T-0075): pass `restorePoint: run.restorePoint`; this branch's Uninstaller takes none, and the
+            // default nil would drop the name from the journal lines. withKnownIssue in
+            // uninstallHandsItsRestorePointToTheRemoveStep flips once it is passed. The snapshot is made either way.
+            let (report, freed) = try await support.measuring(run.mode, pending.rows.map(\.url)) {
                 if let uninstaller {
-                    try await uninstaller.uninstall(pending.plan, leftovers: chosen, mode: mode)
+                    try await uninstaller.uninstall(pending.plan, leftovers: chosen, mode: run.mode)
                 } else {
                     // Demo data: nothing real to move.
                     TrashReport(batch: UUID(), outcomes: pending.rows.map { .refused($0.url, .notImplemented) })
                 }
             }
             apply(report, to: pending.plan)
-            confirmation?.run.freed = freed
-            confirmation?.report = report
+            confirmation.ifStill(pending.id) {
+                $0.run.freed = freed
+                $0.report = report
+            }
         } catch {
-            confirmation?.errorMessage = pending.failureMessage(for: error)
+            confirmation.ifStill(pending.id) { $0.errorMessage = pending.failureMessage(for: error) }
             // The plan may be stale (an update replaced the bundle, the app recreated a folder), and retrying it
             // would fail the same way. Read the app and its leftovers again for the next try.
             if uninstaller != nil { await rescan() }

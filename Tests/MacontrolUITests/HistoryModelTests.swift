@@ -76,14 +76,15 @@ import TestSupport
 
     // MARK: Hardcore mode (DESIGN-debloat section 1.5, T-0073 criterion 8)
 
-    /// A permanent batch says so, has no Undo, and is not counted as in the Trash.
+    /// A permanent batch says so, has no Undo, and is not counted as in the Trash. Its figure is what the items took on
+    /// disk, never "freed": a restore point keeps their blocks, and the journal has no measured change (T-0073 review 1).
     @Test func aPermanentBatchHasNoUndoAndIsNotInTheTrash() {
         let batch = UUID()
         let deleted = HistoryBatch(id: batch, entries: [
             Self.entry(batch, 1, "/a/Old Exports", 2_000_000_000, permanent: true),
             Self.entry(batch, 1, "/a/Cache", 500_000_000, permanent: true),
         ])
-        #expect(deleted.status == "Deleted permanently · freed \(UInt64(2_500_000_000).formattedBytes) · can't be undone")
+        #expect(deleted.status == "Deleted permanently · \(UInt64(2_500_000_000).formattedBytes) · can't be undone")
         #expect(!deleted.canUndo && deleted.inTrash.isEmpty)
         let model = HistoryModel(trash: nil, entries: deleted.entries + [Self.entry(UUID(), 2, "/a/Logs", 100)])
         #expect(model.inTrashBytes == 100)
@@ -94,7 +95,10 @@ import TestSupport
             Self.entry(batch, 1, "/a/Library/Safari", 300),
         ])
         #expect(mixed.canUndo)
-        #expect(mixed.status == "Deleted permanently · freed \(UInt64(500).formattedBytes) · can't be undone. In Trash, frees \(UInt64(300).formattedBytes) when emptied")
+        #expect(mixed.status == "Deleted permanently · \(UInt64(500).formattedBytes) · can't be undone. In Trash, frees \(UInt64(300).formattedBytes) when emptied")
+        for status in [deleted.status, mixed.status] {
+            #expect(!status.localizedCaseInsensitiveContains("freed"))
+        }
     }
 
     @Test func theRestorePointLineCarriesTheRollbackClause() {

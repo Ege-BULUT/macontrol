@@ -16,6 +16,7 @@ struct ReviewState: RemovalConfirmation {
         case done([ReviewOutcome])
     }
 
+    let id = UUID()
     let items: [StagedItem]
     var estimate: Estimate = .measuring
     var phase: Phase = .confirm
@@ -88,11 +89,10 @@ extension DiskMapModel {
     func confirmReview() async {
         guard let review, review.canConfirm else { return }
         self.review?.phase = .moving
-        guard await support.makeRestorePoint(in: self, \.review) else {
-            self.review?.phase = .confirm
+        guard let run = await support.makeRestorePoint(in: self, \.review) else {
+            self.review.ifStill(review.id) { $0.phase = .confirm }
             return
         }
-        let run = self.review?.run ?? review.run
         let requests = review.items.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
         let (report, freed) = await support.measuring(run.mode, requests.map(\.url)) {
             if let trashService {
@@ -103,8 +103,10 @@ extension DiskMapModel {
         }
         // Applied before `review` is touched: the sheet may be gone by now, and the report must land anyway.
         let outcomes = apply(report, mode: run.mode)
-        self.review?.run.freed = freed
-        self.review?.phase = .done(outcomes)
+        self.review.ifStill(review.id) {
+            $0.run.freed = freed
+            $0.phase = .done(outcomes)
+        }
     }
 
     /// "Delete Permanently" after the restore point failed: go on without one.

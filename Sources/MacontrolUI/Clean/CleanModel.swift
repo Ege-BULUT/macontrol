@@ -223,20 +223,22 @@ public final class CleanModel {
     /// The scan can be hours old: an app launched since keeps its cache (F-0015).
     func confirmReview() async {
         guard let pending = review, pending.report == nil, !pending.isWorking, pending.run.restorePointProblem == nil else { return }
+        // From here on only this review is written to: each await below can outlive its sheet.
         review?.isWorking = true
-        defer { review?.isWorking = false }
-        guard await support.makeRestorePoint(in: self, \.review) else { return }
-        let run = review?.run ?? pending.run
+        defer { review.ifStill(pending.id) { $0.isWorking = false } }
+        guard let run = await support.makeRestorePoint(in: self, \.review) else { return }
         var toMove = pending.items
         if let cleaner {
             let checked = await cleaner.recheck(pending.items)
             update(with: checked)
             toMove = checked.filter(\.canClean)
-            review?.items = checked
-            review?.notMoved = Dictionary(
-                checked.filter { !$0.canClean }.map { ($0.url, $0.skipReason ?? "It can't be cleaned now") },
-                uniquingKeysWith: { first, _ in first }
-            )
+            review.ifStill(pending.id) {
+                $0.items = checked
+                $0.notMoved = Dictionary(
+                    checked.filter { !$0.canClean }.map { ($0.url, $0.skipReason ?? "It can't be cleaned now") },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            }
         }
         let batch = toMove.map(\.trashItem)
         // No cleaner means no recheck, so nothing may reach a real Trash either.
@@ -250,8 +252,10 @@ public final class CleanModel {
             }
         }
         apply(report)
-        review?.run.freed = freed
-        review?.report = report
+        review.ifStill(pending.id) {
+            $0.run.freed = freed
+            $0.report = report
+        }
     }
 
     /// Puts rechecked items back in the list: fresh sizes and skip reasons, and a held item is unchecked.

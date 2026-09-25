@@ -105,10 +105,12 @@ struct HistoryBatch: Identifiable {
     }
 
     /// Never "freed" for the Trash: a same-volume trash is a rename and frees 0 bytes until the Trash is emptied (F-0042).
+    /// Nor for a permanent batch: the journal holds the items' sizes, not what came back. A restore point or another
+    /// snapshot keeps their blocks, and a partly deleted folder is journaled at its full size (T-0073 review 1).
     var status: String {
         var parts: [String] = []
         if !deleted.isEmpty {
-            parts.append("Deleted permanently · freed \(deleted.reduce(0) { $0 + $1.allocated }.formattedBytes) · can't be undone")
+            parts.append("Deleted permanently · \(deleted.reduce(0) { $0 + $1.allocated }.formattedBytes) · can't be undone")
         }
         if !inTrash.isEmpty {
             let bytes = inTrash.reduce(0) { $0 + $1.allocated }.formattedBytes
