@@ -10,6 +10,9 @@ import Testing
         let window = SnapshotRenderer.offscreenWindow(size: SnapshotRenderer.windowSize, styleMask: styleMask)
         defer { window.orderOut(nil) }
         #expect(window.isVisible)
+        // An order-in or order-out animation never ends off screen and holds a dispatch thread for good: 32 windows
+        // used up the pool and hung the whole test run.
+        #expect(window.animationBehavior == .none)
         for screen in NSScreen.screens {
             #expect(!window.frame.intersects(screen.frame), "window at \(window.frame) overlaps a display at \(screen.frame)")
         }

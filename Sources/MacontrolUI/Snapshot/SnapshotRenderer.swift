@@ -72,6 +72,9 @@ public enum SnapshotRenderer {
     public static func offscreenWindow(size: CGSize, styleMask: NSWindow.StyleMask = [.titled]) -> NSWindow {
         runHeadless()
         let window = OffscreenWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: styleMask, backing: .buffered, defer: false)
+        // Ordering in and out starts a transform animation that never ends off every display, and each one holds a
+        // dispatch thread: after 32 windows the pool of 64 is gone and the test run hangs.
+        window.animationBehavior = .none
         window.setFrameOrigin(OffscreenWindow.origin)
         window.orderFrontRegardless()
         return window
