@@ -104,7 +104,8 @@ import Testing
         let safety = Self.sources.appendingPathComponent("Safety")
         let texts = try FileManager.default.contentsOfDirectory(atPath: safety.path).filter { $0.hasSuffix(".swift") }
             .map { try String(contentsOf: safety.appendingPathComponent($0), encoding: .utf8) }
-        guard let scope = texts.first(where: { $0.contains("appleContent") && $0.contains("PrivilegedScope") }) else {
+        // The file that declares it: PrivilegedRouting.swift names both words too, and directory order is not fixed.
+        guard let scope = texts.first(where: { $0.contains("static let appleContent") }) else {
             withKnownIssue("T-0075: PrivilegedScope.appleContent is not on this branch yet") {
                 Issue.record("no PrivilegedScope.appleContent in Sources/Safety")
             }
