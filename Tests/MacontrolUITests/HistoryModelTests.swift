@@ -63,6 +63,10 @@ import TestSupport
         let entry = try JSONDecoder().decode(JournalEntry.self, from: JSONSerialization.data(withJSONObject: line))
         let status = HistoryBatch(id: batch, entries: [entry]).status
         #expect(status.contains(PermanentText.partlyDeleted("Old Exports 2").dropLast()) && !status.contains("Deleted permanently"), "\(status)")
+        // Its row too (T-0073 review 3, item 2).
+        let host = Host(EntryRow(entry: entry), size: CGSize(width: 560, height: 40))
+        defer { host.close() }
+        #expect(host.allTexts.contains("Partly deleted") && !host.allTexts.contains("Deleted permanently"), "\(host.allTexts)")
     }
 
     @Test func inTrashTotalSkipsRestoredItems() {

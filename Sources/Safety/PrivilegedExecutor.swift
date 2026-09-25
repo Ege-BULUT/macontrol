@@ -191,7 +191,7 @@ public struct PrivilegedExecutor: Sendable {
         guard erase, case .trashed(let to) = moved else { return moved }
         switch RemovalEngine().erase(trashed: URL(fileURLWithPath: to), identity: identity) {
         case .removed: return .deleted
-        case .changed: return .failed("Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.", to: to)
+        case .changed: return .failed(TrashBatch.changedInTrash, to: to)
         case .failed(let failures):
             // Nothing was removed: it is whole in the Trash, where History has no Undo for what root moved (D12).
             return .failed(TrashBatch.notDeleted(failures, trashName: (to as NSString).lastPathComponent, asAdministrator: true), to: to)

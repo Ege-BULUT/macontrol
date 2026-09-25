@@ -266,7 +266,7 @@ struct TrashBatch {
         case .changed:
             gone[key] = .trashed(destination)
             record(original: path, trashedTo: destination, identity: identity, allocated: allocated)
-            return .failed(shown, message: "Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.")
+            return .failed(shown, message: Self.changedInTrash)
         case .failed(let failures):
             // Nothing was removed: it is whole in the Trash, so it keeps its Undo.
             gone[key] = .trashed(destination)
@@ -299,6 +299,10 @@ struct TrashBatch {
         return "Partly deleted. \(count) inside could not be removed; the rest is in the Trash as \"\(trashName)\". "
             + "Empty the Trash to finish. First: \(first(failures, trashName))"
     }
+
+    /// The erase found another object in the Trash under the trashed name: the item is whole in the Trash. Also the
+    /// administrator helper's words for the same stop.
+    static let changedInTrash = "Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish."
 
     /// `asAdministrator`: root moved it, so History has no Undo for it (D12) and Finder is the way back.
     static func notDeleted(_ failures: [RemovalEngine.Failure], trashName: String, asAdministrator: Bool = false) -> String {

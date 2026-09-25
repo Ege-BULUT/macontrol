@@ -324,6 +324,17 @@ import Uninstaller
         }
     }
 
+    /// The live sheet asks Safety, which reads the canonical path: the path copy above serves demo data only, and misses
+    /// another spelling of the same place (T-0073 review 3). Only ~/Library itself is opened, read-only.
+    @Test func theLiveSheetAsksSafetyWhichSeesThroughASymlinkedHome() throws {
+        let tmp = try TemporaryDirectory()
+        let link = tmp.url.appendingPathComponent("home")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: FileManager.default.homeDirectoryForCurrentUser)
+        let cloud = link.appendingPathComponent("Library/Mobile Documents")
+        #expect(TrashOnly.reason(for: cloud) == nil, "the path copy cannot see it")
+        #expect(RemovalSupport().trashOnlyReason(cloud) == "stored in iCloud")
+    }
+
     /// Safety's note on an item that went (a LaunchDaemon the helper could not stop) shows under its outcome. The row
     /// is hosted alone: List builds its rows' accessibility lazily.
     @Test func aReportNoteShowsInItsRow() {
@@ -463,6 +474,8 @@ import Uninstaller
             let whole = TrashOutcome.failed(url, message: TrashBatch.notDeleted(failures, trashName: "Old 2", asAdministrator: asAdministrator))
             #expect(whole.isWholeInTrash && whole.isLeftInTrash && !whole.isPartlyDeleted)
         }
+        let changed = TrashOutcome.failed(url, message: TrashBatch.changedInTrash)
+        #expect(changed.isWholeInTrash && changed.isLeftInTrash && !changed.isPartlyDeleted)
     }
 
     @Test func aPartlyDeletedItemSaysWhereTheRestIs() {

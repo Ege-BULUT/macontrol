@@ -87,8 +87,8 @@ struct RemovalSupport {
     var isOnStartupDisk: (URL) -> Bool = { RemovalSupport.isOnStartupDisk($0) }
     /// Available bytes on the startup disk, where `tmutil` makes the restore point; nil when unreadable.
     var startupAvailable: () -> UInt64? = { try? VolumeSummary.of(URL(fileURLWithPath: "/System/Volumes/Data")).available }
-    /// Why an item goes to the Trash even in permanent mode (D4), or nil.
-    var trashOnlyReason: (URL) -> String? = { TrashOnly.reason(for: $0) }
+    /// Why an item goes to the Trash even in permanent mode (D4), or nil: Safety's own rule, the one the delete follows.
+    var trashOnlyReason: (URL) -> String? = { ProtectedPaths.trashOnlyReason(for: $0) }
 
     /// Fixed numbers for demo data: nothing real is read or made.
     static let demo = RemovalSupport(
@@ -146,8 +146,8 @@ struct RemovalSupport {
 }
 
 /// D4: items that go to the Trash even in hardcore mode, with the reason the sheet shows (DESIGN-debloat section 2.2).
-/// ponytail: mirrors Safety's trash-only rule by path, for the sheet only; Safety decides what happens and the result
-/// rows report it. Swap for `ProtectedPaths.trashOnlyReason(for:)` once permanent-engine merges it (comment on T-0074).
+/// Demo data only: its paths do not exist, so Safety's `ProtectedPaths.trashOnlyReason(for:)`, which the live sheet
+/// uses, cannot read them. A copy of Safety's rule by path, without its canonical spelling or iCloud metadata.
 nonisolated enum TrashOnly {
     static let places: [(path: String, reason: String)] = [
         ("Library/Group Containers/group.com.apple.notes", "holds your notes"),

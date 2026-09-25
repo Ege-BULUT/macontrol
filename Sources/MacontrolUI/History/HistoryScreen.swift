@@ -100,10 +100,11 @@ private struct BatchCard: View {
         .card()
     }
 
-    /// Red for a permanent batch, the tint while anything can be put back, gray once everything is back.
+    /// Red for a permanent batch (a partly deleted item too), the tint while anything can be put back, gray once
+    /// everything is back.
     @ViewBuilder
     private var icon: some View {
-        if !batch.deleted.isEmpty {
+        if !batch.deleted.isEmpty || !batch.partlyDeleted.isEmpty {
             Image(systemName: "xmark.bin.fill").foregroundStyle(Theme.danger)
         } else if !batch.inTrash.isEmpty {
             Image(systemName: "trash.fill").foregroundStyle(.tint)
@@ -113,7 +114,7 @@ private struct BatchCard: View {
     }
 }
 
-private struct EntryRow: View {
+struct EntryRow: View {
     let entry: JournalEntry
 
     var body: some View {
@@ -125,6 +126,9 @@ private struct EntryRow: View {
             Spacer()
             if entry.restored {
                 Text("Put back").foregroundStyle(.secondary)
+            } else if entry.leftInTrash != nil {
+                // Its size is the whole item's: the part in the Trash was not measured (the batch status names it).
+                Text("Partly deleted").foregroundStyle(Theme.dangerText)
             } else if entry.isPermanent {
                 Text("Deleted permanently").foregroundStyle(Theme.dangerText)
             } else if entry.asAdministrator {
