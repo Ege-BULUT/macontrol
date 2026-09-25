@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    { "source": "/tasks.html", "destination": "/board/tasks.html" },
+    { "source": "/roadmap.html", "destination": "/board/roadmap.html" },
+    { "source": "/memory.html", "destination": "/board/memory.html" },
+    { "source": "/analysis.html", "destination": "/board/analysis.html" },
+    { "source": "/data/:path*", "destination": "/board/data/:path*" },
+    { "source": "/attachments/:path*", "destination": "/board/attachments/:path*" }
+  ]
+}

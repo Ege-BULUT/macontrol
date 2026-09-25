@@ -11,10 +11,8 @@ import Testing
     func screenFitsTheMinimumWindow(item: SidebarItem) throws {
         SnapshotRenderer.runHeadless()
         let size = RootView.minimumSize
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        let window = SnapshotRenderer.offscreenWindow(size: size, styleMask: [.titled, .fullSizeContentView])
         window.contentView = NSHostingView(rootView: RootView(model: .demo(selection: item)).frame(width: size.width, height: size.height))
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         defer { window.orderOut(nil) }
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 
