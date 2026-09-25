@@ -15,12 +15,21 @@ public enum SnapshotRenderer {
         var name: String
         var view: AnyView
         var size: CGSize?
+        /// Drawn once this holds: the Disk Map computes its layout off the main actor, and under load it is not
+        /// there after the first half second, so the shot showed the spinner.
+        var isReady: () -> Bool = { true }
+    }
+
+    static func screen(_ item: SidebarItem, suffix: String = "", size: CGSize) -> Shot {
+        let model = AppModel.demo(selection: item)
+        return Shot(name: item.rawValue + suffix, view: AnyView(RootView(model: model)), size: size,
+                    isReady: { item != .diskMap || model.diskMap.layout != nil })
     }
 
     static var shots: [Shot] {
-        SidebarItem.allCases.map { Shot(name: $0.rawValue, view: AnyView(RootView(model: .demo(selection: $0))), size: windowSize) }
+        SidebarItem.allCases.map { screen($0, size: windowSize) }
         // The minimum window hides what the default size has room for (T-0056).
-        + SidebarItem.allCases.map { Shot(name: "\($0.rawValue)-small", view: AnyView(RootView(model: .demo(selection: $0))), size: RootView.minimumSize) }
+        + SidebarItem.allCases.map { screen($0, suffix: "-small", size: RootView.minimumSize) }
         + [
             Shot(name: "overview-limited", view: AnyView(RootView(model: .demo(fullDiskAccess: .denied))), size: windowSize),
             Shot(name: "onboarding", view: AnyView(OnboardingSheet(access: .demo())), size: nil),
@@ -36,14 +45,14 @@ public enum SnapshotRenderer {
         for shot in shots {
             for dark in [false, true] {
                 let url = directory.appendingPathComponent("\(shot.name)-\(dark ? "dark" : "light").png")
-                try png(of: shot.view, dark: dark, size: shot.size).write(to: url)
+                try png(of: shot.view, dark: dark, size: shot.size, isReady: shot.isReady).write(to: url)
                 written.append(url)
             }
         }
         return written
     }
 
-    public static func png(of view: some View, dark: Bool = false, size: CGSize? = windowSize) throws -> Data {
+    public static func png(of view: some View, dark: Bool = false, size: CGSize? = windowSize, isReady: () -> Bool = { true }) throws -> Data {
         runHeadless()
         let hosting = NSHostingView(rootView: AnyView(view))
         // Lets `.toolbar` and `.navigationTitle` reach the window, as they do in the real app.
@@ -57,6 +66,10 @@ public enum SnapshotRenderer {
         defer { window.orderOut(nil) }
         // Let SwiftUI finish its first passes: lists and split views fill in asynchronously.
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        let deadline = Date().addingTimeInterval(10)
+        while !isReady() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        // A last pass, so the view draws what just became ready.
+        if isReady() { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
 
         let image = try windowImage(window) ?? cachedDisplay(window)
         return try pngData(image)
