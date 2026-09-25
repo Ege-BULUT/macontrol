@@ -65,10 +65,8 @@ enum Snapshot {
     /// Lays `view` out in an off-screen window and returns the frame of its tallest scroll view (a List).
     static func largestScrollView(in view: some View, size: CGSize) -> CGRect? {
         SnapshotRenderer.runHeadless()
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        let window = SnapshotRenderer.offscreenWindow(size: size)
         window.contentView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         defer { window.orderOut(nil) }
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         func scrollViews(in view: NSView) -> [NSScrollView] {
