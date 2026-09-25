@@ -28,7 +28,7 @@
       "critical"
     ],
     "taskIdPrefix": "T-",
-    "nextTaskSeq": 85
+    "nextTaskSeq": 90
   },
   "tasks": [
     {
@@ -8477,7 +8477,8 @@
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0051"
+        "T-0051",
+        "T-0088"
       ],
       "owner": "",
       "createdAt": "2026-09-23T14:08:27",
@@ -8538,6 +8539,12 @@
           "actor": "final-fix",
           "event": "updated",
           "detail": "status: development -> ready_for_review"
+        },
+        {
+          "ts": "2026-09-25T16:57:18",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0088"
         }
       ],
       "sessions": [
@@ -8944,7 +8951,8 @@
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0051"
+        "T-0051",
+        "T-0087"
       ],
       "owner": "",
       "createdAt": "2026-09-23T14:08:27",
@@ -9053,6 +9061,12 @@
           "actor": "review-ux-polish-2",
           "event": "reviewed",
           "detail": "verdict=approve by review-ux-polish-2"
+        },
+        {
+          "ts": "2026-09-25T16:57:08",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0087"
         }
       ],
       "sessions": [
@@ -9702,7 +9716,8 @@
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0051"
+        "T-0051",
+        "T-0088"
       ],
       "owner": "",
       "createdAt": "2026-09-23T14:08:28",
@@ -9720,6 +9735,12 @@
           "actor": "unspecified",
           "event": "attached",
           "detail": "attachments/T-0064-states-empty-clean.png (empty-clean.png)"
+        },
+        {
+          "ts": "2026-09-25T16:57:18",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0088"
         }
       ],
       "sessions": [],
@@ -9769,7 +9790,8 @@
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0051"
+        "T-0051",
+        "T-0088"
       ],
       "owner": "",
       "createdAt": "2026-09-23T14:08:28",
@@ -9781,6 +9803,12 @@
           "actor": "verify-ux",
           "event": "created",
           "detail": "status=backlog, urgency=low"
+        },
+        {
+          "ts": "2026-09-25T16:57:18",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0088"
         }
       ],
       "sessions": []
@@ -10367,7 +10395,7 @@
       "id": "T-0073",
       "title": "Hardcore mode UI: toolbar checkbox, risk modal, permanent-delete copy, History",
       "description": "**Module `hardcore-ui`.** Design: `docs/DESIGN-debloat.md` §1 (all), §2.6 (restore-point box), §3.6 (admin rows), §6.3 (revision r2).\n\n**Owned paths:** `Sources/MacontrolUI/{Shell,Clean,DiskMap,Uninstall,History}/**`; `Tests/MacontrolUITests/**` except files named `Debloat*` or `Sealed*`.\n\n**Brief:** the always-visible \"Hardcore mode\" checkbox in the toolbar (last trailing item, every screen, `.help` tooltip with the r2 texts), the turn-on modal (three bullets + \"Back up first\", NO checkbox; red \"Turn On Hardcore Mode\" with no shortcut is the confirmation; Return and Esc cancel), the red banner while on, every destructive surface's copy and colour per the §1.4 table (\"Frees up to X\", red strip \"Permanent: skips the Trash\" inside permanent sheets, D4 items listed apart under \"Moved to the Trash\" with reasons and excluded from X), the result reporting the MEASURED change of `VolumeSummary.available` (+ snapshot line when below half the estimate; \"Partly deleted … the rest is in the Trash\" text), History (permanent batches without Undo; restore-point line with the rollback clause; helper-trashed `asAdministrator` items without Undo and with the Finder text; batch Undo skips them), the unchecked restore-point box (disabled below 1 GB available), \"Admin\" rows only in Clean and Uninstall (Debloat via debloat-catalog) with the prompt note without \"once\" and, in Trash mode, Finder's password-on-empty note, and `AppModel.live()` wiring (`PrivilegedLauncher.bundled()` → Clean/Uninstall/Debloat models only, never `DiskMapModel`; `recoverPrivilegedResults()` at launch). Mode captured when a confirmation opens. Never persisted.\n\n**Acceptance** (§6.3 hardcore-ui)\n1. Toggle inside the window on all six screens at 900x600 and 1600x1000, light and dark; banner visible while on (NSView-tree assertions).\n2. Tooltip, modal (three bullets, no checkbox), banner and §1.4 strings exactly as the design.\n3. Off at launch; no `UserDefaults` write when toggling (test).\n4. Return/Esc cancel the modal; Return in every confirmation sheet removes nothing, both modes (hosted-window key events).\n5. A confirmation keeps its opening mode after the toggle changes.\n6. Permanent sheets show the red strip; D4 items listed under \"Moved to the Trash\" with their reason, left out of X.\n7. Result: measured free-space change (injected before/after `VolumeSummary`), snapshot line below half, \"Partly deleted\" text.\n8. History: permanent batch status, no Undo, not in \"in the Trash\"; restore-point line with rollback clause; helper-trashed items without Undo + Finder text, batch Undo skips them; demo has one permanent and one helper-trashed batch.\n9. Restore-point box: unchecked; disabled below 1 GB available (injected); create only when ticked (injected); failure asks before deleting.\n10. With a launcher: admin rows in Clean/Uninstall selectable + badge + sheet notes (no \"once\"; Finder note in Trash mode); Disk Map keeps v1 \"Needs admin\" even with a launcher (`DiskMapModel` has no launcher parameter); without a launcher: v1 everywhere.\n11. `Theme.dangerText` >= 4.5:1 from snapshot pixels.\n12. Snapshots attached; full `swift test` green.",
-      "status": "ready_for_review",
+      "status": "accepted",
       "urgency": "high",
       "tag": "frontend",
       "milestone": "M9",
@@ -10378,11 +10406,13 @@
         "T-0072"
       ],
       "relatedTo": [
-        "T-0082"
+        "T-0082",
+        "T-0085",
+        "T-0086"
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:50",
-      "updatedAt": "2026-09-25T16:37:51",
+      "updatedAt": "2026-09-25T23:24:47",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -10799,6 +10829,24 @@
           "actor": "v02-integrator",
           "event": "comment",
           "detail": "Merged into local main as 7645348 (7908b66), not pushed (T-0082). Merge notes do…"
+        },
+        {
+          "ts": "2026-09-25T16:56:49",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0085"
+        },
+        {
+          "ts": "2026-09-25T16:56:58",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0086"
+        },
+        {
+          "ts": "2026-09-25T23:24:47",
+          "actor": "review-hardcore-ui-3",
+          "event": "reviewed",
+          "detail": "verdict=approve by review-hardcore-ui-3, 1500s, 200000 tokens"
         }
       ],
       "sessions": [
@@ -10846,6 +10894,15 @@
           "durationSec": null,
           "tokens": null,
           "summary": "Fix round 2: restore point only for startup-disk items with 1 GB read there; space line only while a restore point is coming; all-trash-only runs open in Trash mode; whole-in-Trash failures count as In Trash; Not-removed passthrough; merge notes for leftInTrash, Safety sentence contract and Debloat Return test; Gate waits fail instead of hanging. 383/48 green, 3 known issues."
+        },
+        {
+          "ts": "2026-09-25T23:24:47",
+          "agent": "review-hardcore-ui-3",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": 1500.0,
+          "tokens": 200000,
+          "summary": "verdict=approve: APPROVE. Re-review of round 2 on local main 1681e52 (hardcore UI merged as 76453"
         }
       ],
       "attachments": [
@@ -10895,10 +10952,10 @@
           "addedAt": "2026-09-25T14:24:08"
         }
       ],
-      "verdict": "request_changes",
-      "verdictBy": "review-hardcore-ui-2",
-      "verdictAt": "2026-09-25T14:50:56",
-      "verdictNotes": "CHANGES. I reviewed feat/hardcore-ui bc6fb2e, which is fix round 1 on top of 33c7e9e (merge-base origin/main 76952e5).\n\nWhat I ran:\n- Full `swift test` in the worktree: 377 tests in 48 suites, 0 failures, 2 known issues (items 2 and 6 of round 1), 205 s. The run left no macontrol-tests-* folders.\n- A scratch merge of feat/privileged-helper-engine 9daf1c5 into the worktree (`git merge --no-commit`, uncommitted, then `git merge --abort`). MacontrolUITests on the merged tree: 182 tests in 25 suites passed. Only my own probes failed.\n- A real permanent Clean and a real permanent Disk Map delete through the merged engine. Both deleted in the fixture, and each journal line was permanent. The node left the map.\n- Temporary probes in ZZReviewR2ProbeTests.swift. That file is deleted, the tree is clean at bc6fb2e, and HEAD is rebuilt.\n\n1. MEDIUM (honest UI, D11 and section 2.6): the restore-point box appears for items that the restore point does not cover. Its 1 GB check also reads the wrong volume.\n   Code: `RemovalRun.canMakeRestorePoint` uses `availableAtOpen = support.available(urls)`. `RemovalSupport.availableSpace(holding:)` sums the free space of every volume that holds the items. `RestorePoint.create()` runs `tmutil localsnapshot`, and `man tmutil` says that snapshots \"all APFS volumes included in the Time Machine backup\".\n   Probe R1: I mounted a 3 GB sparse APFS image with `-nobrowse` in the scratchpad (diskutil: External, Removable; `tmutil isexcluded` on the file: [Excluded]). I scanned it with DiskMapModel, staged blob.bin, turned hardcore on and called beginReview. The result: availableAtOpen=2997161984 (the image's free space) and canMakeRestorePoint=true. The boot volume's 19.5 GB was never read.\n   Impact: someone permanently deleting files on an external drive ticks \"Create a restore point first\". The snapshot covers only the internal disk, and History then says \"Rolling back returns every file on this Mac to that moment\". Those files are gone for good.\n   Related: an external disk with less than 1 GB free disables the box with \"Not enough free space for a restore point.\" That is the wrong reason. Two volumes with 600 MB free each add up to more than 1 GB.\n   Fix: offer the box only when every item is on the startup data volume (compare `volumeIdentifierKey` with that of the home folder or /System/Volumes/Data). Read the 1 GB from that volume. Otherwise disable the box with a reason, for example that a restore point covers only the startup disk. Inject the volume check and add a test.\n\n2. MEDIUM (merge, round 1 item 3, second half): History says \"Deleted permanently\" for a folder whose rest is still in the Trash.\n   T-0075 now journals a partly deleted folder with `leftInTrash`, and fix-privileged-helper-engine-1 (14:15) asked T-0073 to show \"Partly deleted, the rest is in the Trash as <name>\". The round-1 fix comment gives that ask no disposition, and HistoryModel has no MERGE NOTE for it.\n   Probe M1, on the scratch merge: a line with trashedPath nil, leftInTrash \"/Users/demo/.Trash/Old Exports\" and 12 GB gives the status \"Deleted permanently · 12 GB · can't be undone\", inTrashBytes 0 and no Undo. Once the sheet is closed, nothing tells the user to empty the Trash.\n   Needs: a MERGE NOTE in `HistoryBatch.status` and `inTrashBytes`, plus a withKnownIssue test like round 1 item 2's. Or the whoever-merges-second owner writes the code right after the merge.\n\n3. LOW (copy): \"Space comes back when the restore point is removed.\" is still shown when no restore point exists.\n   `TrashSheet.explanation` (and the Disk Map header) adds it whenever the box is ticked. Probe R2: it is still there after the restore point failed, and while deleting after \"Delete anyway\". SS8 shows it next to \"Couldn't create a restore point\".\n   Fix: add the sentence only when `restorePointProblem == nil && !goesOnWithoutRestorePoint`.\n\n4. LOW (copy): a permanent sheet whose items are all trash-only (D4).\n   Probe R3, one Safari item: the title is \"Delete 1 item permanently?\", the message ends \"Frees up to Zero KB.\", the button says \"Delete Permanently\", and the only list section is \"Moved to the Trash\". The result shows \"Nothing was deleted\" as the title and \"Nothing was deleted.\" as the message, with a green check.\n   Say what happens instead, for example \"Move 1 item to the Trash?\" and a result like \"Moved to the Trash: it holds your Safari data\". Related: UninstallConfirmation.failureMessage says \"Nothing was moved to the Trash\" in permanent mode, where \"Nothing was removed\" would be accurate.\n\n5. LOW: permanent failures that leave the item whole in the Trash are counted in no \"In Trash\" figure.\n   This covers the engine's \"Moved to the Trash as X, but nothing in it could be deleted\" and \"…changed there\". Both are journaled with trashedPath, so they have Undo.\n   `CleanModel.apply` adds only `.trashed` rows to `inTrash`, and so does Disk Map's `trashed`. The row leaves the list, and in hardcore mode the Clean footer then says \"items skip the Trash\" while the item sits in the Trash. History does count it.\n\n6. LOW (merge notes and process, V5):\n   (a) fix-debloat-catalog-1 (14:15) asks for the Debloat sheet in the pressReturnThenEsc tests (criterion 4, \"every confirmation sheet\"). That ask has no disposition.\n   (b) `isLeftInTrash` and `isPartlyDeleted` match Safety's sentences by prefix. After the merge, pin that contract with a test built from Safety's own builders (`@testable import Safety`: `TrashBatch.partlyDeleted`, `TrashBatch.notDeleted`, the \"changed there\" literal, and PrivilegedExecutor's copy). A rewording in Safety would otherwise put a left-in-Trash item back in the lists with a Reveal in Finder that leads nowhere.\n   (c) Round 1 item 5b (the \"Could not move it: Not removed: …\" double prefix) lives only in a board comment. Put a MERGE NOTE at `words(in:)`.\n   (d) Scratch-merge trap: the first merged-tree run ended with signal 11 until I removed `.build/*/debug/*Tests.build`, because Safety's structs had grown. Whoever merges should do the same.\n\nRound 1 items, rechecked:\n- #1 HIGH is fixed. Writes are scoped to the confirmation id, closing a sheet while tmutil runs deletes nothing, and `.interactiveDismissDisabled(isWorking)` is on TrashSheet. The P1 tests pass here and on the merged tree.\n- #2: the MERGE NOTE is in confirmUninstall. On the merged tree the known issue still records (the journal has lines but no name), as intended.\n- #3 is half fixed: \"freed\" is gone (SS9), and the partial case is item 2 above.\n- #4 is fixed.\n- #5c is resolved: `git merge-tree` is clean against sealed-apps, debloat-catalog, privileged-helper-engine and signing-ci.\n- #6 is still a known issue.\n- #7: 5 of 7 rows are visible.\n\nChecked and fine:\n- Nothing permanent or root touches an unselected item.\n- Disk Map has no launcher.\n- Containers are unticked in hardcore mode, and a check the user gave under another note no longer counts.\n- Admin leftovers can be chosen only with a launcher.\n- The mode is captured when a confirmation opens, and hardcore is off at launch.\n- Return never confirms, and Esc cancels.\n- The danger strip in dark mode measures 5.88:1 from SS7's pixels.\n- I viewed 50 snapshots rendered here from HardcoreSnapshotTests, light and dark: the Disk Map permanent review, the Clean result, Disk Map at 900 dark and the modal."
+      "verdict": "approve",
+      "verdictBy": "review-hardcore-ui-3",
+      "verdictAt": "2026-09-25T23:24:47",
+      "verdictNotes": "APPROVE. Re-review of round 2 on local main 1681e52 (hardcore UI merged as 7645348, merge notes in 576866e). No blocking issues. Four LOW follow-ups below.\n\nWhat I ran:\n- swift test --filter HardcoreConfirmationTests|HardcoreModeTests|HistoryModelTests: 57 tests in 3 suites passed.\n- On clean HEAD, Clean/DiskMapReview/Uninstall/DebloatFlow/Offscreen/Clean+Uninstall+Hardcore snapshots and HardcoreConfirmation: 121 tests in 9 suites passed. No new macontrol-tests-* folders, and the tree is clean.\n- Temporary probes (ZZReviewR3ProbeTests.swift, now deleted) rendered the states that round 2 never rendered, light and dark: Clean and Disk Map with items on another disk, Clean and Disk Map where every item is trash-only (the Clean sheet and result, the Disk Map sheet), and History with partly deleted lines. I looked at them together with the HardcoreSnapshotTests PNGs rendered in the same run.\n- A 30 MB sparse APFS image mounted with -nobrowse in the scratchpad: volumeIsRootFileSystem on its file was false, and on ~/Documents and /Applications it was true. The image is detached and deleted.\n\nRound 2 items on main:\n1. MEDIUM, restore point on another disk: fixed. RemovalRun reads isOnStartupDisk and startupAvailable (/System/Volumes/Data). The rendered sheet shows the box off with \"A restore point covers only the startup disk, and some of these items are on another disk.\" (Clean and Disk Map).\n2. MEDIUM, History leftInTrash: fixed by the integrator. The status says \"Partly deleted. The rest is in the Trash as ...\" and the line stays out of inTrashBytes. See LOW 2 for what is still off.\n3. LOW, space sentence: fixed. The integrator's comment says it is \"still open\", which is wrong. promisesRestorePoint gates the sentence in TrashSheet.explanation and in the Disk Map header. hardcore-clean-restore-point-failed has no \"Space comes back\" line, the ticked state has it, and theSpaceLineNeedsARestorePointStillComing covers failed and Delete anyway.\n4. LOW, all trash-only: fixed. The run opens in Trash mode and each row keeps its reason. Clean says \"Move 1 item to the Trash?\", \"Frees about 42 MB once you empty the Trash\", Move to Trash, and a \"Moved to the Trash\" result. Disk Map does the same. The mixed case (the title counts trash-only rows) is T-0085, so it is not re-raised here.\n5. LOW, whole-in-Trash counts: fixed (inTrashURLs in Clean, trashed in Disk Map).\n6. (a) The Debloat Return and Esc tests exist. (b) The prefixes are pinned to Safety's builders, with one gap (LOW 3). (c) \"Not removed\" passes through. (d) Done at the merge.\n\nNew LOW findings:\n1. LOW: the sheet's trash-only check is still the UI mirror (Removal.swift TrashOnly, with a ponytail \"swap once permanent-engine merges\"). It has merged, and ProtectedPaths.trashOnlyReason(for:home:) is public.\n   Probe with a fixture home: the /System/Volumes/Data spelling and a symlinked-parent spelling of Library/Safari/History.db give ui=nil and safety=\"holds your Safari data\". Safety also checks isUbiquitousItem (iCloud Desktop & Documents), which the mirror misses. That check is untested here: the feature is off on this Mac, as Safety's own comment says.\n   Result: with Desktop & Documents in iCloud, a hardcore Disk Map delete of ~/Documents items says \"Delete N permanently? Frees up to X\". Safety then moves them to the Trash, and the result says \"Nothing was deleted\". That is round 2 R3 again, through another path. The result rows are honest and nothing is lost. The other direction (the mirror says Trash, Safety erases) was refused as identityChanged in my probe.\n   Fix: production RemovalSupport.trashOnlyReason = ProtectedPaths.trashOnlyReason(for:). Keep the path mirror only for .demo, since canonicalPath fails on the demo's missing paths.\n2. LOW (History, partly deleted): a batch whose only line is partly deleted gets the gray \"everything was put back\" icon (arrow.uturn.backward.circle.fill), because the icon checks only deleted and inTrash. Its EntryRow says \"Deleted permanently\" at the full size, while the status says \"Partly deleted\". The header still says \"Zero KB in the Trash from Macontrol\". Seen in the probe render r3-history-partly.\n3. LOW (tests): safetysLeftInTrashSentencesAreRecognised covers only partlyDeleted and notDeleted. The \"Moved to the Trash, but not deleted: it changed there.\" sentence is an inline literal twice in Safety (TrashBatch.swift:269, PrivilegedExecutor.swift:192) and no test pins it, although round 2 6(b) named it. If it is reworded, the row comes back to the lists with a Reveal in Finder that leads nowhere. Hoist it to a Safety constant and add it to the test.\n4. LOW (cosmetic): the Disk Map review list height is items*44 (+40 permanent / +12 Trash). It ignores the extra reason line, which fix 2 now also shows in Trash mode. In the all-trash-only render the 2nd row's \"Holds your Safari data\" is cut off at the list's edge (it scrolls)."
     },
     {
       "id": "T-0074",
@@ -11171,7 +11228,8 @@
       "relatedTo": [
         "T-0068",
         "T-0074",
-        "T-0082"
+        "T-0082",
+        "T-0089"
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
@@ -11526,6 +11584,12 @@
           "actor": "v02-integrator",
           "event": "comment",
           "detail": "Merged into local main as 8b2a6f1 (9daf1c5), not pushed (T-0082). The debloat-ca…"
+        },
+        {
+          "ts": "2026-09-25T23:11:42",
+          "actor": "v02-attack",
+          "event": "linked",
+          "detail": "relatedTo += T-0089"
         }
       ],
       "sessions": [
@@ -11604,7 +11668,8 @@
       ],
       "relatedTo": [
         "T-0070",
-        "T-0082"
+        "T-0082",
+        "T-0086"
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
@@ -12043,6 +12108,12 @@
           "actor": "v02-integrator",
           "event": "comment",
           "detail": "Merged into local main as 2cecaf5 (2715e99), not pushed (T-0082). The appleConte…"
+        },
+        {
+          "ts": "2026-09-25T16:56:58",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0086"
         }
       ],
       "sessions": [
@@ -13785,8 +13856,15 @@
       ],
       "owner": "",
       "createdAt": "2026-09-25T15:26:28",
-      "updatedAt": "2026-09-25T16:37:58",
-      "comments": [],
+      "updatedAt": "2026-09-25T16:57:58",
+      "comments": [
+        {
+          "author": "v02-ux",
+          "role": "tester",
+          "date": "2026-09-25T16:57:58",
+          "text": "UX verify (T-0083): PASS with changes requested. 0 high. Medium: T-0085 (permanent titles count trash-only items), T-0086 (Debloat has no restore-point box; the T-0076 merge note is still open after 576866e), T-0087 (light-mode secondary text and white-on-red buttons below 4.5:1). Low: T-0088. Two copy commits on main: 7037416 and 542f8b9 (with a test). Full suite: 570 tests passed. build/Macontrol.app predates them, so rebuild before release."
+        }
+      ],
       "log": [
         {
           "ts": "2026-09-25T15:26:28",
@@ -13847,6 +13925,12 @@
           "actor": "v02-attack",
           "event": "linked",
           "detail": "relatedTo += T-0084"
+        },
+        {
+          "ts": "2026-09-25T16:57:58",
+          "actor": "v02-ux",
+          "event": "comment",
+          "detail": "UX verify (T-0083): PASS with changes requested. 0 high. Medium: T-0085 (permane…"
         }
       ],
       "sessions": [
@@ -13887,19 +13971,30 @@
       "id": "T-0083",
       "title": "Verify: v0.2.0 UX",
       "description": "Judge the merged v0.2.0 main (c37dfbc) in light/dark at 900x600 and large: hardcore off/on on every screen, the turn-on modal, permanent confirmation sheets, History with permanent items, Debloat, sealed panel and expert guide. Check that permanent is obvious, the copy honest and calm, the look PureMac/Radix-familiar, and contrast >= 4.5:1 from sampled pixels. File problems as tasks; fix trivial copy/spacing on main with a snapshot re-check.",
-      "status": "development",
+      "status": "ready_for_review",
       "urgency": "high",
       "tag": "ux",
       "milestone": "M9",
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0082"
+        "T-0082",
+        "T-0085",
+        "T-0086",
+        "T-0087",
+        "T-0088"
       ],
       "owner": "",
       "createdAt": "2026-09-25T16:38:59",
-      "updatedAt": "2026-09-25T16:39:03",
-      "comments": [],
+      "updatedAt": "2026-09-25T16:58:04",
+      "comments": [
+        {
+          "author": "v02-ux",
+          "role": "tester",
+          "date": "2026-09-25T16:57:58",
+          "text": "Verdict: PASS with changes requested. 0 high, 3 medium (T-0085, T-0086, T-0087), 1 low batch (T-0088), 2 copy fixes committed on main. Permanent mode is obvious on every surface. The copy is honest and calm, and the look is familiar from PureMac. The two honesty mediums (T-0085, T-0086) should land before v0.2.0 is tagged. Contrast (T-0087) can follow.\n\nWhat I looked at: main c37dfbc. I made 30 fresh `Macontrol --snapshot` PNGs with the built binary (hardcore off, every screen, 1180x760 and 900x600, light and dark). I also used the integrator's 108 suite PNGs (build/snapshots-0.2.0/suites, 15:57, after 576866e and 59470e3; the later commits change no UI): hardcore on every screen at 900 and 1600, the turn-on modal, the Clean, Uninstall, Disk Map and Debloat permanent sheets, restore point ticked and failed, the permanent result, History with permanent, helper-trashed and restore-point batches, Debloat (first, loading, empty, ticked, hardcore, both confirms, result), the sealed panel (SIP on and off) and the expert guide with its steps. Contrast was measured from pixels with the WCAG formula.\n\nWorks well:\n- Permanent is obvious. When on, the toolbar box turns red with a filled flame. A red banner on every screen says \"removals are permanent\" and has Turn Off. Every permanent sheet has the red strip \"Permanent: skips the Trash\", the title \"Delete N items permanently?\", the red \"Delete Permanently\" button and the list header \"Deletes permanently\". The Clean and Uninstall footers say it again. History uses a red icon and \"can't be undone\" with no Undo.\n- Keyboard safety as designed: the modal's default button is Cancel; Return and Esc cancel. A failed restore point defaults to Cancel.\n- The copy is calm and honest: \"Freed X. These can't be put back.\" with the snapshot line, \"Partly deleted … empty the Trash to finish\", the restore-point caption (\"It is not a backup\"), History's rollback line, and the admin items History can't put back. The sealed panel and guide say \"Strongly not recommended\", gate the steps behind \"I have a backup and I accept these risks\", badge every step \"Unverified\", mark claims \"(expected, not yet tested)\" and say \"macontrol runs none of these commands.\"\n- dangerText and the status colours pass in both themes: banner, strip and label 5.6-6.8:1; green, orange and badges 5.2-8.4:1; links 4.8-5.4:1. Dark mode passes everywhere.\n\nFiled:\n- T-0085 medium: permanent titles count trash-only items. \"Delete 7 items permanently?\" when Safari's History.db goes to the Trash. Same count in Disk Map and Debloat.\n- T-0086 medium: Debloat's permanent sheet has no restore-point box (DESIGN 2.6, CHANGELOG; the T-0076 merge note is still open). Its \"Frees up to 23,1 GB\" includes runtimes not shown above the \"10,67 GB on disk\" footer.\n- T-0087 medium: light-mode .secondary is 3.95:1 and carries the permanence sentences. White on system red is 3.5-4.1:1 on \"Delete Permanently\", \"Turn On Hardcore Mode\" and \"Uninstall…\". Token values are suggested, with measured ratios.\n- T-0088 low: toolbar capsule at the window edge (snapshot only); Uninstall at 900x600 (bundle id breaks mid-word, admin row squeezed); macontrol/Macontrol casing; duplicate \"Frees up to\" in Disk Map; Discard Pile bar doesn't show the mode; \"They\" with no antecedent; Debloat header styles; a dense modal bullet; suite Disk Map shots still show the spinner.\n\nFixed on main (copy only, re-rendered, git status was clean before each commit):\n- 7037416: the Debloat GarageBand caption now ends with \"…, so none of it is ticked for you\". Checked with `swift build --product Macontrol` and `--snapshot`: one line at 900x600, light and dark.\n- 542f8b9: when nothing moved, TrashSheet's Trash-mode result said \"Items stay in the Trash and still use their space. Put them back from History…\". That text dates from v1 (T-0057), and the Debloat \"None of the 11 items were moved\" result showed it. It now says \"Nothing was moved to the Trash.\" One test, aTrashResultWithNothingMovedSaysSo, covers both branches. Deliberate-bug proof: without the guard the test fails, and it passes after the restore. debloat-result was re-rendered in light and dark.\n- Full `swift test` after both commits: 570 tests in 67 suites passed (188 s). The $TMPDIR/macontrol-tests-* count was 1197 before and 1197 after.\n\nNote: build/Macontrol.app is now one commit behind main (these two strings). Rebuild the bundle before release."
+        }
+      ],
       "log": [
         {
           "ts": "2026-09-25T16:38:59",
@@ -13912,28 +14007,111 @@
           "actor": "v02-ux",
           "event": "claimed",
           "detail": "assignee: (none) -> v02-ux; status: backlog -> development"
+        },
+        {
+          "ts": "2026-09-25T16:56:49",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0085"
+        },
+        {
+          "ts": "2026-09-25T16:56:58",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0086"
+        },
+        {
+          "ts": "2026-09-25T16:57:08",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0087"
+        },
+        {
+          "ts": "2026-09-25T16:57:18",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0088"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0083-result-after.png (After 542f8b9: nothing-moved result says 'Nothing was moved to the Trash.')"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0083-debloat-caption-after.png (After 7037416: GarageBand caption states the consequence (900x600 light))"
+        },
+        {
+          "ts": "2026-09-25T16:57:58",
+          "actor": "v02-ux",
+          "event": "comment",
+          "detail": "Verdict: PASS with changes requested. 0 high, 3 medium (T-0085, T-0086, T-0087),…"
+        },
+        {
+          "ts": "2026-09-25T16:58:04",
+          "actor": "v02-ux",
+          "event": "updated",
+          "detail": "status: development -> ready_for_review"
+        },
+        {
+          "ts": "2026-09-25T16:58:04",
+          "actor": "v02-ux",
+          "event": "released",
+          "detail": "assignee was 'v02-ux'"
         }
       ],
-      "sessions": [],
-      "assignee": "v02-ux"
+      "sessions": [
+        {
+          "ts": "2026-09-25T16:58:04",
+          "agent": "v02-ux",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": 1500.0,
+          "tokens": null,
+          "summary": "UX verify v0.2.0: PASS with changes requested. 0 high; 3 medium (T-0085, T-0086, T-0087); low batch T-0088. Copy fixes 7037416 and 542f8b9 on main with a snapshot re-check; full suite 570 passed."
+        }
+      ],
+      "attachments": [
+        {
+          "file": "attachments/t0083-result-after.png",
+          "label": "After 542f8b9: nothing-moved result says 'Nothing was moved to the Trash.'",
+          "addedAt": "2026-09-25T16:57:29"
+        },
+        {
+          "file": "attachments/t0083-debloat-caption-after.png",
+          "label": "After 7037416: GarageBand caption states the consequence (900x600 light)",
+          "addedAt": "2026-09-25T16:57:29"
+        }
+      ]
     },
     {
       "id": "T-0084",
       "title": "Verify: v0.2.0 safety attack",
       "description": "Attack the v0.2.0 destructive paths non-root on temp trees: permanent mode via every entry point, RemovalEngine, privileged executor and request format, debloat catalog, hardcore toggle. Suite in Tests/SafetyAttackTests/.",
-      "status": "development",
+      "status": "ready_for_review",
       "urgency": "high",
       "tag": "safety",
       "milestone": "M7",
       "refs": [],
       "blockedBy": [],
       "relatedTo": [
-        "T-0082"
+        "T-0082",
+        "T-0089"
       ],
       "owner": "",
       "createdAt": "2026-09-25T16:39:07",
-      "updatedAt": "2026-09-25T16:39:10",
-      "comments": [],
+      "updatedAt": "2026-09-25T23:15:34",
+      "comments": [
+        {
+          "author": "v02-attack",
+          "role": "tester",
+          "date": "2026-09-25T23:15:34",
+          "text": "Verdict: 1 break (low severity, filed T-0089 safety/high as asked), everything else held. Commit 1681e52 on main. Full suite: 581 tests in 70 suites passed, 2 known issues (both T-0089), private TMPDIR, 0 fixtures left. Env-gated runs: MACONTROL_ENV_TESTS=1 aVariableSetAfterTheScrubIsSeenByTheCheck passed; MACONTROL_DISK_IMAGE_TESTS=1 PermanentDeleteTests 18/18 (mount before pre-flight refused, mount mid-erase never entered, case-sensitive twin). Deliberate-bug proofs, each killed then restored with git checkout: drop the st_dev/st_ino check after openat in RemovalEngine.empty -> aFolderSwappedForAnotherRealFolderMidEraseIsNotEntered fails; drop lowercased() in PrivilegedScope.looksLikeApple -> theFirstComponentRuleHoldsUnderOtherSpellings fails 4 cases; hand Disk Map's remove a launcher -> aFolderOnlyRootCanEmptyNeverReachesTheHelperFromDiskMap fails.\n\nHELD. Permanent via entry points: Clean/Uninstall/Debloat keep the mode they opened with and route set-aside items with it (HardcoreConfirmationTests *KeepsTheModeItOpenedWith, PermanentAttackTests.threePassesInOrder, DebloatFlowTests); Disk Map has no launcher, now proven by behaviour too (a folder only root can empty stays 'Needs admin', the route is never called). RemovalEngine: folder swapped for a link mid-walk (PermanentDeleteTests), swapped for another real folder mid-erase (new), hard links outside the selection and one added mid-erase (new), lock added after the pre-flight at depth 2 and on its folder never cleared (new), mount points, PATH_MAX (deepTreesGoWholeAndDeepItemsAreRefused), entry 501 of 1000 (anEraseThatStopsHalfwayLeavesTheRestInTheTrash). Privileged: hostile names (shell, newline+JSON line, lookalike, decomposed) through the built helper in both modes, exact History paths, nothing ran; request rewrite before/after the check; dialog shell line: 5 injections x 9 kept variables run nothing and argv arrives byte-exact, SHELLOPTS=xtrace+PS4 control fires unscrubbed and not once scrubbed, BASH_ENV is ignored by bash-as-sh (probed); first-component rule under COM.APPLE / Apple Loops parent and neighbours / '..' / malformed ids; another user's Library refused as protectedLocation while the requester's own item goes. Not isolatable non-root: the request-file-owner != folder-owner check (a root 0600 file can't be opened by the test user, so open fails first). Debloat catalog: shared Apple Loops/Logic/Impulse Responses never preselected (AppleProfileTests.sharedContentIsNeverPreselectedAndUnverifiedItemsSaySo, DebloatModelTests.sharedAndUnverifiedContentIsNeverPreselected), sent once (DebloatFlowTests.sharedContentIsCountedAndSentOnce), Xcode runtimes first and Xcode kept on any runtime failure (DebloatFlowTests.runtimesGoFirstThenOneUninstallForEveryApp and 8 siblings). Hardcore toggle: off at launch and never stored, Return and Esc both cancel the modal (HardcoreModeTests).\n\nBROKE (T-0089, low: History/report integrity, no root action, needs same-user code): a root result.jsonl hard-linked while in the request folder drops back to one link when the app removes its name, then (1) renamed over a later run's result it is read as that run's (root deleted item B, the app reports 'changed since the list' and journals nothing), (2) placed beside a request.json the user wrote, recovery journals root's old line against ~/Documents/thesis.docx. Fix: sha256 of the request in the result's first line, checked by run() and recover().\n\nAlso fixed in the stalled attacker's files: the known-issue IDs pointed at T-0085 (a UX task); run A/C expectations (the attacker's link makes the app skip that result, the child still writes it); the shell probe wrote to a path with the folder's own quote in it and compared $0, so it failed every case including the clean control."
+        }
+      ],
       "log": [
         {
           "ts": "2026-09-25T16:39:07",
@@ -13946,10 +14124,233 @@
           "actor": "v02-attack",
           "event": "claimed",
           "detail": "assignee: (none) -> v02-attack; status: backlog -> development"
+        },
+        {
+          "ts": "2026-09-25T23:11:42",
+          "actor": "v02-attack",
+          "event": "linked",
+          "detail": "relatedTo += T-0089"
+        },
+        {
+          "ts": "2026-09-25T23:15:34",
+          "actor": "v02-attack",
+          "event": "comment",
+          "detail": "Verdict: 1 break (low severity, filed T-0089 safety/high as asked), everything e…"
+        },
+        {
+          "ts": "2026-09-25T23:15:34",
+          "actor": "v02-attack",
+          "event": "updated",
+          "detail": "status: development -> ready_for_review"
+        }
+      ],
+      "sessions": [
+        {
+          "ts": "2026-09-25T23:15:34",
+          "agent": "v02-attack",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "v0.2.0 safety attack: 1 low-severity break (T-0089, result replay), all other attacks held; suite committed 1681e52; full run 581/581 with 2 known issues"
+        }
+      ],
+      "assignee": "v02-attack"
+    },
+    {
+      "id": "T-0085",
+      "title": "Hardcore: permanent sheet titles count items that still go to the Trash",
+      "description": "Found by T-0083 on main c37dfbc. Clean's permanent review with Safari's History.db ticked (trash-only, D4) says \"Delete 7 items permanently?\" and \"They skip the Trash and can't be put back. Frees up to 13,33 GB.\" Only 6 are deleted. The 7th sits below the fold under \"Moved to the Trash\" and goes there. The footer says \"7 items · 13,37 GB on disk\" (evidence: build/snapshots-0.2.0/suites/hardcore-clean-review-light.png; the 6 visible rows add up to 13,33 GB). The count comes from CleanReviewSheet.swift:16 PermanentText.title(count: current.items.count). DiskMap/ReviewSheet.swift:29 (review.items.count) and the Debloat title (DebloatScreen.swift:316) count the same way. The error overclaims permanence, but a user then thinks their Safari history is gone for good. Suggested fix: count only rows that are not trash-only. When some are trash-only, say so in the title or message, e.g. \"Delete 6 items permanently?\" plus \"1 more goes to the Trash (listed below).\" Test: HardcoreSnapshotTests.cleanPermanentReview already builds this state, so assert the title there.",
+      "status": "backlog",
+      "urgency": "medium",
+      "tag": "ux",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0083",
+        "T-0073"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:56:49",
+      "updatedAt": "2026-09-25T16:57:29",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:56:49",
+          "actor": "v02-ux",
+          "event": "created",
+          "detail": "status=backlog, urgency=medium"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0085-clean-review-light.png (Delete 7 items permanently? with 6 rows visible (13,33 GB); the 7th goes to the Trash)"
         }
       ],
       "sessions": [],
-      "assignee": "v02-attack"
+      "attachments": [
+        {
+          "file": "attachments/t0085-clean-review-light.png",
+          "label": "Delete 7 items permanently? with 6 rows visible (13,33 GB); the 7th goes to the Trash",
+          "addedAt": "2026-09-25T16:57:29"
+        }
+      ]
+    },
+    {
+      "id": "T-0086",
+      "title": "Debloat: the permanent sheet has no restore-point box, and its 'Frees up to' counts runtimes the list doesn't show",
+      "description": "Found by T-0083 on main c37dfbc. (1) DESIGN-debloat 2.6 says \"Every hardcore confirmation shows an unchecked box\", and the 0.2.0 CHANGELOG says a hardcore confirmation can make a restore point first. DebloatSheet (DebloatScreen.swift:315) passes neither restorePoint nor run: RemovalRun to TrashSheet. So Debloat in hardcore mode, the biggest permanent removal (Xcode, 23 GB in the demo), is the only permanent sheet with no restore-point box. It also has no measured \"Freed X\" result and no trash-only split. This is the open T-0076 merge note (\"switch to ... the mode-aware TrashSheet or RemovalRun once feat/hardcore-ui merges\"). T-0073's note says where the call goes: DebloatModel.confirm(), before the runtimes. 576866e did not cover it. (2) debloat-confirm-hardcore-light.png says \"Frees up to 23,1 GB\" and the footer \"11 items · 10,67 GB on disk\". DebloatConfirmation.summary (DebloatModel.swift:63) adds runtimeBytes (12,43 GB), and the runtimes appear only in \"Also happens\" below the fold. Suggested copy: \"Frees up to 23,1 GB, including 12,43 GB of simulator runtimes.\" If Debloat is meant to have no restore point, the user has to decide that, and CHANGELOG and 2.6 must then say so.",
+      "status": "backlog",
+      "urgency": "medium",
+      "tag": "ux",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0083",
+        "T-0076",
+        "T-0073"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:56:58",
+      "updatedAt": "2026-09-25T16:57:29",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:56:58",
+          "actor": "v02-ux",
+          "event": "created",
+          "detail": "status=backlog, urgency=medium"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0086-debloat-hardcore-light.png (Debloat permanent: no restore-point box; Frees up to 23,1 GB vs 10,67 GB on disk)"
+        }
+      ],
+      "sessions": [],
+      "attachments": [
+        {
+          "file": "attachments/t0086-debloat-hardcore-light.png",
+          "label": "Debloat permanent: no restore-point box; Frees up to 23,1 GB vs 10,67 GB on disk",
+          "addedAt": "2026-09-25T16:57:29"
+        }
+      ]
+    },
+    {
+      "id": "T-0087",
+      "title": "Contrast: light-mode secondary text (3.95:1) and white-on-red buttons (3.5-4.1:1) carry the permanence facts",
+      "description": "Measured by T-0083 from snapshot pixels with the WCAG formula (the text pixel against the most common background pixel). Light mode: the .secondary grey (128,128,128) on white is 3.95:1, and 3.88:1 on cards. It carries the most important hardcore sentences: the permanent sheet message \"They skip the Trash and can't be put back\", the three turn-on modal bullets (\"History can't put anything back\"), the restore-point caption, the Clean footer \"items skip the Trash and can't be put back\", the Uninstall footer \"deleted permanently\", History's \"Deleted permanently · can't be undone\", the sealed guide's step instructions and the Debloat intro. Also below 4.5:1: the toolbar label while off, 4.12:1; the Admin badge, 3.80:1; TrashSheet's errorMessage in system .red, 3.71:1 light (use Theme.dangerText). White on the system-red fill is 3.71:1 light and 3.57:1 dark for \"Delete Permanently\" and \"Turn On Hardcore Mode\", and 4.12:1 / 3.51:1 for \"Uninstall…\". Dark mode passes everywhere (secondary 5.6-5.9:1), and dangerText passes (5.6-6.8:1). Suggested: a Theme.secondaryText built with statusText(light: 0x666666, dark: system secondary), which gives 5.74:1 on white, 5.41:1 on #F8F8F8 and 4.56:1 on #E5E5E5, or .primary on the risk sentences at least. For the red buttons, a danger fill token such as #C62828 gives white 5.62:1 (#B3261E gives 6.54:1). Re-measure from pixels after the change (M-0044 trap).",
+      "status": "backlog",
+      "urgency": "medium",
+      "tag": "ux",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0083",
+        "T-0060"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:57:08",
+      "updatedAt": "2026-09-25T16:57:29",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:57:08",
+          "actor": "v02-ux",
+          "event": "created",
+          "detail": "status=backlog, urgency=medium"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0087-modal-light.png (Modal bullets in secondary grey, 3.95:1; red button white 3.71:1)"
+        }
+      ],
+      "sessions": [],
+      "attachments": [
+        {
+          "file": "attachments/t0087-modal-light.png",
+          "label": "Modal bullets in secondary grey, 3.95:1; red button white 3.71:1",
+          "addedAt": "2026-09-25T16:57:29"
+        }
+      ]
+    },
+    {
+      "id": "T-0088",
+      "title": "UX polish from the v0.2.0 review (toolbar edge, Uninstall at 900x600, name casing, duplicate copy)",
+      "description": "From T-0083 on main c37dfbc. (1) The toolbar capsule holding the Hardcore mode checkbox runs into the window's right edge at 900, 1180 and 1600 pt wide, with no trailing padding and its rounded end cut off. This is snapshot evidence only, so check once in a live window (T-0066). (2) Uninstall at 900x600: the app header's bundle id breaks mid-word (\"com.example.Edit\" / \"or\"). Without the helper, the admin leftover row shrinks to \"com.examp…\" and \"/Librar…Support\", and its \"can't confirm it belongs\" note wraps a word per line, hyphenated as \"administra-\" (app/uninstall-small-*.png, T-0056). (3) Name casing: the v0.2.0 copy says \"macontrol\" (modal, tooltips, guide, notes: 23 strings in MacontrolUI). The window title, History header (\"in the Trash from Macontrol\"), onboarding and the Full Disk Access list say \"Macontrol\". The user should pick one. HardcoreTextTests reads the 1.2 and 1.3 strings from the design doc. (4) The Disk Map permanent review says \"Frees up to 9,4 GB\" twice: in the message and in the box under the list. (5) The Disk Map's Discard Pile bar doesn't show the mode, while the Clean and Uninstall footers do. (6) \"Uninstall Editor permanently? They skip the Trash…\": \"They\" has no antecedent. (7) Debloat section headers mix \"Apple apps you can remove\" with \"DELETED BY XCODE'S TOOL, NOT MOVED TO THE TRASH\" in capitals, and the expand chevron sits at the top of the app row instead of the centre. (8) The turn-on modal's third bullet is 5 lines that mix \"never deletes\" with \"still go to the Trash\". Split it into two bullets. (9) Tooling: HardcoreSnapshotTests' Disk Map shots (hardcore-diskMap-900/1600, light and dark) show the spinner, with 24-37 distinct colours in the chart region. c37dfbc's isReady wait covers only Macontrol --snapshot, so give Snapshot.write the same wait for RootView on .diskMap.",
+      "status": "backlog",
+      "urgency": "low",
+      "tag": "ux",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0083",
+        "T-0056",
+        "T-0066",
+        "T-0064"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:57:18",
+      "updatedAt": "2026-09-25T16:57:29",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:57:18",
+          "actor": "v02-ux",
+          "event": "created",
+          "detail": "status=backlog, urgency=low"
+        },
+        {
+          "ts": "2026-09-25T16:57:29",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/t0088-uninstall-small-dark.png (Uninstall 900x600: bundle id breaks mid-word; admin row squeezed)"
+        }
+      ],
+      "sessions": [],
+      "attachments": [
+        {
+          "file": "attachments/t0088-uninstall-small-dark.png",
+          "label": "Uninstall 900x600: bundle id breaks mid-word; admin row squeezed",
+          "addedAt": "2026-09-25T16:57:29"
+        }
+      ]
+    },
+    {
+      "id": "T-0089",
+      "title": "Privileged results: a kept root result.jsonl of another run is believed, live and in crash recovery",
+      "description": "Found by T-0084 (v0.2.0 safety attack) on main 542f8b9. Tests: Tests/SafetyAttackTests/PrivilegedAttackTests.swift aResultKeptFromAnotherRunIsNotTakenForThisOne and recoveryDoesNotJournalAKeptResultAgainstARequestTheUserWrote (both withKnownIssue naming this task). Attack: while root's result.jsonl sits in the user's 0700 request folder, a same-user process hard-links it elsewhere (link(2) needs no ownership). The app unlinks its own name in RequestFolder.remove(), so the kept file is again a regular root file with st_nlink 1, which is all ResultReader checks. (1) Live: in a later run, after the helper's parent returns and before the app opens result.jsonl, the kept file is renamed over it. PrivilegedRouting.run maps the old lines by index onto the new items: run B's item, which root deleted permanently, is reported 'refused: changed since the list', and nothing is journaled for it. (2) Recovery: the kept file placed next to a request.json the user wrote in priv/<uuid>.x makes recover() journal root's old line against any path, e.g. ~/Documents/thesis.docx shows in History as moved by the administrator. Impact: report and History integrity only. No root action follows from a result line (D12: no Undo for admin lines; lastPass re-checks requiresGone on disk), and the attacker needs same-user code, which Risk 2 already cannot stop before the dialog. But DESIGN-debloat 3.3/3.9 promise that results are read through one checked fd and that a hard-linked result file is ignored; the link-count check is bypassed. Suggested fix: bind a result to its request. The helper writes the SHA-256 it was given (argv 3) in its first line ({\"pid\":N,\"sha256\":\"...\"}); run() reads lines only after a first line whose sha256 equals the one it sent, and recover() only when it equals the SHA-256 of the folder's request.json. Flip both withKnownIssue wrappers to plain expectations with the fix; each must fail with the check removed.",
+      "status": "backlog",
+      "urgency": "high",
+      "tag": "safety",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0084",
+        "T-0075"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T23:11:42",
+      "updatedAt": "2026-09-25T23:11:42",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T23:11:42",
+          "actor": "v02-attack",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        }
+      ],
+      "sessions": []
     }
   ]
 }
