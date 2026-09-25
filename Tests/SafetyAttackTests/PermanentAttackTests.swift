@@ -503,7 +503,8 @@ import Testing
             // What the helper does as root, done here as the owner: the bundle leaves its place.
             chmod(bundle.path, 0o755)
             try? FileManager.default.moveItem(at: bundle, to: box.trashFolder.appendingPathComponent("Example.app"))
-            return (routed.map { .deleted(original: $0.url) }, [:])
+            // The helper's note on an item that went (a LaunchDaemon it did not stop) reaches the report.
+            return (routed.map { .deleted(original: $0.url) }, routed.first.map { [$0.url: "note"] } ?? [:])
         }
         let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent")) { _, _, _, _ in }
         let before = box.tree()
@@ -513,6 +514,7 @@ import Testing
         #expect(calls.all == [["Example.app", "mode \(mode)", "cache gone true", "leftovers there true"]])
         #expect(report.outcomes.count == 4 && report.outcomes.first == .deleted(original: items[0].url))
         #expect(report.outcomes.dropFirst().allSatisfy { $0.isDone }, "\(report.outcomes)")
+        #expect(report.notes == [items[0].url: "note"])
         let gone = ["root/Applications/Example.app", "\(caches)/com.example.app", "\(caches)/com.other", "home/Library/Preferences/com.example.app.plist"]
         #expect(Sandbox.difference(box.tree(), Sandbox.expected(before, without: gone)) == [])
     }

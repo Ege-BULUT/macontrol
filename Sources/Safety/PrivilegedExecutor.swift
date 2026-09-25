@@ -183,15 +183,8 @@ public struct PrivilegedExecutor: Sendable {
         case .removed: return .deleted
         case .changed: return .failed("Moved to the Trash, but not deleted: it changed there. Empty the Trash to finish.", to: to)
         case .failed(let failures):
-            // Nothing was removed: it is whole in the Trash. Not v1's "Undo it from History": History has no Undo for
-            // what root moved (D12).
-            let name = (to as NSString).lastPathComponent
-            let first = failures.first.map { ($0.path.isEmpty ? name : $0.path) + ": " + $0.reason } ?? ""
-            return .failed(
-                "Moved to the Trash as \"\(name)\", but nothing in it could be deleted (\(first)). It belongs to the system, "
-                    + "so History can't put it back: drag it back from the Trash in Finder, or empty the Trash to finish.",
-                to: to
-            )
+            // Nothing was removed: it is whole in the Trash, where History has no Undo for what root moved (D12).
+            return .failed(TrashBatch.notDeleted(failures, trashName: (to as NSString).lastPathComponent, asAdministrator: true), to: to)
         case .partly(let failures):
             return .failed(TrashBatch.partlyDeleted(failures, trashName: (to as NSString).lastPathComponent), partial: true)
         }

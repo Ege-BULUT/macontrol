@@ -300,9 +300,12 @@ struct TrashBatch {
             + "Empty the Trash to finish. First: \(first(failures, trashName))"
     }
 
-    static func notDeleted(_ failures: [RemovalEngine.Failure], trashName: String) -> String {
+    /// `asAdministrator`: root moved it, so History has no Undo for it (D12) and Finder is the way back.
+    static func notDeleted(_ failures: [RemovalEngine.Failure], trashName: String, asAdministrator: Bool = false) -> String {
         "Moved to the Trash as \"\(trashName)\", but nothing in it could be deleted (\(first(failures, trashName))). "
-            + "Undo it from History, or empty the Trash to finish."
+            + (asAdministrator
+                ? "It belongs to the system, so History can't put it back: drag it back from the Trash in Finder, or empty the Trash to finish."
+                : "Undo it from History, or empty the Trash to finish.")
     }
 
     private static func first(_ failures: [RemovalEngine.Failure], _ trashName: String) -> String {

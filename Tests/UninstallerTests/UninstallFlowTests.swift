@@ -28,7 +28,8 @@ import Testing
     /// The one batch: the bundle, then each leftover with the bundle as `requiresGone` (DESIGN-debloat section 3.6),
     /// every item naming the app it belongs to.
     private func batch(_ plan: UninstallPlan, _ leftovers: [TrashItem]) -> Recorder.Event {
-        let id = plan.app.bundleIdentifier
+        // Sent only for an app Apple's signature vouched for (the first-component rule).
+        let id = plan.app.kind == .appleAppStore ? plan.app.bundleIdentifier : nil
         return .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: id)] + leftovers.map { item in
             var item = item
             item.requiresGone = plan.app.url
