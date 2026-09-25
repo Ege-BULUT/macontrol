@@ -20,24 +20,26 @@
     {
       "id": "M2",
       "name": "Scan engine",
-      "status": "next",
+      "status": "done",
       "description": "Production walker behind the ScanEngine contract: fd-relative getattrlistbulk on a fixed pool of blocking threads, compact ScanTree (no stored paths), hard links once with a deterministic owner, no mount-point crossing, dataless never materialized, errors flagged not zeroed; exact 'frees now' via PRIVATESIZE for selections; mcscan in the bench (target: fixture total exact, within 1.3x of dua). Task T-0043.",
       "why": "Speed of the scan decides whether the app feels instant; both cleanup and visualization sit on it.",
       "examples": [],
       "chips": [
         "Loop: spikes, benchmarks",
-        "v1 merged on main (c99e07e)"
+        "v1 merged on main (c99e07e)",
+        "Shipped in 0.1.0; extended in 0.2.0 (M9)"
       ]
     },
     {
       "id": "M3",
       "name": "App shell & UI",
-      "status": "next",
+      "status": "done",
       "description": "SwiftUI shell (sidebar: Overview, Disk Map, Clean, Uninstall, History), Overview, Full Disk Access onboarding (per-user probe, poll, relaunch), History with Undo, design tokens and Liquid Glass surfaces, snapshot tooling (Macontrol --snapshot), Clean and Uninstall screens. Tasks T-0047, T-0049.",
       "why": "One shell that both feature sets plug into, designed once.",
       "examples": [],
       "chips": [
-        "v1 merged on main (c99e07e)"
+        "v1 merged on main (c99e07e)",
+        "Shipped in 0.1.0; extended in 0.2.0 (M9)"
       ]
     },
     {
@@ -65,44 +67,49 @@
     {
       "id": "M6",
       "name": "App uninstaller",
-      "status": "next",
+      "status": "done",
       "description": "App inventory with Apple-app classification, evidence-scored leftovers (bundle id, container metadata, app groups, launchd), quit + launchctl bootout + one Trash batch; built-in apps shown as 'Part of macOS'. No privileged helper in v1. Task T-0046.",
       "why": "Most requested cleanup feature, and the riskiest one.",
       "examples": [],
       "chips": [
-        "v1 merged on main (c99e07e)"
+        "v1 merged on main (c99e07e)",
+        "Shipped in 0.1.0; extended in 0.2.0 (M9)"
       ]
     },
     {
       "id": "M7",
       "name": "Safety & verification",
-      "status": "next",
+      "status": "done",
       "description": "One deletion door (Sources/Safety, sink-audit test): containment protected-path policy with canonical paths, identity re-check, FileManager.trashItem only, JSON Lines undo journal; no permanent delete in v1; fixture-only tests. Task T-0044.",
       "why": "A cleaner that deletes the wrong thing once is uninstalled forever.",
       "examples": [],
       "chips": [
-        "v1 merged on main (c99e07e)"
+        "v1 merged on main (c99e07e)",
+        "Shipped in 0.1.0; extended in 0.2.0 (M9)"
       ]
     },
     {
       "id": "M8",
       "name": "Release",
-      "status": "planned",
+      "status": "next",
       "description": "Signing, notarization, update channel, landing page.",
       "why": "Ship it.",
       "examples": [],
-      "chips": []
+      "chips": [
+        "Self-signed signing + tag-release workflow merged (T-0081); secrets and v0.2.0 tag wait on the user's key decision"
+      ]
     },
     {
       "id": "M9",
       "name": "Debloat & hardcore",
-      "status": "next",
+      "status": "done",
       "description": "Hardcore mode (a toolbar checkbox on every screen, off at launch; on = permanent delete after a risk modal), a fd-relative permanent-delete engine in Safety, a privileged helper for root-owned items (do shell script with administrator privileges, request file bound by SHA-256, root-side re-validation), a Debloat section that removes Apple's apps with their content from a validated apple-apps.json, and an honest expert flow for sealed system apps. Design: docs/DESIGN-debloat.md.",
       "why": "User decisions after v1 (M-0045 4-6): debloating the Mac the way Windows debloaters remove Microsoft's own apps is the product's main promise. The user wants admin deletions like PureMac (Apple apps with all their leftovers), a permanent 'hardcore mode', and system apps removable with the strongest warnings. No paid developer account, so everything must work ad-hoc signed.",
       "examples": [],
       "chips": [
         "7 tasks",
-        "Risk: high (no undo, root)"
+        "Risk: high (no undo, root)",
+        "v0.2.0 integrated on local main (c37dfbc), 569 tests green, not pushed (T-0082)"
       ]
     }
   ],

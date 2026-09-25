@@ -269,7 +269,7 @@
       "critical"
     ],
     "taskIdPrefix": "T-",
-    "nextTaskSeq": 83
+    "nextTaskSeq": 85
   },
   "tasks": [
     {
@@ -10623,7 +10623,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:50",
-      "updatedAt": "2026-09-25T15:24:53",
+      "updatedAt": "2026-09-25T16:37:51",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -10738,6 +10738,12 @@
           "role": "engineer",
           "date": "2026-09-25T15:24:44",
           "text": "Fix round 2 (fix-hardcore-ui-2), feat/hardcore-ui 7908b66 (3e0dc15 fix, 90b1e19 and 7908b66 tests). Full `swift test` at 7908b66: 383 tests in 48 suites passed in 141 s, 3 known issues (round 1 item 2, round 1 item 6, and item 2 below). No macontrol-tests-* folders were born in that run. `git merge-tree` is clean against sealed-apps, debloat-catalog, privileged-helper-engine, signing-ci, ux-polish and origin/main.\n\n1. MEDIUM, fixed. `RemovalRun` now reads two new injected parts of `RemovalSupport`: `isOnStartupDisk(url)` (the item's folder has `volumeIsRootFileSystem`, which is true for firmlinked /Users, /Applications and /Library) and `startupAvailable()` (`VolumeSummary.of(/System/Volumes/Data).available`). If any item is off the startup disk, the box is disabled with \"A restore point covers only the startup disk, and some of these items are on another disk.\" The 1 GB is now read on the startup disk. `available(urls)` is only used for the measured result now.\n   Real probe: a 30 MB sparse APFS image mounted `-nobrowse` in the scratchpad, through the production `RemovalRun(support: RemovalSupport())`, gave onStartup=false, the box off with the other-disk reason, and startup space 18.7 GB (the image had 30 MB). A TMPDIR file gave onStartup=true and the box on. The image is detached and deleted, and the probe test is deleted.\n   Tests: `theRestorePointBoxIsForItemsOnTheStartupDiskOnly` (mixed volumes; items' volumes 0 B with the startup disk at 5 GB, and the reverse) and `everyScreenAsksWhetherItsItemsAreOnTheStartupDisk` (Clean, Uninstall and Disk Map each pass their items; the real check says true for a fixture file and false for /dev/null and for an unreadable path).\n2. MEDIUM, merge note plus a known issue. This branch's JournalEntry has no `leftInTrash`. HistoryBatch.status and HistoryModel.inTrashBytes carry a MERGE NOTE: take those lines out of `deleted`, say `PermanentText.partlyDeleted(\u003clastPathComponent of leftInTrash>)` for each, and keep them out of the in-Trash sum, because `allocated` is the full size. `aPartlyDeletedLineSaysTheRestIsInTheTrash` decodes a line from JSON with the key, and its known issue flips once status says so. On a scratch merge with privileged-helper-engine 9daf1c5, the field decoded and the known issue still recorded, as intended.\n3. LOW, fixed. `RemovalRun.promisesRestorePoint` (ticked, possible, no problem, not \"Delete anyway\") drives the space sentence in TrashSheet and in the Disk Map header. The sentence no longer shows after a failure or when deleting without one. Test: `theSpaceLineNeedsARestorePointStillComing`.\n4. LOW, fixed at the root. When every item is trash-only (D4), `RemovalRun` opens in Trash mode and keeps the reasons. The sheet is then a plain Trash sheet: \"Move 1 item to the Trash?\", the Trash estimate, \"Move to Trash\" and the Trash result, with no restore-point box. Each row still says why (\"Holds your Safari data\") in TrashSheet and in the Disk Map review. Disk Map measures those items in Trash mode instead of reporting zero. One deletable item keeps the sheet permanent. UninstallConfirmation.failureMessage says \"Nothing was removed, but …\" in permanent mode. Tests: `aSelectionThatAllGoesToTheTrashOpensInTrashMode`, `aStoppedUninstallSaysNothingWasRemoved(mode:)`.\n5. LOW, fixed. New `TrashOutcome.isWholeInTrash` (\"Moved to the Trash…\": the notDeleted and \"changed there\" sentences) and `TrashReport.inTrashURLs`. Clean's `apply` and Disk Map's `apply` count those items as In Trash, and so does History. Partly deleted items stay out, and the Clean footer then shows the in-Trash line. `TrashedItem.trashedTo` was never read and is removed. Tests: the left-in-Trash cases 1 and 2 now expect In Trash, case 0 does not.\n6. LOW.\n   (a) Merge note in HardcoreConfirmationTests above the Return tests: add `returnInTheDebloatSheetRemovesNothing(mode:)` once DebloatSheet exists here, because it only exists on debloat-catalog.\n   (b) MERGE NOTE at `isLeftInTrash`: pin the prefixes with a test built from `TrashBatch.partlyDeleted`, `TrashBatch.notDeleted` (with and without asAdministrator) and the \"changed there\" literal. I ran exactly that test on the scratch merge (uncommitted), and all four sentences classify correctly.\n   (c) Fixed, not just noted: `words(in:)` shows a failure that starts with \"Not removed\" as it is, in both modes. The scratch merge confirmed `PrivilegedRouting.message(for: .cancelled)` reads \"Not removed: the administrator password was not given.\" with no double prefix. There is a test with the helper's two \"Not removed\" sentences.\nAlso: the four Gate tests hung forever when the held step was never reached (seen under a mutation). `Gate.callerEnded()` now fails the wait as soon as the confirm returns. I tried `.timeLimit(.minutes(1))` first, but on the merged tree under load they took 106-114 s and failed, so I dropped it.\n\nMutations, all killed, each by its own test (A: 7 in one build, B: 3): off-disk check off; the problem dropped from promisesRestorePoint; no Trash-mode switch; Clean counting trashedURLs; Disk Map not recording whole-in-Trash items; the \"Not removed\" passthrough; the permanent failure text; startup space read from the items' volumes (killed by 9 tests, and the Gate tests now fail in 0.26 s instead of hanging); `volumeIsRootFileSystem != nil` (/dev/null check); and goesOnWithoutRestorePoint dropped. After each group the sources were restored with `git checkout`.\nScratch merge with privileged-helper-engine 9daf1c5 (`--no-commit`, then aborted, with Tests.build removed before and after): 183 UI tests. Apart from the 1-minute time limits I have since removed, everything passed with 3 known issues. The contract probe passed.\nNot done: a snapshot of the other-disk box text and of the Trash-mode sheet for trash-only items; I rendered neither."
+        },
+        {
+          "author": "v02-integrator",
+          "role": "engineer",
+          "date": "2026-09-25T16:37:51",
+          "text": "Merged into local main as 7645348 (7908b66), not pushed (T-0082). Merge notes done in 576866e: restorePoint is passed in confirmUninstall and the fixture; History has partly-deleted lines; TrashSheet rows show report notes; the demo's HardcoreMode is shared with Debloat; the demo admin leftover carries the unvouched note; the Debloat sheet is in the Return and Esc tests; the left-in-Trash prefixes are pinned to Safety's builders. All 3 known issues now assert. The DiskMapModel+Trash where-clause warning is cleared (a20db56). Review-2 LOW 3 (the restore-point sentence when none exists) is still open."
         }
       ],
       "log": [
@@ -11028,6 +11034,12 @@
           "actor": "v02-integrator",
           "event": "linked",
           "detail": "relatedTo += T-0082"
+        },
+        {
+          "ts": "2026-09-25T16:37:51",
+          "actor": "v02-integrator",
+          "event": "comment",
+          "detail": "Merged into local main as 7645348 (7908b66), not pushed (T-0082). Merge notes do…"
         }
       ],
       "sessions": [
@@ -11404,7 +11416,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-25T14:41:00",
+      "updatedAt": "2026-09-25T16:37:51",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -11513,6 +11525,12 @@
           "role": "engineer",
           "date": "2026-09-25T14:24:41",
           "text": "Merge note from T-0073 fix 1 (feat/hardcore-ui 7bedd67), about the uninstall restore point: UninstallModel.confirmUninstall now gets the restore point's name as `run.restorePoint`, from the run that makeRestorePoint returns. It still calls `uninstaller.uninstall(pending.plan, leftovers: chosen, mode: run.mode)` because this branch's Uninstaller takes no restorePoint (there is a MERGE NOTE at the call). Whoever merges the second of the two branches: add `restorePoint: run.restorePoint` there, and switch RemovalFixture.uninstallModel in HardcoreConfirmationTests to the 3-argument UninstallActions init so the fixture's remove step passes `restorePoint: $2` to service.remove. HardcoreConfirmationTests.uninstallHandsItsRestorePointToTheRemoveStep wraps its journal check in withKnownIssue(\"T-0075 ...\") and fails the moment both are done. Then drop the wrapper. Also in TrashOutcome+Words.words(in: .trash): helper sentences that start with \"Not removed\" should be shown as they are, without \"Could not move it: \" in front (review item 5b)."
+        },
+        {
+          "author": "v02-integrator",
+          "role": "engineer",
+          "date": "2026-09-25T16:37:51",
+          "text": "Merged into local main as 8b2a6f1 (9daf1c5), not pushed (T-0082). The debloat-catalog conflict in Uninstaller.swift was resolved per the fix-debloat-catalog-1 note: preflight(job) holds your helper-aware checks up to checkUnchanged (vouchedIdentifier for .appleAppStore only), and prepare(job) starts with try preflight(job). unvouchedNote is now public, for the demo. Your review-2 LOWs 1-3 are still open."
         }
       ],
       "log": [
@@ -11743,6 +11761,12 @@
           "actor": "v02-integrator",
           "event": "linked",
           "detail": "relatedTo += T-0082"
+        },
+        {
+          "ts": "2026-09-25T16:37:51",
+          "actor": "v02-integrator",
+          "event": "comment",
+          "detail": "Merged into local main as 8b2a6f1 (9daf1c5), not pushed (T-0082). The debloat-ca…"
         }
       ],
       "sessions": [
@@ -11825,7 +11849,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-25T14:27:59",
+      "updatedAt": "2026-09-25T16:37:51",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -11922,6 +11946,12 @@
           "role": "engineer",
           "date": "2026-09-25T14:24:41",
           "text": "Merge note from T-0073 fix 1 (feat/hardcore-ui bc6fb2e): in demo and --snapshot, Debloat keeps its own HardcoreMode, because AppModel.demo() takes the default `debloat: .demo()`. Once debloat-catalog and hardcore-ui are both on main, AppModel.demo should create one `let hardcore = HardcoreMode()` and pass `hardcore: hardcore, debloat: .demo(hardcore: hardcore)`. HardcoreConfirmationTests.everyScreenSharesTheAppsSwitch checks `app.debloat.hardcore === app.hardcore` inside withKnownIssue(\"T-0076 ...\"), so it fails once this is fixed; then drop the wrapper. I did not change it on hardcore-ui: DebloatModel(uninstaller: nil, hardcore:) would have given the demo an empty Debloat after the merge."
+        },
+        {
+          "author": "v02-integrator",
+          "role": "engineer",
+          "date": "2026-09-25T16:37:51",
+          "text": "Merged into local main as 2cecaf5 (2715e99), not pushed (T-0082). The appleContent known issue is replaced by #require (f42e092). Debloat now shares the app's HardcoreMode in the demo, joins the Return and Esc-while-working sheet tests (576866e), and passes systemAppsSize to the sealed panel (59470e3). Still open: review-2 item 1 (CoreSimulator is shared by every Xcode but kept per job) is live now that the helper is on main. Item 2 (no test for guard !done.isEmpty) is open too."
         }
       ],
       "log": [
@@ -12248,6 +12278,12 @@
           "actor": "v02-integrator",
           "event": "linked",
           "detail": "relatedTo += T-0082"
+        },
+        {
+          "ts": "2026-09-25T16:37:51",
+          "actor": "v02-integrator",
+          "event": "comment",
+          "detail": "Merged into local main as 2cecaf5 (2715e99), not pushed (T-0082). The appleConte…"
         }
       ],
       "sessions": [
@@ -12440,7 +12476,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:51",
-      "updatedAt": "2026-09-25T13:41:01",
+      "updatedAt": "2026-09-25T16:37:51",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -12501,6 +12537,12 @@
           "role": "engineer",
           "date": "2026-09-25T13:36:07",
           "text": "For your Color.sealedWarning note: Theme.dangerText (Sources/MacontrolUI/Shell/Theme.swift) is on feat/hardcore-ui and reaches main with the T-0073 PR; HardcoreModeTests.dangerTextOnTheBannerReachesAA measures it from pixels, light and dark. Also: feat/hardcore-ui now carries the same window.animationBehavior = .none hunk as your 96bc399 (identical lines and comment, so the second merge is clean), plus a test that counts NSAnimation starts for offscreen windows."
+        },
+        {
+          "author": "v02-integrator",
+          "role": "engineer",
+          "date": "2026-09-25T16:37:51",
+          "text": "Merged into local main as 9238a25 (8ab58ac), not pushed (T-0082). Color.sealedWarning is replaced by Theme.dangerText. The panel gets systemAppsSize from Debloat once every locked app is measured. Not checked: the guide as a sheet on the Debloat sheet. The review-1 LOWs are still open."
         }
       ],
       "log": [
@@ -12761,6 +12803,12 @@
           "actor": "v02-integrator",
           "event": "linked",
           "detail": "relatedTo += T-0082"
+        },
+        {
+          "ts": "2026-09-25T16:37:51",
+          "actor": "v02-integrator",
+          "event": "comment",
+          "detail": "Merged into local main as 9238a25 (8ab58ac), not pushed (T-0082). Color.sealedWa…"
         }
       ],
       "sessions": [
@@ -13696,7 +13744,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-24T08:36:55",
-      "updatedAt": "2026-09-25T13:49:16",
+      "updatedAt": "2026-09-25T16:37:52",
       "comments": [
         {
           "author": "signing-ci",
@@ -13733,6 +13781,12 @@
           "role": "engineer",
           "date": "2026-09-25T13:30:48",
           "text": "finish-signing-ci, feat/signing-ci 0830960 (merge origin/main 76952e5) + 0c79671.\nMerge: no conflicts. The branch only adds files, and none of them are in main's diff.\nDispositions since verdictAt (09:56:44), V5:\n- review-2 #1, #2, #3, #5: fixed in 43496c0 (fix-2). Re-checked: test-signing.sh passes. The real keychain search list and the listing and hashes of ~/.config/macontrol are identical before and after.\n- review-2 #4 (merge note), plus fix-site-2 10:23: FIXED in 0c79671. RELEASING.md \"Publishing the download\" now matches main's deploy-site.sh. board-sync.sh runs it too. Only the SITE_RELEASE line (0.1) is served, and a suffixed tag never is. Version, size, date and SHA-256 go into the pages, and there is no version.json. Images and the changelog come from the served tag (git fetch --tags). For v0.2.0, the copy and SITE_RELEASE go in one commit, and until then 0.1.x is served with a note. The \"do not push a pre-release tag\" line is gone. Step 3 says the site never serves a suffixed tag. Proofs, offline: `deploy-site.sh --dry-run --zip Macontrol-0.2.0-beta.1.zip` exits 1 with \"candidates are never served\", and `--zip Macontrol-0.2.0.zip` exits 1 with \"not a 0.1.x release\". dist/ was removed afterwards.\n- New contract from the merge: release.yml's notes awk reads CHANGELOG.md, which came from main. test-signing.sh now extracts the awk from the YAML and runs it on the newest section (0.1.1): it checks that the notes are not empty, do not run into the next \"## \" heading and contain a \"###\" heading. Two mutations, each on a scratch copy of 5 files: exact-heading match gives empty notes, and no section end runs into the next section. Both killed. The unmutated copy passes.\n- signing-ci 08:53 (1), bundle-app.sh wiring: not changed here on purpose. feat/privileged-helper-engine (T-0075) rewrites lines 7-15 and already has `SIGN_IDENTITY=\"${SIGN_IDENTITY:-$([ -x scripts/signing-identity.sh ] && scripts/signing-identity.sh || echo -)}\"` at line 15. Changing the same lines here would only cause a conflict. Until T-0075 merges, RELEASING.md \"Local builds\" gives the explicit SIGN_IDENTITY line. release.yml sets SIGN_IDENTITY itself, so CI does not depend on it.\n- gh-templates-fix-1 11:48 (CONTRIBUTING signing bullet): CONTRIBUTING.md is not on main or on this branch, so there is nothing to edit here. Whichever of chore/github-templates and feat/signing-ci merges second points the bullet at scripts/make-signing-cert.sh. There is no board task for that branch.\n- Site/README copy that says \"signed ad hoc\" (install, full-disk-access, faq, build.html#signing, README:165/178/182): still true for the served 0.1.x. It belongs to T-0080 and T-0071 with the v0.2.0 SITE_RELEASE bump, as commented on 09:36.\nChecks: swift build --build-tests ok. swift test: 324 tests in 45 suites passed (summary line present), with 0 macontrol-tests-* folders born in the run window and no other test run at the time. test-signing.sh ok. This branch has no UI module, so no snapshots.\nStill OPEN, not closable by an agent: (a) the user decision on a separate dev certificate and a fresh release key, which must come before `gh secret set` (round-1 #1, remainder). (b) The checkout SHA 3d3c42e5... for v7.0.1 is not verified online. (c) The two secrets are not set. (d) ~/.config/macontrol still holds the .p12, .b64 and password until the maintainer runs --remove-export."
+        },
+        {
+          "author": "v02-integrator",
+          "role": "engineer",
+          "date": "2026-09-25T16:37:52",
+          "text": "Merged into local main as 524ea97 (0c79671), not pushed (T-0082). VERSION is 0.2.0 and CHANGELOG has a 0.2.0 draft (date 'unreleased'). CONTRIBUTING and RELEASING now say bundle-app.sh signs with the self-signed certificate by default. The local release bundle is signed 'macontrol Self-Signed' with no dialog, and test-signing.sh's certificate check passes. Open items 4 and 5 still gate gh secret set and the tag."
         }
       ],
       "log": [
@@ -13873,6 +13927,12 @@
           "actor": "v02-integrator",
           "event": "linked",
           "detail": "relatedTo += T-0082"
+        },
+        {
+          "ts": "2026-09-25T16:37:52",
+          "actor": "v02-integrator",
+          "event": "comment",
+          "detail": "Merged into local main as 524ea97 (0c79671), not pushed (T-0082). VERSION is 0.2…"
         }
       ],
       "sessions": [
@@ -13949,7 +14009,7 @@
       "id": "T-0082",
       "title": "Integrate v0.2.0 modules",
       "description": "Merge onto main in order: feat/privileged-helper-engine (T-0075), feat/debloat-catalog (T-0076), feat/sealed-apps (T-0077), feat/hardcore-ui (T-0073), feat/signing-ci (T-0081), chore/github-templates. Resolve the merge notes the reviews left for whoever merges second, wire SIGN_IDENTITY and VERSION 0.2.0 in scripts/bundle-app.sh, full swift test, release bundle + codesign check, headless snapshots of every screen light/dark.",
-      "status": "development",
+      "status": "ready_for_review",
       "urgency": "high",
       "tag": "integration",
       "milestone": "M9",
@@ -13960,11 +14020,13 @@
         "T-0075",
         "T-0076",
         "T-0077",
-        "T-0081"
+        "T-0081",
+        "T-0083",
+        "T-0084"
       ],
       "owner": "",
       "createdAt": "2026-09-25T15:26:28",
-      "updatedAt": "2026-09-25T15:26:32",
+      "updatedAt": "2026-09-25T16:37:58",
       "comments": [],
       "log": [
         {
@@ -13978,10 +14040,157 @@
           "actor": "v02-integrator",
           "event": "claimed",
           "detail": "assignee: (none) -> v02-integrator; status: backlog -> development"
+        },
+        {
+          "ts": "2026-09-25T16:36:14",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/T-0082-1-overview-diskmap-clean.png (v0.2.0 integrated main: 1-overview-diskmap-clean (light/dark))"
+        },
+        {
+          "ts": "2026-09-25T16:36:14",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/T-0082-2-uninstall-debloat-history.png (v0.2.0 integrated main: 2-uninstall-debloat-history (light/dark))"
+        },
+        {
+          "ts": "2026-09-25T16:36:14",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/T-0082-3-hardcore-modal-debloat-sealed.png (v0.2.0 integrated main: 3-hardcore-modal-debloat-sealed (light/dark))"
+        },
+        {
+          "ts": "2026-09-25T16:36:14",
+          "actor": "unspecified",
+          "event": "attached",
+          "detail": "attachments/T-0082-4-hardcore-sheets.png (v0.2.0 integrated main: 4-hardcore-sheets (light/dark))"
+        },
+        {
+          "ts": "2026-09-25T16:37:58",
+          "actor": "v02-integrator",
+          "event": "updated",
+          "detail": "status: development -> ready_for_review"
+        },
+        {
+          "ts": "2026-09-25T16:37:58",
+          "actor": "v02-integrator",
+          "event": "released",
+          "detail": "assignee was 'v02-integrator'"
+        },
+        {
+          "ts": "2026-09-25T16:38:59",
+          "actor": "v02-ux",
+          "event": "linked",
+          "detail": "relatedTo += T-0083"
+        },
+        {
+          "ts": "2026-09-25T16:39:07",
+          "actor": "v02-attack",
+          "event": "linked",
+          "detail": "relatedTo += T-0084"
+        }
+      ],
+      "sessions": [
+        {
+          "ts": "2026-09-25T16:37:58",
+          "agent": "v02-integrator",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "v0.2.0 is integrated on local main at c37dfbc, not pushed. Merged privileged-helper-engine 8b2a6f1, debloat-catalog 2cecaf5 (one conflict, resolved per the T-0075 note), sealed-apps 9238a25, hardcore-ui 7645348, signing-ci 524ea97 and github-templates bbdf242. Merge notes were applied in 576866e and 59470e3. Full swift test: 569/569 in 67 suites, 0 known issues. The release bundle is 0.2.0 (186), signed 'macontrol Self-Signed': designated => identifier dev.macontrol.Macontrol and certificate leaf = H\"2b40c1b6…\". Snapshots are in build/snapshots-0.2.0 and 4 contact sheets are attached. Journal M-0055."
+        }
+      ],
+      "attachments": [
+        {
+          "file": "attachments/T-0082-1-overview-diskmap-clean.png",
+          "label": "v0.2.0 integrated main: 1-overview-diskmap-clean (light/dark)",
+          "addedAt": "2026-09-25T16:36:14"
+        },
+        {
+          "file": "attachments/T-0082-2-uninstall-debloat-history.png",
+          "label": "v0.2.0 integrated main: 2-uninstall-debloat-history (light/dark)",
+          "addedAt": "2026-09-25T16:36:14"
+        },
+        {
+          "file": "attachments/T-0082-3-hardcore-modal-debloat-sealed.png",
+          "label": "v0.2.0 integrated main: 3-hardcore-modal-debloat-sealed (light/dark)",
+          "addedAt": "2026-09-25T16:36:14"
+        },
+        {
+          "file": "attachments/T-0082-4-hardcore-sheets.png",
+          "label": "v0.2.0 integrated main: 4-hardcore-sheets (light/dark)",
+          "addedAt": "2026-09-25T16:36:14"
+        }
+      ]
+    },
+    {
+      "id": "T-0083",
+      "title": "Verify: v0.2.0 UX",
+      "description": "Judge the merged v0.2.0 main (c37dfbc) in light/dark at 900x600 and large: hardcore off/on on every screen, the turn-on modal, permanent confirmation sheets, History with permanent items, Debloat, sealed panel and expert guide. Check that permanent is obvious, the copy honest and calm, the look PureMac/Radix-familiar, and contrast >= 4.5:1 from sampled pixels. File problems as tasks; fix trivial copy/spacing on main with a snapshot re-check.",
+      "status": "development",
+      "urgency": "high",
+      "tag": "ux",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0082"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:38:59",
+      "updatedAt": "2026-09-25T16:39:03",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:38:59",
+          "actor": "v02-ux",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        },
+        {
+          "ts": "2026-09-25T16:39:03",
+          "actor": "v02-ux",
+          "event": "claimed",
+          "detail": "assignee: (none) -> v02-ux; status: backlog -> development"
         }
       ],
       "sessions": [],
-      "assignee": "v02-integrator"
+      "assignee": "v02-ux"
+    },
+    {
+      "id": "T-0084",
+      "title": "Verify: v0.2.0 safety attack",
+      "description": "Attack the v0.2.0 destructive paths non-root on temp trees: permanent mode via every entry point, RemovalEngine, privileged executor and request format, debloat catalog, hardcore toggle. Suite in Tests/SafetyAttackTests/.",
+      "status": "development",
+      "urgency": "high",
+      "tag": "safety",
+      "milestone": "M7",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0082"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T16:39:07",
+      "updatedAt": "2026-09-25T16:39:10",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T16:39:07",
+          "actor": "v02-attack",
+          "event": "created",
+          "detail": "status=backlog, urgency=high"
+        },
+        {
+          "ts": "2026-09-25T16:39:10",
+          "actor": "v02-attack",
+          "event": "claimed",
+          "detail": "assignee: (none) -> v02-attack; status: backlog -> development"
+        }
+      ],
+      "sessions": [],
+      "assignee": "v02-attack"
     }
   ]
 }
