@@ -28,7 +28,7 @@
       "critical"
     ],
     "taskIdPrefix": "T-",
-    "nextTaskSeq": 90
+    "nextTaskSeq": 91
   },
   "tasks": [
     {
@@ -4947,7 +4947,8 @@
       "blockedBy": [],
       "relatedTo": [
         "T-0048",
-        "T-0045"
+        "T-0045",
+        "T-0090"
       ],
       "owner": "",
       "createdAt": "2026-09-23T11:32:50",
@@ -5146,6 +5147,12 @@
           "actor": "integrator",
           "event": "comment",
           "detail": "Merged into main (feat/scan-engine 5500175, merge commit on main; main HEAD c99e…"
+        },
+        {
+          "ts": "2026-09-25T23:43:38",
+          "actor": "v02-final-fix",
+          "event": "linked",
+          "detail": "relatedTo += T-0090"
         }
       ],
       "sessions": [
@@ -10412,7 +10419,7 @@
       ],
       "owner": "",
       "createdAt": "2026-09-23T16:09:50",
-      "updatedAt": "2026-09-25T23:24:47",
+      "updatedAt": "2026-09-25T23:43:48",
       "comments": [
         {
           "author": "challenge-honesty-ux",
@@ -10533,6 +10540,12 @@
           "role": "engineer",
           "date": "2026-09-25T16:37:51",
           "text": "Merged into local main as 7645348 (7908b66), not pushed (T-0082). Merge notes done in 576866e: restorePoint is passed in confirmUninstall and the fixture; History has partly-deleted lines; TrashSheet rows show report notes; the demo's HardcoreMode is shared with Debloat; the demo admin leftover carries the unvouched note; the Debloat sheet is in the Return and Esc tests; the left-in-Trash prefixes are pinned to Safety's builders. All 3 known issues now assert. The DiskMapModel+Trash where-clause warning is cleared (a20db56). Review-2 LOW 3 (the restore-point sentence when none exists) is still open."
+        },
+        {
+          "author": "v02-final-fix",
+          "role": "engineer",
+          "date": "2026-09-25T23:43:48",
+          "text": "Re-review 3 LOW follow-ups, local main 479b8c9. (1) Fixed. RemovalSupport's live trashOnlyReason is ProtectedPaths.trashOnlyReason(for:). TrashOnly stays only for demo data. Test: theLiveSheetAsksSafetyWhichSeesThroughASymlinkedHome (a symlink to the real home in TMPDIR: the path copy gives nil, the live one 'stored in iCloud'; only ~/Library itself is opened). (2) Partly fixed. A batch with a partly deleted line gets the red permanent icon, and the row says 'Partly deleted' instead of 'Deleted permanently'. HistoryModelTests.aPartlyDeletedLineSaysTheRestIsInTheTrash hosts EntryRow, and a probe render was checked. Still open: the header's in-Trash total leaves out the partly deleted rest, because its size is not journaled (added to T-0088). (3) Fixed. TrashBatch.changedInTrash is the one constant that Safety and the helper both use, and safetysLeftInTrashSentencesAreRecognised covers it. (4) Not done: the Disk Map review list height still ignores the reason line (added to T-0088)."
         }
       ],
       "log": [
@@ -10847,6 +10860,12 @@
           "actor": "review-hardcore-ui-3",
           "event": "reviewed",
           "detail": "verdict=approve by review-hardcore-ui-3, 1500s, 200000 tokens"
+        },
+        {
+          "ts": "2026-09-25T23:43:48",
+          "actor": "v02-final-fix",
+          "event": "comment",
+          "detail": "Re-review 3 LOW follow-ups, local main 479b8c9. (1) Fixed. RemovalSupport's live…"
         }
       ],
       "sessions": [
@@ -13139,7 +13158,7 @@
       "relatedTo": [],
       "owner": "",
       "createdAt": "2026-09-24T08:10:45",
-      "updatedAt": "2026-09-25T13:49:17",
+      "updatedAt": "2026-09-26T00:10:37",
       "comments": [
         {
           "author": "site",
@@ -13194,6 +13213,12 @@
           "role": "reviewer",
           "date": "2026-09-25T13:49:17",
           "text": "From T-0081 review (feat/signing-ci 0c79671): once release.yml is on main, CI certificate-signs every v* tag, a 0.1.x hotfix included. deploy-site.sh serves such a tag (0.1 line, no suffix), and board-sync.sh redeploys on every board change. The pages that say releases are signed ad hoc (docs/faq.html:82 and :108, install.html:84/91, full-disk-access.html:79; README.md:165 for T-0071) are then false from the first CI release, not only from v0.2.0. Change that copy in the same commit as the first CI-built release of any line, or cut 0.1.x hotfixes by hand."
+        },
+        {
+          "author": "v02-release-prep",
+          "role": "engineer",
+          "date": "2026-09-26T00:10:37",
+          "text": "v0.2.0 site copy is on local main (1c27652, not pushed): landing features for Debloat and hardcore mode, Coming next keeps live map 0.3 and later items, new docs pages hardcore.html, admin.html, debloat.html, system-apps.html, and install/FDA/FAQ/using/safety/build updated for certificate signing. SITE_RELEASE is 0.2 in the same commit. Consequence: until a v0.2.0 release exists on GitHub, every deploy stops with 'no v0.2.x release', including the hourly board-sync deploy; the board branch is still pushed and the live site keeps its 0.1.1 deploy. 455f7bc lets --dry-run preview from HEAD before the tag. Checked: dry run with a local 0.2.0 zip, headless Chromium 14 pages x 390/768/1440 x light/dark, 0 console errors, 0 HTTP>=400, 0 external requests, 0 overflow, 0 broken/upscaled images, all internal links and anchors resolve. Not verified: a real vercel deploy of the 0.2 copy."
         }
       ],
       "log": [
@@ -13424,6 +13449,12 @@
           "actor": "review-signing-ci-1",
           "event": "comment",
           "detail": "From T-0081 review (feat/signing-ci 0c79671): once release.yml is on main, CI ce…"
+        },
+        {
+          "ts": "2026-09-26T00:10:37",
+          "actor": "v02-release-prep",
+          "event": "comment",
+          "detail": "v0.2.0 site copy is on local main (1c27652, not pushed): landing features for De…"
         }
       ],
       "sessions": [
@@ -13856,13 +13887,19 @@
       ],
       "owner": "",
       "createdAt": "2026-09-25T15:26:28",
-      "updatedAt": "2026-09-25T16:57:58",
+      "updatedAt": "2026-09-25T23:43:56",
       "comments": [
         {
           "author": "v02-ux",
           "role": "tester",
           "date": "2026-09-25T16:57:58",
           "text": "UX verify (T-0083): PASS with changes requested. 0 high. Medium: T-0085 (permanent titles count trash-only items), T-0086 (Debloat has no restore-point box; the T-0076 merge note is still open after 576866e), T-0087 (light-mode secondary text and white-on-red buttons below 4.5:1). Low: T-0088. Two copy commits on main: 7037416 and 542f8b9 (with a test). Full suite: 570 tests passed. build/Macontrol.app predates them, so rebuild before release."
+        },
+        {
+          "author": "v02-final-fix",
+          "role": "engineer",
+          "date": "2026-09-25T23:43:56",
+          "text": "Final fixer: T-0089 fix plus the T-0073 re-review follow-ups are on local main as d42e558 and 479b8c9 (not pushed). Full suite: 583 tests in 70 suites, 0 known issues. One failure under load, T-0090 (a v1 sparse-file reclaim test that passes alone). build/Macontrol.app was rebuilt at 479b8c9 with scripts/bundle-app.sh release: VERSION 0.2.0, build 191, designated requirement identifier \"dev.macontrol.Macontrol\" and certificate leaf = H\"2b40c1b6e6a9e1c2f8c7f8a4aa582ed22010cbaf\" (macontrol Self-Signed). The helper is dev.macontrol.Macontrol.priv with flags=0x10000(runtime) and has no test flags. The hardcore, Debloat and sealed snapshots (108 PNGs) were re-rendered headless and looked at."
         }
       ],
       "log": [
@@ -13931,6 +13968,12 @@
           "actor": "v02-ux",
           "event": "comment",
           "detail": "UX verify (T-0083): PASS with changes requested. 0 high. Medium: T-0085 (permane…"
+        },
+        {
+          "ts": "2026-09-25T23:43:56",
+          "actor": "v02-final-fix",
+          "event": "comment",
+          "detail": "Final fixer: T-0089 fix plus the T-0073 re-review follow-ups are on local main a…"
         }
       ],
       "sessions": [
@@ -14103,13 +14146,19 @@
       ],
       "owner": "",
       "createdAt": "2026-09-25T16:39:07",
-      "updatedAt": "2026-09-25T23:15:34",
+      "updatedAt": "2026-09-25T23:43:47",
       "comments": [
         {
           "author": "v02-attack",
           "role": "tester",
           "date": "2026-09-25T23:15:34",
           "text": "Verdict: 1 break (low severity, filed T-0089 safety/high as asked), everything else held. Commit 1681e52 on main. Full suite: 581 tests in 70 suites passed, 2 known issues (both T-0089), private TMPDIR, 0 fixtures left. Env-gated runs: MACONTROL_ENV_TESTS=1 aVariableSetAfterTheScrubIsSeenByTheCheck passed; MACONTROL_DISK_IMAGE_TESTS=1 PermanentDeleteTests 18/18 (mount before pre-flight refused, mount mid-erase never entered, case-sensitive twin). Deliberate-bug proofs, each killed then restored with git checkout: drop the st_dev/st_ino check after openat in RemovalEngine.empty -> aFolderSwappedForAnotherRealFolderMidEraseIsNotEntered fails; drop lowercased() in PrivilegedScope.looksLikeApple -> theFirstComponentRuleHoldsUnderOtherSpellings fails 4 cases; hand Disk Map's remove a launcher -> aFolderOnlyRootCanEmptyNeverReachesTheHelperFromDiskMap fails.\n\nHELD. Permanent via entry points: Clean/Uninstall/Debloat keep the mode they opened with and route set-aside items with it (HardcoreConfirmationTests *KeepsTheModeItOpenedWith, PermanentAttackTests.threePassesInOrder, DebloatFlowTests); Disk Map has no launcher, now proven by behaviour too (a folder only root can empty stays 'Needs admin', the route is never called). RemovalEngine: folder swapped for a link mid-walk (PermanentDeleteTests), swapped for another real folder mid-erase (new), hard links outside the selection and one added mid-erase (new), lock added after the pre-flight at depth 2 and on its folder never cleared (new), mount points, PATH_MAX (deepTreesGoWholeAndDeepItemsAreRefused), entry 501 of 1000 (anEraseThatStopsHalfwayLeavesTheRestInTheTrash). Privileged: hostile names (shell, newline+JSON line, lookalike, decomposed) through the built helper in both modes, exact History paths, nothing ran; request rewrite before/after the check; dialog shell line: 5 injections x 9 kept variables run nothing and argv arrives byte-exact, SHELLOPTS=xtrace+PS4 control fires unscrubbed and not once scrubbed, BASH_ENV is ignored by bash-as-sh (probed); first-component rule under COM.APPLE / Apple Loops parent and neighbours / '..' / malformed ids; another user's Library refused as protectedLocation while the requester's own item goes. Not isolatable non-root: the request-file-owner != folder-owner check (a root 0600 file can't be opened by the test user, so open fails first). Debloat catalog: shared Apple Loops/Logic/Impulse Responses never preselected (AppleProfileTests.sharedContentIsNeverPreselectedAndUnverifiedItemsSaySo, DebloatModelTests.sharedAndUnverifiedContentIsNeverPreselected), sent once (DebloatFlowTests.sharedContentIsCountedAndSentOnce), Xcode runtimes first and Xcode kept on any runtime failure (DebloatFlowTests.runtimesGoFirstThenOneUninstallForEveryApp and 8 siblings). Hardcore toggle: off at launch and never stored, Return and Esc both cancel the modal (HardcoreModeTests).\n\nBROKE (T-0089, low: History/report integrity, no root action, needs same-user code): a root result.jsonl hard-linked while in the request folder drops back to one link when the app removes its name, then (1) renamed over a later run's result it is read as that run's (root deleted item B, the app reports 'changed since the list' and journals nothing), (2) placed beside a request.json the user wrote, recovery journals root's old line against ~/Documents/thesis.docx. Fix: sha256 of the request in the result's first line, checked by run() and recover().\n\nAlso fixed in the stalled attacker's files: the known-issue IDs pointed at T-0085 (a UX task); run A/C expectations (the attacker's link makes the app skip that result, the child still writes it); the shell probe wrote to a path with the folder's own quote in it and compared $0, so it failed every case including the clean control."
+        },
+        {
+          "author": "v02-final-fix",
+          "role": "engineer",
+          "date": "2026-09-25T23:43:47",
+          "text": "The T-0084 break is fixed in d42e558 (T-0089, now ready_for_review). The helper's first result line names the request's SHA-256, and requests carry a nonce. The attack suite has no withKnownIssue left, and it adds aResultKeptFromAnIdenticalRequestIsNotTakenForThisOne."
         }
       ],
       "log": [
@@ -14142,6 +14191,12 @@
           "actor": "v02-attack",
           "event": "updated",
           "detail": "status: development -> ready_for_review"
+        },
+        {
+          "ts": "2026-09-25T23:43:47",
+          "actor": "v02-final-fix",
+          "event": "comment",
+          "detail": "The T-0084 break is fixed in d42e558 (T-0089, now ready_for_review). The helper'…"
         }
       ],
       "sessions": [
@@ -14299,8 +14354,15 @@
       ],
       "owner": "",
       "createdAt": "2026-09-25T16:57:18",
-      "updatedAt": "2026-09-25T16:57:29",
-      "comments": [],
+      "updatedAt": "2026-09-25T23:43:48",
+      "comments": [
+        {
+          "author": "v02-final-fix",
+          "role": "engineer",
+          "date": "2026-09-25T23:43:48",
+          "text": "Two more low items from the T-0073 re-review 3. (a) Disk Map review: the list height ignores the extra reason line, so the second row's 'Holds your Safari data' is clipped. (b) History header: a partly deleted batch's rest is in the Trash but not in the 'N in the Trash from Macontrol' total, because the journal holds the whole item's size, not the rest's. The icon and row label were fixed in 479b8c9."
+        }
+      ],
       "log": [
         {
           "ts": "2026-09-25T16:57:18",
@@ -14313,6 +14375,12 @@
           "actor": "unspecified",
           "event": "attached",
           "detail": "attachments/t0088-uninstall-small-dark.png (Uninstall 900x600: bundle id breaks mid-word; admin row squeezed)"
+        },
+        {
+          "ts": "2026-09-25T23:43:48",
+          "actor": "v02-final-fix",
+          "event": "comment",
+          "detail": "Two more low items from the T-0073 re-review 3. (a) Disk Map review: the list he…"
         }
       ],
       "sessions": [],
@@ -14328,7 +14396,7 @@
       "id": "T-0089",
       "title": "Privileged results: a kept root result.jsonl of another run is believed, live and in crash recovery",
       "description": "Found by T-0084 (v0.2.0 safety attack) on main 542f8b9. Tests: Tests/SafetyAttackTests/PrivilegedAttackTests.swift aResultKeptFromAnotherRunIsNotTakenForThisOne and recoveryDoesNotJournalAKeptResultAgainstARequestTheUserWrote (both withKnownIssue naming this task). Attack: while root's result.jsonl sits in the user's 0700 request folder, a same-user process hard-links it elsewhere (link(2) needs no ownership). The app unlinks its own name in RequestFolder.remove(), so the kept file is again a regular root file with st_nlink 1, which is all ResultReader checks. (1) Live: in a later run, after the helper's parent returns and before the app opens result.jsonl, the kept file is renamed over it. PrivilegedRouting.run maps the old lines by index onto the new items: run B's item, which root deleted permanently, is reported 'refused: changed since the list', and nothing is journaled for it. (2) Recovery: the kept file placed next to a request.json the user wrote in priv/<uuid>.x makes recover() journal root's old line against any path, e.g. ~/Documents/thesis.docx shows in History as moved by the administrator. Impact: report and History integrity only. No root action follows from a result line (D12: no Undo for admin lines; lastPass re-checks requiresGone on disk), and the attacker needs same-user code, which Risk 2 already cannot stop before the dialog. But DESIGN-debloat 3.3/3.9 promise that results are read through one checked fd and that a hard-linked result file is ignored; the link-count check is bypassed. Suggested fix: bind a result to its request. The helper writes the SHA-256 it was given (argv 3) in its first line ({\"pid\":N,\"sha256\":\"...\"}); run() reads lines only after a first line whose sha256 equals the one it sent, and recover() only when it equals the SHA-256 of the folder's request.json. Flip both withKnownIssue wrappers to plain expectations with the fix; each must fail with the check removed.",
-      "status": "backlog",
+      "status": "ready_for_review",
       "urgency": "high",
       "tag": "safety",
       "milestone": "M9",
@@ -14340,14 +14408,77 @@
       ],
       "owner": "",
       "createdAt": "2026-09-25T23:11:42",
-      "updatedAt": "2026-09-25T23:11:42",
-      "comments": [],
+      "updatedAt": "2026-09-25T23:43:31",
+      "comments": [
+        {
+          "author": "v02-final-fix",
+          "role": "engineer",
+          "date": "2026-09-25T23:43:31",
+          "text": "Fixed on local main d42e558 (not pushed). The helper writes the SHA-256 it was given (argv 3) in its first line: {\"pid\":N,\"sha256\":\"...\"}. ResultReader (PrivilegedRouting.swift) returns no line until the first line names the request's hash. If it names another, run() fails every sent item with 'The administrator helper's results could not be read.' (PrivilegedRouting.unreadable), and recover() removes the folder unread. Recovery hashes the folder's own request.json bytes. Every PrivilegedRequest carries a random nonce, so two runs of the same list never hash alike. The helper ignores it. Tests: the two withKnownIssue wrappers are now plain expectations (aResultKeptFromAnotherRunIsNotTakenForThisOne expects the unreadable failure; recoveryDoesNotJournalAKeptResultAgainstARequestTheUserWrote also expects the forged folder removed). New: aResultKeptFromAnIdenticalRequestIsNotTakenForThisOne. It runs the same item twice (run A fails on requiresGone, then run B trashes it) and renames run A's kept result over B's. PrivilegedExecutorTests pins the first line to pid plus hash, and the recovery fixture writes the hash. Deliberate-bug proofs, each restored and checked with cmp: (1) first-line check always true: all 3 replay tests fail. (2) nonce = nil: only the identical-list test fails. (3) helper omits the hash: 25 helper and executor tests fail. DESIGN-debloat 3.3 step 5, 3.4, 3.8 and 3.9 are updated. Full suite: 583 tests in 70 suites, 0 known issues. The only failure is ReclaimTests.sparseFileFreesItsAllocatedBlocks under load, unrelated; it passes 3 of 3 alone (see T-0090)."
+        }
+      ],
       "log": [
         {
           "ts": "2026-09-25T23:11:42",
           "actor": "v02-attack",
           "event": "created",
           "detail": "status=backlog, urgency=high"
+        },
+        {
+          "ts": "2026-09-25T23:43:31",
+          "actor": "v02-final-fix",
+          "event": "claimed",
+          "detail": "assignee: (none) -> v02-final-fix; status: backlog -> development"
+        },
+        {
+          "ts": "2026-09-25T23:43:31",
+          "actor": "v02-final-fix",
+          "event": "comment",
+          "detail": "Fixed on local main d42e558 (not pushed). The helper writes the SHA-256 it was g…"
+        },
+        {
+          "ts": "2026-09-25T23:43:31",
+          "actor": "v02-final-fix",
+          "event": "updated",
+          "detail": "status: development -> ready_for_review"
+        }
+      ],
+      "sessions": [
+        {
+          "ts": "2026-09-25T23:43:31",
+          "agent": "v02-final-fix",
+          "startedAt": "",
+          "endedAt": "",
+          "durationSec": null,
+          "tokens": null,
+          "summary": "T-0089 fixed: result bound to request SHA-256 + request nonce; 3 replay tests pass, 3 mutations killed"
+        }
+      ],
+      "assignee": "v02-final-fix"
+    },
+    {
+      "id": "T-0090",
+      "title": "Test flake: ReclaimTests.sparseFileFreesItsAllocatedBlocks reads freesNow 0 under full-suite load",
+      "description": "Seen once in the v02-final-fix full run on main 479b8c9 (583 tests, load average 5-6). estimate.freesNow was 0 while Fixtures.allocatedBytes(sparse) read 4096 right after. The test passed 3 of 3 alone, and earlier full runs (integrator 568, attack 581) passed it. ScanEngine and the test are untouched since 5500175. Likely cause (unverified): ATTR_CMNEXT_PRIVATESIZE is read before APFS has allocated the file's one written block. The seek-and-write goes through FileHandle with no fsync, and allocatedBytes is read later. Try handle.synchronize() before close, and check whether the flake stops under load (for example, run the suite with 3 other swift test processes).",
+      "status": "backlog",
+      "urgency": "low",
+      "tag": "test",
+      "milestone": "M9",
+      "refs": [],
+      "blockedBy": [],
+      "relatedTo": [
+        "T-0043"
+      ],
+      "owner": "",
+      "createdAt": "2026-09-25T23:43:38",
+      "updatedAt": "2026-09-25T23:43:38",
+      "comments": [],
+      "log": [
+        {
+          "ts": "2026-09-25T23:43:38",
+          "actor": "v02-final-fix",
+          "event": "created",
+          "detail": "status=backlog, urgency=low"
         }
       ],
       "sessions": []
