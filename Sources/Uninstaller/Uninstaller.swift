@@ -117,21 +117,11 @@ public final class Uninstaller: Sendable {
 
     /// The v1 steps for one app, up to the Trash: its bundle and chosen leftovers, in that order.
     private func prepare(_ job: UninstallJob) async throws -> [TrashItem] {
+        try preflight(job)
         let plan = job.plan
-        if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
         let chosen = plan.leftovers.filter { job.leftovers.contains($0.url) }
-        if let stray = chosen.first(where: { !isInRemovableArea($0.url) }) {
-            throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
-        }
-        if !canUseAdministrator, let administrative = chosen.first(where: \.needsAdministrator) {
-            throw UninstallError.needsAdministrator(administrative.url)
-        }
-        // The helper's first-component rule lets `com.apple.dt.Xcode.plist` go only for the app it belongs to, so the
-        // identifier goes only where Apple's signature vouched for it (`.appleAppStore`): any bundle's Info.plist can
-        // claim `com.apple.loginwindow`. A third-party app has nothing Apple-named to claim (T-0075 review 1).
-        let identifier = plan.app.kind == .appleAppStore ? plan.app.bundleIdentifier : nil
+        let identifier = Self.vouchedIdentifier(plan.app)
         let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: identifier)
-        try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         // A LaunchDaemon runs in the system domain: the helper boots it out, only after launchd confirms the plist.
@@ -152,6 +142,30 @@ public final class Uninstaller: Sendable {
             item.bundleIdentifier = identifier
             return item
         }
+    }
+
+    /// Every check `uninstall` makes before it quits the app, and nothing else. A caller with a step that can't be
+    /// undone before the uninstall (Debloat deletes simulator runtimes for good) runs this first (T-0076 review, new
+    /// cycle 1, 2).
+    public func preflight(_ job: UninstallJob) throws {
+        let plan = job.plan
+        if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
+        let chosen = plan.leftovers.filter { job.leftovers.contains($0.url) }
+        if let stray = chosen.first(where: { !isInRemovableArea($0.url) }) {
+            throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
+        }
+        if !canUseAdministrator, let administrative = chosen.first(where: \.needsAdministrator) {
+            throw UninstallError.needsAdministrator(administrative.url)
+        }
+        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: Self.vouchedIdentifier(plan.app))
+        try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
+    }
+
+    /// The helper's first-component rule lets `com.apple.dt.Xcode.plist` go only for the app it belongs to, so the
+    /// identifier goes only where Apple's signature vouched for it (`.appleAppStore`): any bundle's Info.plist can
+    /// claim `com.apple.loginwindow`. A third-party app has nothing Apple-named to claim (T-0075 review 1).
+    private static func vouchedIdentifier(_ app: InstalledApp) -> String? {
+        app.kind == .appleAppStore ? app.bundleIdentifier : nil
     }
 
     // MARK: Helpers

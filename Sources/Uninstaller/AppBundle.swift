@@ -50,16 +50,23 @@ struct AppBundle {
         return values?.addedToDirectoryDate ?? values?.creationDate
     }
 
-    /// The name Finder shows, localized for system apps.
+    /// The name Finder shows. Asking LaunchServices for it registers the bundle there, so it is asked only for apps
+    /// macOS protects, which it knows already: a test fixture's app would otherwise stay in LaunchServices for good
+    /// (feasibility-apple-apps open question 7: 3,614 stale records). Other apps show their file name, as Finder does
+    /// unless an app localizes its name.
     private var displayName: String {
-        let shown = FileManager.default.displayName(atPath: url.path)
+        let shown = isProtectedByMacOS ? FileManager.default.displayName(atPath: url.path) : url.lastPathComponent
         return shown.hasSuffix(".app") ? String(shown.dropLast(4)) : shown
+    }
+
+    private var isProtectedByMacOS: Bool {
+        let restricted = FileSystem.status(of: url).map { $0.st_flags & UInt32(SF_RESTRICTED) != 0 } ?? false
+        return restricted || isOnReadOnlyVolume
     }
 
     private func kind(systemRoot: URL) -> AppKind {
         let systemFolder = systemRoot.appendingPathComponent("System").path + "/"
-        let restricted = FileSystem.status(of: url).map { $0.st_flags & UInt32(SF_RESTRICTED) != 0 } ?? false
-        if url.path.hasPrefix(systemFolder) || restricted || isOnReadOnlyVolume {
+        if url.path.hasPrefix(systemFolder) || isProtectedByMacOS {
             return .builtIn
         }
         let hasReceipt = FileSystem.exists(url.appendingPathComponent("Contents/_MASReceipt/receipt"))
@@ -83,6 +90,15 @@ struct AppBundle {
         return teamIdentifier == "59GAB85EFG"
     }
 
+    /// Signed by Apple itself (`anchor apple`), as macOS installers are. Only the signed code directory is checked.
+    var isSignedByApple: Bool {
+        guard let code = staticCode else { return false }
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString("anchor apple" as CFString, [], &requirement) == errSecSuccess else { return false }
+        let flags = SecCSFlags(rawValue: kSecCSDoNotValidateExecutable | kSecCSDoNotValidateResources)
+        return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
+    }
+
     private var staticCode: SecStaticCode? {
         var code: SecStaticCode?
         return SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess ? code : nil
@@ -93,5 +109,13 @@ struct AppBundle {
         var information: CFDictionary?
         guard SecCodeCopySigningInformation(code, flags, &information) == errSecSuccess else { return nil }
         return information as? [String: Any]
+    }
+}
+
+extension InstalledApp {
+    /// A macOS installer (`Install macOS Tahoe.app`): Apple-signed and named so. Debloat lists these apart from
+    /// Apple's apps (DESIGN-debloat section 4.2); no `AppKind` of its own.
+    public var isMacOSInstaller: Bool {
+        kind != .builtIn && name.hasPrefix("Install macOS") && AppBundle(url: url).isSignedByApple
     }
 }

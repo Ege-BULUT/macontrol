@@ -161,7 +161,7 @@ extension UninstallError: LocalizedError {
         case .refused(let url, _):
             "\(url.lastPathComponent) can't be moved to the Trash safely. Deselect it and try again."
         case .changedSincePlan(let url):
-            "\(url.lastPathComponent) changed after the list was made. Refresh the list and try again."
+            "\(url.lastPathComponent) changed after the list was made. Scan Again, then try again."
         case .stillRunning(let name):
             "\(name) is still running. Quit it, then try again."
         case .bootoutFailed(let label, let status):

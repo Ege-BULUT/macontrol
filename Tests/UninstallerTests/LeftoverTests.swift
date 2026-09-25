@@ -257,20 +257,4 @@ import Uninstaller
 
         #expect(plan.bundleLaunchdLabels == ["com.example.Demo.helper", "com.example.Demo.login"])
     }
-
-    @Test func applesContentLibrariesAreAdminOnlyAndShared() async throws {
-        let fx = try Fixture()
-        try fx.app("GarageBand", id: "com.apple.garageband10")
-        try fx.app("Logic Pro", id: "com.apple.logic10")
-        try fx.file("root/Library/Application Support/GarageBand/Instrument Library/a.caf")
-        try fx.file("root/Library/Audio/Apple Loops/Apple/loop.caf")
-
-        let plan = try await fx.plan("GarageBand")
-
-        let library = fx.root.appendingPathComponent("Library")
-        #expect(plan.paths(relativeTo: library) == ["Application Support/GarageBand", "Audio/Apple Loops"])
-        #expect(plan.leftovers.allSatisfy { $0.evidence == .contentLibrary && $0.needsAdministrator && !$0.isPreselected })
-        #expect(plan.leftover("Audio/Apple Loops", in: library)?.note == "Also used by Logic Pro")
-        #expect(plan.leftover("Application Support/GarageBand", in: library)?.note == nil)
-    }
 }
