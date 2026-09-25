@@ -46,7 +46,7 @@ enum DemoApps {
             leftover("~/Library/Caches/com.example.Editor", .bundleIdentifier, 1_310_000_000),
             leftover("~/Library/Preferences/com.example.Editor.plist", .bundleIdentifier, 4_096),
             leftover("~/Library/Saved Application State/com.example.Editor.savedState", .bundleIdentifier, 212_000),
-            leftover("/Library/Application Support/com.example.Editor", .bundleIdentifier, 45_000_000, admin: true),
+            leftover("/Library/Application Support/com.example.Editor", .bundleIdentifier, 45_000_000, admin: true, note: Uninstaller.unvouchedNote("Editor")),
             leftover("~/Library/Containers/com.example.Editor.QuickLook", .containerMetadata, 12_300_000),
             leftover("~/Library/Group Containers/A1B2C3D4E5.com.example.shared", .appGroup, 85_000_000,
                      note: "Also used by Editor Pro, which stays installed."),

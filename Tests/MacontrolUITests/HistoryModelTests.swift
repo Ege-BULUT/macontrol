@@ -53,8 +53,7 @@ import TestSupport
     }
 
     /// T-0075 journals a partly deleted folder as permanent, with `leftInTrash` naming the rest in the Trash. History
-    /// must say so, not "Deleted permanently" (T-0073 review 2, item 2). Decoded from JSON: this branch's JournalEntry has
-    /// no such field yet, and ignores the key until the merge.
+    /// must say so, not "Deleted permanently" (T-0073 review 2, item 2). Decoded from JSON, as the journal file is read.
     @Test func aPartlyDeletedLineSaysTheRestIsInTheTrash() throws {
         let batch = UUID()
         var line = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(
@@ -63,9 +62,7 @@ import TestSupport
         line["leftInTrash"] = "/Users/demo/.Trash/Old Exports 2"
         let entry = try JSONDecoder().decode(JournalEntry.self, from: JSONSerialization.data(withJSONObject: line))
         let status = HistoryBatch(id: batch, entries: [entry]).status
-        withKnownIssue("T-0075: JournalEntry.leftInTrash arrives with the engine merge; then follow the MERGE NOTE in HistoryBatch.status") {
-            #expect(status.contains(PermanentText.partlyDeleted("Old Exports 2")) && !status.contains("Deleted permanently"), "\(status)")
-        }
+        #expect(status.contains(PermanentText.partlyDeleted("Old Exports 2").dropLast()) && !status.contains("Deleted permanently"), "\(status)")
     }
 
     @Test func inTrashTotalSkipsRestoredItems() {

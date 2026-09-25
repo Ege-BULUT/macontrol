@@ -122,6 +122,7 @@ public final class AppModel {
 
     /// Fixed sample data for snapshots and previews. Touches no real files.
     public static func demo(selection: SidebarItem = .overview, fullDiskAccess: FullDiskAccess = .granted) -> AppModel {
+        let hardcore = HardcoreMode()
         let model = AppModel(
             selection: selection,
             fullDiskAccess: fullDiskAccess,
@@ -133,7 +134,9 @@ public final class AppModel {
             clean: .demo(),
             uninstall: .demo(),
             history: .demo(),
-            volumeReadAt: Date(timeIntervalSince1970: 1_790_000_000)
+            volumeReadAt: Date(timeIntervalSince1970: 1_790_000_000),
+            hardcore: hardcore,
+            debloat: .demo(hardcore: hardcore)
         )
         model.scope = .home
         return model

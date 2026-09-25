@@ -69,7 +69,7 @@ struct SealedGuideSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Strongly not recommended")
                     .font(.title2.weight(.bold))
-                    .foregroundStyle(Color.sealedWarning)
+                    .foregroundStyle(Theme.dangerText)
                 Text("Removing \(ListFormatter.localizedString(byJoining: apps.map(\.name))) from macOS yourself, in Terminal.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -183,14 +183,4 @@ private struct Callout: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tint.opacity(0.1), in: .rect(cornerRadius: 8))
     }
-}
-
-private extension Color {
-    /// Red text at 4.5:1 or more on the sheet in both appearances.
-    /// ponytail: local until hardcore-ui lands Theme.dangerText, then use that.
-    static let sealedWarning = Color(nsColor: NSColor(name: nil) {
-        $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(srgbRed: 1, green: 0x6B / 255, blue: 0x61 / 255, alpha: 1)
-            : NSColor(srgbRed: 0xB3 / 255, green: 0x26 / 255, blue: 0x1E / 255, alpha: 1)
-    })
 }

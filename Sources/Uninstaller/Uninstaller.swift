@@ -80,7 +80,7 @@ public final class Uninstaller: Sendable {
         )
     }
 
-    static func unvouchedNote(_ app: String) -> String {
+    public static func unvouchedNote(_ app: String) -> String {
         "Needs an administrator, and macontrol can't confirm it belongs to \(app). Check it before you remove it."
     }
 

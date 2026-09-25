@@ -103,7 +103,7 @@ struct TrashSheet: View {
         ForEach(rows) { row in
             TrashSheetRowView(
                 row: row, outcome: outcomes[row.url], notMoved: notMoved[row.url], isDone: report != nil, mode: mode,
-                trashOnly: run.trashOnly[row.url]
+                trashOnly: run.trashOnly[row.url], note: report?.notes[row.url]
             )
         }
     }
@@ -305,7 +305,7 @@ enum PermanentText {
     }
 }
 
-private struct TrashSheetRowView: View {
+struct TrashSheetRowView: View {
     let row: TrashSheetRow
     let outcome: TrashOutcome?
     let notMoved: String?
@@ -313,6 +313,8 @@ private struct TrashSheetRowView: View {
     let mode: DeletionMode
     /// Why this row goes to the Trash even in hardcore mode (D4).
     let trashOnly: String?
+    /// What Safety wants the user to know about an item that went, such as a LaunchDaemon still running until restart.
+    let note: String?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -333,6 +335,9 @@ private struct TrashSheetRowView: View {
                         .font(.caption)
                         .foregroundStyle(outcome.isRemoved ? Theme.successText : Theme.cautionText)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let note {
+                        Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
                 } else if isDone {
                     Label("No result was reported for this item", systemImage: "questionmark.circle")
                         .font(.caption)

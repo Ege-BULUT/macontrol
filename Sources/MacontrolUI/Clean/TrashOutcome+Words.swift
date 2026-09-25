@@ -30,11 +30,7 @@ extension TrashOutcome {
     /// A permanent removal that stopped after the item was moved to the Trash: "Partly deleted. …", "Moved to the
     /// Trash, but not deleted: …" and "Moved to the Trash as "<name>", but nothing in it could be deleted …". The item
     /// is no longer where it was, so lists and the map drop it; the row keeps Safety's sentence (DESIGN-debloat D3).
-    /// MERGE NOTE (T-0074/T-0075): these prefixes match Safety's sentences, which this branch's Safety does not have yet.
-    /// After the merge, pin them with a test built from Safety's own builders (`@testable import Safety`:
-    /// `TrashBatch.partlyDeleted`, `TrashBatch.notDeleted` with and without `asAdministrator`, and the "it changed
-    /// there" literal in TrashBatch and PrivilegedExecutor): each must give `isLeftInTrash`, and only `partlyDeleted`
-    /// `isPartlyDeleted`. A rewording in Safety would otherwise put an item that left its place back in the lists.
+    /// The prefixes match Safety's sentences; `safetysLeftInTrashSentencesAreRecognised` pins them to its builders.
     var isLeftInTrash: Bool { isPartlyDeleted || isWholeInTrash }
 
     /// Stopped with the whole item in the Trash, nothing deleted: journaled as trashed, so History can put it back and

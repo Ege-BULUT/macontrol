@@ -26,8 +26,8 @@ public final class HistoryModel {
 
     /// Bytes still in the Trash from every batch, helper-trashed items included. Trashing frees nothing until the
     /// Trash is emptied (F-0042), and permanent deletions are not in the Trash at all.
-    /// MERGE NOTE (T-0075): a partly deleted line (`leftInTrash != nil`) keeps its full size in `allocated`, so leave it
-    /// out of this sum; `HistoryBatch.status` says the rest is in the Trash instead.
+    /// A partly deleted line (`leftInTrash != nil`) is permanent and keeps its full size in `allocated`, so it stays out
+    /// of this sum; `HistoryBatch.status` says the rest is in the Trash instead.
     var inTrashBytes: UInt64 {
         entries.filter { !$0.restored && !$0.isPermanent }.reduce(0) { $0 + $1.allocated }
     }
@@ -90,7 +90,9 @@ struct HistoryBatch: Identifiable {
 
     var date: Date { entries.map(\.date).min() ?? .distantPast }
     /// Deleted for good: nothing to put back (DESIGN-debloat section 1.5).
-    var deleted: [JournalEntry] { entries.filter(\.isPermanent) }
+    var deleted: [JournalEntry] { entries.filter { $0.isPermanent && $0.leftInTrash == nil } }
+    /// Stopped halfway: part deleted for good, the rest in the Trash under `leftInTrash` (DESIGN-debloat section 2.4).
+    var partlyDeleted: [JournalEntry] { entries.filter { $0.isPermanent && $0.leftInTrash != nil } }
     /// Still in the Trash, helper-trashed items included.
     var inTrash: [JournalEntry] { entries.filter { !$0.restored && !$0.isPermanent } }
     /// Moved to the Trash by the administrator helper: no Undo, Finder puts them back (D12).
@@ -109,13 +111,14 @@ struct HistoryBatch: Identifiable {
     /// Never "freed" for the Trash: a same-volume trash is a rename and frees 0 bytes until the Trash is emptied (F-0042).
     /// Nor for a permanent batch: the journal holds the items' sizes, not what came back. A restore point or another
     /// snapshot keeps their blocks, and a partly deleted folder is journaled at its full size (T-0073 review 1).
-    /// MERGE NOTE (T-0075): lines with `leftInTrash != nil` were only partly deleted. Take them out of `deleted` and
-    /// add, per line, "Partly deleted. The rest is in the Trash as "<lastPathComponent of leftInTrash>"; empty the
-    /// Trash to finish." (`PermanentText.partlyDeleted`). `aPartlyDeletedLineSaysTheRestIsInTheTrash` flips then.
+    /// A partly deleted line says where the rest waits, per line, instead of "Deleted permanently".
     var status: String {
         var parts: [String] = []
         if !deleted.isEmpty {
             parts.append("Deleted permanently · \(deleted.reduce(0) { $0 + $1.allocated }.formattedBytes) · can't be undone")
+        }
+        for entry in partlyDeleted {
+            parts.append(PermanentText.partlyDeleted(((entry.leftInTrash ?? "") as NSString).lastPathComponent).trimmingCharacters(in: ["."]))
         }
         if !inTrash.isEmpty {
             let bytes = inTrash.reduce(0) { $0 + $1.allocated }.formattedBytes

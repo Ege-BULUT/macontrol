@@ -4,7 +4,7 @@ import Foundation
 import MacontrolCore
 @testable import MacontrolUI
 import os
-import Safety
+@testable import Safety
 import ScanEngine
 import SwiftUI
 import Testing
@@ -168,9 +168,7 @@ import Uninstaller
         await model.confirmUninstall()
         #expect(model.confirmation?.run.restorePoint == Gate.snapshot && model.confirmation?.report != nil)
         let journaled = await fixture.service().history().map(\.restorePoint)
-        withKnownIssue("T-0075: this branch's Uninstaller takes no restorePoint and deletes nothing permanently. After the merge, pass run.restorePoint in confirmUninstall and in the fixture's remove step") {
-            #expect(!journaled.isEmpty && journaled.allSatisfy { $0 == Gate.snapshot }, "journal: \(journaled)")
-        }
+        #expect(!journaled.isEmpty && journaled.allSatisfy { $0 == Gate.snapshot }, "journal: \(journaled)")
     }
 
     // MARK: Criterion 4: Return never confirms, Esc cancels, in every sheet and both modes
@@ -179,15 +177,32 @@ import Uninstaller
     /// real sheet on RootView: SwiftUI's `SheetPresentationWindow` handles Esc in `cancelOperation` only while its
     /// `handleEscapeKey` is set, which `.interactiveDismissDisabled` clears. The working state is read from that flag,
     /// not pressed: an Esc nothing takes beeps. Once done, a real `cancelOperation` closes it.
-    @Test(arguments: [SidebarItem.clean, .uninstall])
+    @Test(arguments: [SidebarItem.clean, .uninstall, .debloat])
     func escCannotCloseAWorkingSheet(screen: SidebarItem) throws {
         SnapshotRenderer.runHeadless()
         let model = AppModel.demo(selection: screen)
-        if screen == .clean { model.clean.beginReview() } else { model.uninstall.beginUninstall() }
-        func setWorking(_ working: Bool) {
-            if screen == .clean { model.clean.review?.isWorking = working } else { model.uninstall.confirmation?.isWorking = working }
+        switch screen {
+        case .clean: model.clean.beginReview()
+        case .uninstall: model.uninstall.beginUninstall()
+        default:
+            model.debloat.ticked = Set(model.debloat.apps.filter(model.debloat.canTick).prefix(1).map(\.id))
+            model.debloat.beginRemove()
         }
-        var isOpen: Bool { screen == .clean ? model.clean.review != nil : model.uninstall.confirmation != nil }
+        func setWorking(_ working: Bool) {
+            switch screen {
+            case .clean: model.clean.review?.isWorking = working
+            case .uninstall: model.uninstall.confirmation?.isWorking = working
+            default: model.debloat.confirmation?.isWorking = working
+            }
+        }
+        var isOpen: Bool {
+            switch screen {
+            case .clean: model.clean.review != nil
+            case .uninstall: model.uninstall.confirmation != nil
+            default: model.debloat.confirmation != nil
+            }
+        }
+        #expect(isOpen)
         setWorking(true)
         let window = HardcoreModeTests.window(RootView(model: model), size: RootView.minimumSize)
         defer { window.orderOut(nil) }
@@ -205,8 +220,29 @@ import Uninstaller
     }
 
 
-    // MERGE NOTE (T-0076): add returnInTheDebloatSheetRemovesNothing(mode:), hosting DebloatSheet over a fixture
-    // DebloatModel, once debloat-catalog brings DebloatSheet; it does not exist on this branch (fix-debloat-catalog-1).
+    @Test(arguments: modes)
+    func returnInTheDebloatSheetRemovesNothing(mode: DeletionMode) async throws {
+        let fixture = try RemovalFixture()
+        let (_, plan) = try await fixture.uninstallModel()
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let hardcore = HardcoreMode()
+        hardcore.isOn = mode == .permanent
+        let model = DebloatModel(uninstaller: nil, hardcore: hardcore, engine: nil, uninstallJobs: { _, _ in
+            calls.withLock { $0 += 1 }
+            return UninstallBatchReport(report: TrashReport(batch: UUID(), outcomes: []), skipped: [:])
+        })
+        model.apps = [DebloatApp(app: plan.app, plan: plan)]
+        model.ticked = [plan.app.url]
+        model.beginRemove()
+        #expect(model.confirmation?.mode == mode)
+        let window = AppListOrderTests.host(DebloatSheet(model: model), size: Snapshot.sheetSize)
+        defer { window.orderOut(nil) }
+        try await fixture.pressReturnThenEsc(in: window) { model.confirmation?.report == nil && model.confirmation?.isWorking == false }
+        #expect(model.confirmation == nil, "Esc did not close the sheet")
+        #expect(calls.withLock { $0 } == 0, "the uninstaller ran")
+        try fixture.expectUntouched(["Applications/Probe/Contents/Info.plist", "home/Library/Caches/com.example.macontrol-probe/data"])
+    }
+
     @Test(arguments: modes)
     func returnInTheCleanSheetRemovesNothing(mode: DeletionMode) async throws {
         let fixture = try RemovalFixture()
@@ -286,6 +322,19 @@ import Uninstaller
         for (path, reason) in cases {
             #expect(TrashOnly.reason(for: home.appendingPathComponent(path), home: home) == reason, "\(path)")
         }
+    }
+
+    /// Safety's note on an item that went (a LaunchDaemon the helper could not stop) shows under its outcome. The row
+    /// is hosted alone: List builds its rows' accessibility lazily.
+    @Test func aReportNoteShowsInItsRow() {
+        let daemon = URL(fileURLWithPath: "/Library/LaunchDaemons/com.example.helper.plist")
+        let note = PrivilegedExecutor.untilRestart
+        let host = Host(TrashSheetRowView(
+            row: TrashSheetRow(url: daemon, bytes: 1_000), outcome: .deleted(original: daemon), notMoved: nil, isDone: true,
+            mode: .permanent, trashOnly: nil, note: note
+        ), size: CGSize(width: 560, height: 90))
+        defer { host.close() }
+        #expect(host.allTexts.contains(note), "\(host.allTexts)")
     }
 
     @Test func permanentSheetsShowTheStripAndListTrashOnlyItemsApart() {
@@ -401,6 +450,19 @@ import Uninstaller
         #expect(sheet.heading == PermanentText.summary(deleted: confirmation.rows.count, of: confirmation.rows.count))
         #expect(sheet.explanation.hasPrefix("Freed \(freed.formattedBytes). These can't be put back."))
         #expect(sheet.explanation.contains(PermanentText.snapshotNote) == snapshotLine, "\(sheet.explanation)")
+    }
+
+    /// `isLeftInTrash` and `isPartlyDeleted` match Safety's sentences by prefix. Built here from Safety's own builders,
+    /// so a rewording there fails this test instead of putting an item that left its place back in the lists.
+    @Test func safetysLeftInTrashSentencesAreRecognised() {
+        let url = URL(fileURLWithPath: "/Users/demo/Old")
+        let failures = [RemovalEngine.Failure(path: "a", reason: "Operation not permitted")]
+        let partly = TrashOutcome.failed(url, message: TrashBatch.partlyDeleted(failures, trashName: "Old 2"))
+        #expect(partly.isPartlyDeleted && partly.isLeftInTrash)
+        for asAdministrator in [false, true] {
+            let whole = TrashOutcome.failed(url, message: TrashBatch.notDeleted(failures, trashName: "Old 2", asAdministrator: asAdministrator))
+            #expect(whole.isWholeInTrash && whole.isLeftInTrash && !whole.isPartlyDeleted)
+        }
     }
 
     @Test func aPartlyDeletedItemSaysWhereTheRestIs() {
@@ -723,9 +785,7 @@ import Uninstaller
     @Test func everyScreenSharesTheAppsSwitch() {
         let app = AppModel.demo()
         #expect(app.clean.hardcore === app.hardcore && app.uninstall.hardcore === app.hardcore && app.diskMap.hardcore === app.hardcore)
-        withKnownIssue("T-0076: demo Debloat keeps its own switch. Once debloat-catalog merges, AppModel.demo passes hardcore and .demo(hardcore:)") {
-            #expect(app.debloat.hardcore === app.hardcore)
-        }
+        #expect(app.debloat.hardcore === app.hardcore)
     }
 }
 
@@ -807,11 +867,11 @@ final class RemovalFixture {
     ) async throws -> (UninstallModel, UninstallPlan) {
         let service = service()
         let modes = modes
-        let actions = UninstallActions(quit: { _ in true }, bootout: { _ in }, remove: { items, mode in
+        let actions = UninstallActions(quit: { _ in true }, bootout: { _ in }, remove: { items, mode, restorePoint in
             await hold?.pass()
             modes.withLock { $0.append(mode) }
             if let outcome { return TrashReport(batch: UUID(), outcomes: items.map(outcome)) }
-            return await service.remove(items, mode: mode)
+            return await service.remove(items, mode: mode, restorePoint: restorePoint)
         })
         let uninstaller = Uninstaller(home: home, applicationFolders: [], systemRoot: try temp.directory("root"), trash: service, actions: actions)
         try temp.file("Applications/Probe/Contents/Info.plist", size: 100)

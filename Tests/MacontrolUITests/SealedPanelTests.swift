@@ -162,7 +162,7 @@ import Uninstaller
 
 /// A view in an off-screen window, read and driven through its accessibility tree.
 @MainActor
-private final class Host {
+final class Host {
     let window: NSWindow
 
     init(_ view: some View, size: CGSize) {

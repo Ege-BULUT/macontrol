@@ -349,12 +349,9 @@ public final class UninstallModel {
         guard let run = await support.makeRestorePoint(in: self, \.confirmation) else { return }
         let chosen = Set(pending.leftovers.map(\.url))
         do {
-            // MERGE NOTE (T-0075): pass `restorePoint: run.restorePoint`; this branch's Uninstaller takes none, and the
-            // default nil would drop the name from the journal lines. withKnownIssue in
-            // uninstallHandsItsRestorePointToTheRemoveStep flips once it is passed. The snapshot is made either way.
             let (report, freed) = try await support.measuring(run.mode, pending.rows.map(\.url)) {
                 if let uninstaller {
-                    try await uninstaller.uninstall(pending.plan, leftovers: chosen, mode: run.mode)
+                    try await uninstaller.uninstall(pending.plan, leftovers: chosen, mode: run.mode, restorePoint: run.restorePoint)
                 } else {
                     // Demo data: nothing real to move.
                     TrashReport(batch: UUID(), outcomes: pending.rows.map { .refused($0.url, .notImplemented) })
