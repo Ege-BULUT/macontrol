@@ -18,16 +18,23 @@ import Testing
 
     /// Ordering a titled window in and out starts a transform animation that never ends off every display, and each
     /// one parked a dispatch thread: about 32 windows used up the pool of 64 and the full run hung (T-0073, T-0077).
-    @Test func orderingManyWindowsLeavesDispatchThreadsFree() {
-        for _ in 0..<48 {
-            SnapshotRenderer.offscreenWindow(size: CGSize(width: 240, height: 160)).orderOut(nil)
+    @Test func orderingAWindowInAndOutStartsNoAnimation() throws {
+        let method = try #require(class_getInstanceMethod(NSAnimation.self, NSSelectorFromString("startAnimation")))
+        let original = method_getImplementation(method)
+        typealias Start = @convention(c) (AnyObject, Selector) -> Void
+        let started = OSAllocatedUnfairLock(initialState: [String]())
+        let counting: @convention(block) (AnyObject) -> Void = { animation in
+            let name = String(describing: type(of: animation))
+            started.withLock { $0.append(name) }
+            unsafeBitCast(original, to: Start.self)(animation, NSSelectorFromString("startAnimation"))
         }
-        let ran = OSAllocatedUnfairLock(initialState: false)
-        DispatchQueue.global().async { ran.withLock { $0 = true } }
-        // Wait on the main run loop, not with Task.sleep: a used-up pool would leave a sleep hanging instead of failing.
-        let deadline = Date().addingTimeInterval(3)
-        while !ran.withLock({ $0 }), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
-        #expect(ran.withLock { $0 }, "a global-queue block did not start: the dispatch threads are used up")
+        method_setImplementation(method, imp_implementationWithBlock(counting))
+        defer { method_setImplementation(method, original) }
+        for styleMask in [NSWindow.StyleMask.titled, [.titled, .fullSizeContentView]] {
+            // No run-loop turn while the counter is in: other tests' main-actor work would start animations too.
+            SnapshotRenderer.offscreenWindow(size: CGSize(width: 240, height: 160), styleMask: styleMask).orderOut(nil)
+        }
+        #expect(started.withLock { $0 }.isEmpty, "animations started: \(started.withLock { $0 })")
     }
 
     /// AppKit's event thread stops the main run loop for window-server events. Under `swift test` a stop that reached
