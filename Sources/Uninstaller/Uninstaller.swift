@@ -82,16 +82,9 @@ public final class Uninstaller: Sendable {
     /// one (F-0030), and exactly what the plan listed is trashed (F-0069): URLs not in the plan are ignored.
     /// The report carries the bundle's batch; the leftovers are a second batch in History.
     public func uninstall(_ plan: UninstallPlan, leftovers selected: Set<URL>, mode: DeletionMode = .trash) async throws -> TrashReport {
-        if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
+        try preflight(UninstallJob(plan: plan, leftovers: selected))
         let chosen = plan.leftovers.filter { selected.contains($0.url) }
-        if let stray = chosen.first(where: { !isInsideLibraryFolder($0.url) }) {
-            throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
-        }
-        if let administrative = chosen.first(where: \.needsAdministrator) {
-            throw UninstallError.needsAdministrator(administrative.url)
-        }
         let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
-        try checkUnchanged([bundle] + chosen.map(Self.itemToTrash(for:)))
 
         guard await actions.quit(plan.app) else { throw UninstallError.stillRunning(plan.app.name) }
         var stopped = Set<String>()
@@ -137,6 +130,22 @@ public final class Uninstaller: Sendable {
             }
         }
         return UninstallBatchReport(report: TrashReport(batch: batch ?? UUID(), outcomes: outcomes), skipped: skipped)
+    }
+
+    /// Every check `uninstall` makes before it quits the app, and nothing else. A caller with a step that can't be
+    /// undone before the uninstall (Debloat deletes simulator runtimes for good) runs this first (T-0076 review, new
+    /// cycle 1, 2).
+    public func preflight(_ job: UninstallJob) throws {
+        let plan = job.plan
+        if let blocker = plan.blocker { throw UninstallError.blocked(blocker) }
+        let chosen = plan.leftovers.filter { job.leftovers.contains($0.url) }
+        if let stray = chosen.first(where: { !isInsideLibraryFolder($0.url) }) {
+            throw UninstallError.refused(stray.url, .protectedLocation("Outside the Library folders"))
+        }
+        if let administrative = chosen.first(where: \.needsAdministrator) {
+            throw UninstallError.needsAdministrator(administrative.url)
+        }
+        try checkUnchanged([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)] + chosen.map(Self.itemToTrash(for:)))
     }
 
     // MARK: Helpers

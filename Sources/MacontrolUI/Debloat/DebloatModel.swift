@@ -393,7 +393,7 @@ public final class DebloatModel {
             let others = allApps.filter { !xcodes.contains($0.url) && hasRuntimes($0) }.map(\.name)
             let bytes = staying.values.reduce(0, +).formattedBytes
             first.append(others.isEmpty
-                ? "The simulator runtimes left unticked (\(bytes)) stay on this Mac: once \(Self.list(runtimes.map(\.xcode.name))) \(runtimes.count == 1 ? "is" : "are") gone, nothing can delete them."
+                ? "The simulator runtimes left unticked (\(bytes)) stay on this Mac until you reinstall \(Self.list(runtimes.map(\.xcode.name)))."
                 : "The simulator runtimes left unticked (\(bytes)) stay on this Mac for \(Self.list(others)).")
         }
         notes.insert(contentsOf: first, at: 0)
@@ -430,6 +430,10 @@ public final class DebloatModel {
             var skipped: String?
             if xcode.identity == nil || FileIdentity(url: xcode.url) != xcode.identity {
                 skipped = UninstallError.changedSincePlan(xcode.url).localizedDescription
+            } else if let refusal = preflight(pending.jobs.first { $0.plan.app.url == xcode.url }) {
+                // Every other check the uninstall makes on Xcode's job, such as a chosen leftover recreated since the
+                // list (review, new cycle 1, 2).
+                skipped = refusal
             } else if await !runtimeTool.quit(xcode) {
                 skipped = UninstallError.stillRunning(xcode.name).localizedDescription
             } else {
@@ -456,7 +460,6 @@ public final class DebloatModel {
                     done.append(runtime)
                     deleted.insert(runtime.id)
                 }
-                if !done.isEmpty { runtimesDeleted.append(xcode) }
             } catch {
                 // Without Xcode's CoreSimulator nothing could delete them later: they would stay in SIP-restricted AssetsV2.
                 // What did go is gone for good, and the message says so (review 2, 3).
@@ -465,6 +468,17 @@ public final class DebloatModel {
                 messages.append(done.isEmpty
                     ? "Simulator runtimes couldn't be deleted, so \(xcode.name) was kept: without it, nothing can delete them."
                     : "Deleted \(Self.describe(done)) for good, but \(Self.describe(left)) couldn't be deleted, so \(xcode.name) was kept: without it, nothing can delete \(left.count == 1 ? "it" : "them").")
+                continue
+            }
+            guard !done.isEmpty else { continue }
+            // The tool exits once CoreSimulator has queued the delete, and what finishes it runs from the
+            // CoreSimulator.framework that goes with Xcode: Xcode goes only once the list no longer has them (review,
+            // new cycle 1, 1).
+            if await runtimeTool.waitUntilGone(Set(done.map(\.id)), xcode: xcode.url) {
+                runtimesDeleted.append(xcode)
+            } else {
+                kept[xcode.url] = "its simulator runtimes were still being deleted."
+                messages.append("Deleting \(Self.describe(done)) hadn't finished after a minute, so \(xcode.name) was kept: its CoreSimulator finishes the delete. Scan Again in a few minutes, then remove \(xcode.name).")
             }
         }
         let jobs = pending.jobs.filter { kept[$0.plan.app.url] == nil }
@@ -499,6 +513,17 @@ public final class DebloatModel {
     }
 
     // MARK: Helpers
+
+    /// The uninstaller's own checks on this job, without its quit or bootout: the reason it would be skipped, or nil.
+    private func preflight(_ job: UninstallJob?) -> String? {
+        guard let job else { return "it is not in this run." }
+        do {
+            try uninstaller?.preflight(job)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
 
     /// An app whose runtimes CoreSimulator lists: Xcode.
     private func hasRuntimes(_ app: InstalledApp) -> Bool {

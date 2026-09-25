@@ -132,6 +132,19 @@ import Testing
         #expect(calls.all.isEmpty)
     }
 
+    /// Review, new cycle 1, 1: a deleted runtime is gone only once no entry has its id, deletable or not. A list that
+    /// fails or can't be read counts as still there.
+    @Test func aRuntimeIsGoneOnlyOnceNoEntryHasItsID() async {
+        let id = "9AC467AB-22DE-48A1-89DA-CB942B60CE83"
+        let undeletable = #"{"\#(id)": {"deletable": false, "identifier": "\#(id)"}}"#
+        let cases: [(Int32, String, Bool)] = [(0, "{}", true), (0, Self.captured, false), (0, undeletable, false), (1, "{}", false), (0, "not json", false)]
+        for (status, output, gone) in cases {
+            var tool = Calls().tool(status: status, output: output)
+            tool.gonePolling = (.milliseconds(30), .milliseconds(10))
+            #expect(await tool.waitUntilGone([id], xcode: Self.xcode) == gone, "\(status) \(output.prefix(60))")
+        }
+    }
+
     /// An Xcode never opened has no CoreSimulator: no runtimes, and nothing is run.
     @Test func noToolMeansNoRuntimes() async throws {
         let calls = Calls()

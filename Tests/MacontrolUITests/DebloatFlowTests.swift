@@ -43,6 +43,11 @@ final class DebloatFixture {
     nonisolated(unsafe) var listStatus: Int32 = 0
     /// What `simctl runtime list` shows, read at each call (a download can finish between two).
     nonisolated(unsafe) var listed = DebloatFixture.runtimes
+    /// A deleted runtime stays in the list for this many more lists: CoreSimulator purges it after `delete` exits.
+    nonisolated(unsafe) var listedAfterDelete = 0
+    nonisolated(unsafe) private var purging: [String: Int] = [:]
+    /// How long the model waits for deleted runtimes to leave the list.
+    nonisolated(unsafe) var goneLimit: Duration = .seconds(30)
     /// These apps don't quit.
     nonisolated(unsafe) var stayRunning: Set<String> = []
     /// The administrator dialog was cancelled: every remove fails and nothing moves.
@@ -109,22 +114,29 @@ final class DebloatFixture {
     /// CoreSimulator's tool: lists `listed` (the two captured runtimes), records Xcode's quit and each delete.
     var runtimeTool: SimRuntimeTool {
         let log = log
-        return SimRuntimeTool(
+        var tool = SimRuntimeTool(
             run: { _, arguments, _ in
                 guard arguments.first == "runtime", arguments.count == 3, arguments[1] == "delete" else {
+                    for (id, lists) in self.purging {
+                        if lists > 0 { self.purging[id] = lists - 1 } else { self.listed.removeAll { $0.0 == id }; self.purging[id] = nil }
+                    }
                     let json = "{" + self.listed.map { id, bytes, platform in
                         #""\#(id)": {"deletable": true, "identifier": "\#(id)", "sizeBytes": \#(bytes), "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.\#(platform)-26-5", "version": "26.5"}"#
                     }.joined(separator: ",") + "}"
                     return (self.listStatus, self.listStatus == 0 ? Data(json.utf8) : Data())
                 }
                 log.record(.runtime(arguments[2]))
-                return (arguments[2] == self.failingRuntime ? 1 : 0, Data())
+                guard arguments[2] != self.failingRuntime else { return (1, Data()) }
+                self.purging[arguments[2]] = self.listedAfterDelete
+                return (0, Data())
             },
             quit: { app in
                 log.record(.quit(app.name))
                 return !self.stayRunning.contains(app.name)
             }
         )
+        tool.gonePolling = (goneLimit, .milliseconds(10))
+        return tool
     }
 
     /// A loaded model over the fixture, with Xcode and GarageBand classified as Apple's App Store apps (a fixture
@@ -358,6 +370,57 @@ final class DebloatFixture {
         #expect(model.confirmation?.message?.hasPrefix("Xcode was skipped: Xcode.app changed after the list was made.") == true)
     }
 
+    /// Review, new cycle 1, 1: `runtime delete` exits once CoreSimulator has queued the delete, and the purge ends
+    /// seconds later, run from the CoreSimulator.framework that goes with Xcode. Xcode goes only once the list no
+    /// longer has them: a slow purge is waited for, and one that doesn't end in time keeps Xcode and CoreSimulator.
+    @Test(arguments: [3, Int.max])
+    func xcodeGoesOnlyOnceItsDeletedRuntimesLeaveTheList(listsAfterDelete: Int) async throws {
+        let fx = try DebloatFixture()
+        fx.listedAfterDelete = listsAfterDelete
+        let finishes = listsAfterDelete != .max
+        if !finishes { fx.goneLimit = .milliseconds(300) }
+        let model = try await fx.model()
+
+        try await fx.run(model)
+
+        #expect(fx.runtimeDeletes == 2 && !fx.exists(fx.garageBand))
+        #expect(fx.exists(fx.xcode) != finishes, "\(fx.log.events)")
+        let confirmation = try #require(model.confirmation)
+        if finishes {
+            #expect(confirmation.message == nil)
+        } else {
+            // Nothing of Xcode's is sent: CoreSimulator (root-owned here, so it can't be chosen in v1) goes with its job.
+            #expect(fx.firstXcodeEvent() == nil, "\(fx.log.events)")
+            let message = try #require(confirmation.message)
+            #expect(message.hasPrefix("Deleting iOS 26.5 and watchOS 26.5 (") && message.hasSuffix(
+                ") hadn't finished after a minute, so Xcode was kept: its CoreSimulator finishes the delete. Scan Again in a few minutes, then remove Xcode."
+            ), "\(message)")
+            #expect(confirmation.notMoved[fx.xcode] == "its simulator runtimes were still being deleted.")
+        }
+    }
+
+    /// Review, new cycle 1, 2: every check the uninstall makes on Xcode's job runs before a runtime is deleted for
+    /// good. DerivedData recreated after the sheet opened (Xcode's Delete Derived Data) keeps the runtimes too.
+    @Test func aLeftoverChangedAfterTheListKeepsTheRuntimes() async throws {
+        let fx = try DebloatFixture()
+        let model = try await fx.model()
+        let row = try #require(model.row(fx.xcode))
+        #expect(model.chosenLeftovers(row).contains { $0.url.lastPathComponent == "DerivedData" })
+        model.setTicked(true, row)
+        model.setRuntimesChosen(true, row)
+        model.beginRemove()
+        let derivedData = fx.home.appendingPathComponent("Library/Developer/Xcode/DerivedData")
+        try FileManager.default.removeItem(at: derivedData)
+        try fx.tmp.file("home/Library/Developer/Xcode/DerivedData/Other/x", size: 4096)
+
+        await model.confirm()
+
+        #expect(fx.runtimeDeletes == 0 && fx.exists(fx.xcode), "\(fx.log.events)")
+        #expect(!fx.log.events.contains(.quit("Xcode")))
+        #expect(model.confirmation?.message == "Xcode was skipped: DerivedData changed after the list was made. Scan Again, then try again.")
+        #expect(model.confirmation?.notMoved[fx.xcode] == "Xcode was skipped.")
+    }
+
     /// Review 3: the sheet lists what happens in the order it happens, simulators shutting down included.
     @Test func notesFollowTheOrderOfTheRun() async throws {
         let fx = try DebloatFixture()
@@ -384,7 +447,7 @@ final class DebloatFixture {
         let notes = try #require(model.confirmation?.notes)
         // Right after the quit, in the order of the run.
         let stay = notes.count >= 2 ? notes[1] : ""
-        #expect(stay.hasPrefix("The simulator runtimes left unticked (") && stay.hasSuffix(") stay on this Mac: once Xcode is gone, nothing can delete them."), "\(notes)")
+        #expect(stay.hasPrefix("The simulator runtimes left unticked (") && stay.hasSuffix(") stay on this Mac until you reinstall Xcode."), "\(notes)")
         #expect(!notes.contains { $0.hasPrefix(AppleProfile.Kept.notePrefix) })
         model.confirmation = nil
 

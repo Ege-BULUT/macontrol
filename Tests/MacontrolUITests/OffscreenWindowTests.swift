@@ -10,23 +10,11 @@ import Testing
         let window = SnapshotRenderer.offscreenWindow(size: SnapshotRenderer.windowSize, styleMask: styleMask)
         defer { window.orderOut(nil) }
         #expect(window.isVisible)
+        // An order-in or order-out animation never ends off screen and holds a dispatch thread for good: 32 windows
+        // used up the pool and hung the whole test run.
+        #expect(window.animationBehavior == .none)
         for screen in NSScreen.screens {
             #expect(!window.frame.intersects(screen.frame), "window at \(window.frame) overlaps a display at \(screen.frame)")
         }
-    }
-}
-
-/// Ordering a window in and out animates it on a GCD thread. Outside every display that animation never ended, so
-/// each snapshot window kept a thread, and after 64 of them the whole test run stopped with no summary.
-@Suite struct OffscreenWindowAnimationTests {
-    @MainActor @Test func orderingManyWindowsLeavesGCDItsThreads() {
-        for _ in 0..<80 {
-            SnapshotRenderer.offscreenWindow(size: CGSize(width: 200, height: 100)).orderOut(nil)
-        }
-        // The animations start on the next turns of the run loop.
-        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
-        let ran = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInteractive).async { ran.signal() }
-        #expect(ran.wait(timeout: .now() + 10) == .success, "GCD's threads are all taken by window animations")
     }
 }

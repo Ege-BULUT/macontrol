@@ -43,6 +43,8 @@ public struct SimRuntimeTool: Sendable {
     /// Whether CoreSimulator's tool is there. An Xcode that was never opened has none: then it has no runtimes, and
     /// removing it takes no tool away.
     public var isInstalled: @Sendable () -> Bool
+    /// How long `waitUntilGone` waits, and how often it lists. Tests shorten both.
+    public var gonePolling: (limit: Duration, every: Duration) = (.seconds(60), .seconds(1))
 
     public init(
         run: @escaping Runner, quit: @escaping @Sendable (InstalledApp) async -> Bool = { _ in true },
@@ -64,6 +66,24 @@ public struct SimRuntimeTool: Sendable {
         guard UUID(uuidString: runtime.id) != nil else { throw SimRuntimeError.unreadable }
         let result = await run(Self.simctl, ["runtime", "delete", runtime.id], Self.environment(xcode: xcode))
         guard result.status == 0 else { throw SimRuntimeError.failed(result.status) }
+    }
+
+    /// `runtime delete` exits 0 once CoreSimulator has queued the delete, not once it is done. On this Mac the runtime
+    /// was still listed as Ready 3 s later, and simdiskimaged, which runs from the CoreSimulator.framework a Debloat run
+    /// removes next, purged it 4.9 s after the tool exited (T-0076 review, new cycle 1, 1). True once no entry of the
+    /// list, deletable or not, has one of `ids`; false when one still does at the limit, or the list can't be read.
+    public func waitUntilGone(_ ids: Set<String>, xcode: URL) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now + gonePolling.limit
+        while true {
+            let result = await run(Self.simctl, ["runtime", "list", "-j"], Self.environment(xcode: xcode))
+            if result.status == 0, let images = try? JSONSerialization.jsonObject(with: result.output) as? [String: Any] {
+                let listed = Set(images.keys).union(images.values.compactMap { ($0 as? [String: Any])?["identifier"] as? String })
+                if listed.isDisjoint(with: ids) { return true }
+            }
+            guard clock.now < deadline else { return false }
+            do { try await Task.sleep(until: min(clock.now + gonePolling.every, deadline), clock: clock) } catch { return false }
+        }
     }
 
     /// The deletable runtimes in `simctl runtime list -j`, largest first. An entry that doesn't say whether it is
