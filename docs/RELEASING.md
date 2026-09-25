@@ -111,15 +111,18 @@ scripts/deploy-site.sh
 ```
 
 `scripts/board-sync.sh` runs it too, after every board change. It serves the newest release of
-one line, `SITE_RELEASE` in the script (`0.1` now), whose tag has no suffix. A tag with a suffix
+one line, `SITE_RELEASE` in the script (`0.2` now), whose tag has no suffix. A tag with a suffix
 (`v0.2.0-beta.1`) is a candidate and is never served. It writes the version, size, date and SHA-256
 into the pages, redirects `/downloads/latest.zip` to the versioned file, and deploys
 macontrol.vercel.app. The screenshots and the changelog come from the served tag (`git archive`),
 so fetch the tag into your clone first (`git fetch --tags`), or the deploy stops.
 
-The page copy describes one line. For v0.2.0, change the copy and bump `SITE_RELEASE` to `0.2` in
-one commit on main before deploying. Until then the site keeps serving 0.1.x and prints a note that
-a newer release is held back.
+The page copy describes one line, and the copy and `SITE_RELEASE` change in one commit. The 0.2 copy
+landed on main before v0.2.0 was tagged, so until the v0.2.0 release exists every deploy stops with
+"no v0.2.x release in Ege-BULUT/macontrol", the one `board-sync.sh` runs included: the board is still
+pushed, and the live site keeps its last 0.1.1 deploy. To preview the copy before the tag, run
+`scripts/deploy-site.sh --dry-run --zip <a local Macontrol-0.2.0.zip>`: without the tag, a dry run takes
+the screenshots and the changelog from HEAD instead. A real deploy still needs the tag.
 
 ## What users see
 

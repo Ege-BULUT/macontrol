@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debloat: macontrol docs</title>
+<meta name="description" content="Debloat. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/debloat.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/debloat.html">
+<meta property="og:title" content="Debloat: macontrol docs">
+<meta property="og:description" content="Debloat. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html" aria-current="page">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Debloat</h1>
+<p class="lede">Debloat removes Apple's optional apps and what they install outside their bundle, from one checklist. It is the fifth section in the sidebar, <kbd>⌘5</kbd>.</p>
+<figure class="shot">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/debloat-dark.webp">
+    <img src="../assets/shots/debloat-light.webp" width="1800" height="1239" loading="lazy" decoding="async" alt="Debloat: GarageBand and Xcode with their sizes, Xcode expanded to its app, simulator caches, build files, developer frameworks and package receipts, each with an Admin badge where it belongs to the system, and nothing ticked">
+  </picture>
+</figure>
+
+<h2 id="list">What it lists</h2>
+<ul>
+  <li><strong>Apple apps you can remove:</strong> Xcode, GarageBand, Logic Pro, MainStage, iMovie, Pages, Numbers, Keynote, Final Cut Pro, Motion and Compressor, when they are installed. Each row expands to the content the app installs, with its size.</li>
+  <li><strong>Installers:</strong> Apple's “Install macOS” apps.</li>
+  <li><strong>Part of macOS (locked):</strong> apps on the sealed system volume. Selecting one explains why macOS keeps it. See <a href="system-apps.html">macOS's own apps</a>.</li>
+</ul>
+
+<h2 id="ticks">What starts ticked</h2>
+<p>No app starts ticked. When you tick one, its bundle and the content macontrol has checked for it are ticked with it. These stay unticked, with a note that says why:</p>
+<ul>
+  <li>Content another app also uses: “Also used by Logic Pro, which is installed.”</li>
+  <li>Content of an app whose install macontrol hasn't checked yet: “macontrol hasn't checked this location on a real install yet.”</li>
+  <li>Content that holds your own work, such as the apps and data inside Xcode's simulators, and, in hardcore mode, an app's containers: “May hold documents you made in Pages.”</li>
+</ul>
+<p>Items that macOS itself restricts are listed as “Kept by macOS”, without a checkbox. Your own files, such as <code>~/Music/GarageBand</code> and Xcode archives, and the Command Line Tools that git and clang use, are never listed.</p>
+
+<h2 id="profiles">Which apps are checked</h2>
+<p>The content each app installs comes from a list built into the signed app. Only Xcode's has been checked against a real install (Xcode 26.6 on macOS 26.6). The others come from Apple's install layout; until each one is checked on a Mac that has it, none of its content starts ticked.</p>
+
+<h2 id="xcode">Xcode</h2>
+<p>Xcode's simulator runtimes are deleted <strong>first</strong>, with CoreSimulator's own tool, while Xcode is still there to do it: the tool lives in a folder the Xcode removal takes away. Runtimes can't go to the Trash, so in Trash mode their row starts unticked, under “Deleted by Xcode's tool, not moved to the Trash”, with the note “Download them again in Xcode › Settings › Components.” If a runtime can't be deleted, Xcode is kept, because without it nothing could delete them later.</p>
+<p>If git and clang point into the Xcode you remove, the confirmation says: “git, clang and other developer tools stop working until you run <code>sudo xcode-select --reset</code> in Terminal.”, with a Copy button.</p>
+
+<h2 id="remove">Removing</h2>
+<p><strong>Remove…</strong> opens a confirmation that lists every item and, under “Also happens”, what else will happen: apps asked to quit, background jobs stopped, runtimes deleted first, the administrator password. Everything owned by the system goes to the <a href="admin.html">administrator helper</a> in one request, so the whole run shows one password dialog. If one app can't be removed, for example because it won't quit, the others still go, and the result says which one stayed.</p>
+<div class="note warn">
+  <p>In this preview Debloat's hardcore confirmation has no restore point box, and its “Frees up to” includes simulator runtimes that are named only in its notes (T-0086).</p>
+</div>
+<nav class="pager" aria-label="Pages"><a href="admin.html" rel="prev">Previous: Admin removals</a><a href="system-apps.html" rel="next">Next: macOS's own apps</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

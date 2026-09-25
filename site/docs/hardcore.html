@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hardcore mode: macontrol docs</title>
+<meta name="description" content="Hardcore mode. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/hardcore.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/hardcore.html">
+<meta property="og:title" content="Hardcore mode: macontrol docs">
+<meta property="og:description" content="Hardcore mode. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html" aria-current="page">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Hardcore mode</h1>
+<p class="lede">Hardcore mode makes removals permanent: they skip the Trash and can't be put back. It is off every time macontrol starts, and it asks before it turns on.</p>
+
+<h2 id="turn-on">Turn it on</h2>
+<p>The <strong>Hardcore mode</strong> checkbox sits at the right end of the toolbar, on every screen. Ticking it opens this warning:</p>
+<figure class="shot small">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/hardcore-modal-dark.webp">
+    <img src="../assets/shots/hardcore-modal-light.webp" width="480" height="345" loading="lazy" decoding="async" alt="The Turn on hardcore mode warning: nothing goes to the Trash and History can't put anything back, it stays on for Clean, Uninstall, Debloat and Disk Map until you turn it off or quit, what macontrol still never deletes, a reminder to back up with Time Machine, and a red Turn On Hardcore Mode button next to Cancel">
+  </picture>
+</figure>
+<p><kbd>Return</kbd> and <kbd>Esc</kbd> both cancel. The red <strong>Turn On Hardcore Mode</strong> button has no keyboard shortcut, and there is no menu command or key that turns hardcore mode on.</p>
+<p>While it is on, the checkbox turns red and a red banner on every screen says “Hardcore mode is on: removals are permanent.”, with a <strong>Turn Off</strong> button. Unticking the checkbox, the banner's button or <strong>View › Turn Off Hardcore Mode</strong> turns it off at once. Quitting macontrol turns it off too: it is never saved.</p>
+
+<h2 id="changes">What changes while it is on</h2>
+<div class="table"><table>
+  <thead><tr><th>Where</th><th>Off</th><th>On</th></tr></thead>
+  <tbody>
+    <tr><td>Sheet title</td><td>Move 2 items to the Trash?</td><td>Delete 2 items permanently?</td></tr>
+    <tr><td>Sheet header</td><td>Blue Trash icon</td><td>Red flame, and a red strip: “Permanent: skips the Trash”</td></tr>
+    <tr><td>Sheet button</td><td>Move to Trash</td><td>Delete Permanently, in red</td></tr>
+    <tr><td>Clean footer</td><td>frees about X once you empty the Trash</td><td>frees up to X</td></tr>
+    <tr><td>Result</td><td>Moved to the Trash</td><td>Freed X. These can't be put back.</td></tr>
+  </tbody>
+</table></div>
+<p>“Freed X” is measured: macontrol reads the free space before and after the removal. When it is well below the estimate, the result says the rest is held by local snapshots or shared with other files. Every permanent removal still opens its own confirmation, and <kbd>Return</kbd> never presses <strong>Delete Permanently</strong>.</p>
+<figure class="shot small">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/hardcore-uninstall-dark.webp">
+    <img src="../assets/shots/hardcore-uninstall-light.webp" width="640" height="539" loading="lazy" decoding="async" alt="Uninstall Editor permanently?, with a red strip that says Permanent: skips the Trash, the list of what will be deleted, an unticked box to create a restore point first, and a red Delete Permanently button">
+  </picture>
+</figure>
+
+<h2 id="still-trash">What still goes to the Trash</h2>
+<p>Some items go to the Trash even in hardcore mode, because deleting them for good is too easy to regret. The confirmation lists them apart, under “Moved to the Trash”, each with its reason:</p>
+<ul>
+  <li>Anything in iCloud Drive or another cloud storage folder. Deleting it there deletes it on every device.</li>
+  <li>Your notes, contacts, calendars and Safari data, and iPhone and iPad backups.</li>
+</ul>
+<p>In this preview the confirmation's title still counts these items, although the list shows them apart (T-0085).</p>
+
+<h2 id="never">What it never deletes</h2>
+<p>Hardcore mode changes where removals go, not what may be removed. macontrol still never deletes macOS itself, your top-level folders (Documents, Desktop…), Photos libraries, locked files, or anything that changed since the scan. Files you select inside your folders are deleted for good. Every check on the <a href="safety.html">safety model</a> page still runs.</p>
+
+<h2 id="restore-point">Restore point</h2>
+<p>The hardcore confirmations in Clean, Uninstall and the Disk Map have an unticked box: <strong>Create a restore point first (Time Machine local snapshot, about a minute)</strong>. It is never automatic. Before you tick it, know what it is:</p>
+<ul>
+  <li>Rolling back returns <strong>every</strong> file on this Mac to that moment; anything newer is lost. It is done from macOS Recovery › Restore from Time Machine.</li>
+  <li>While it exists, the deleted items still use their space. macOS may remove it on its own. It is not a backup.</li>
+  <li>It covers only the startup disk, and needs at least 1 GB free there. If it can't be made, macontrol asks before it deletes anything.</li>
+</ul>
+<p>Debloat's hardcore confirmation does not offer a restore point yet (T-0086).</p>
+
+<h2 id="how">How a permanent delete works</h2>
+<p>A file is deleted where it is. A folder first goes to the Trash, like any other removal, and is then erased there, one item at a time, through open folder handles, so a folder swapped for a link halfway through is never followed. If the erase stops halfway, for example because macOS refused one file, nothing is left half deleted in the folder's old place: the result says “Partly deleted. The rest is in the Trash as “name”; empty the Trash to finish.”</p>
+
+<h2 id="history">In History</h2>
+<p>Permanent batches have a red icon and say “Deleted permanently”, with no Undo. A batch made after a restore point names the snapshot and how to roll back. Partly deleted batches say so.</p>
+<nav class="pager" aria-label="Pages"><a href="using.html" rel="prev">Previous: Using macontrol</a><a href="admin.html" rel="next">Next: Admin removals</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

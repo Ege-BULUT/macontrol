@@ -41,6 +41,10 @@
       <li><a href="install.html" aria-current="page">Install</a></li>
       <li><a href="full-disk-access.html">Full Disk Access</a></li>
       <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
       <li><a href="safety.html">Safety model</a></li>
       <li><a href="faq.html">FAQ</a></li>
       <li><a href="build.html">Build from source</a></li>
@@ -81,14 +85,15 @@
 <h3>macOS 14 Sonoma</h3>
 <p>Control-click <strong>Macontrol</strong> in Applications, choose <strong>Open</strong>, then click <strong>Open</strong> in the dialog. The Open Anyway button in Privacy &amp; Security works here too.</p>
 <h3>Why this step is needed</h3>
-<p>macOS checks apps downloaded from the internet with Gatekeeper. Apps that Apple has notarized open straight away. Notarization needs a paid Apple Developer Program membership, which macontrol does not have, so each release is signed ad hoc instead. The step above tells macOS that you trust this download. If you would rather not, you can <a href="build.html">build it from source</a>.</p>
+<p>macOS checks apps downloaded from the internet with Gatekeeper. Apps that Apple has notarized open straight away. Notarization needs a paid Apple Developer Program membership, which macontrol does not have, so releases are signed with macontrol's own certificate instead, which Gatekeeper does not know. The step above tells macOS that you trust this download. If you would rather not, you can <a href="build.html">build it from source</a>.</p>
 
 <h2 id="access">Allow Full Disk Access</h2>
 <p>On first launch macontrol asks for Full Disk Access and walks you through it. It continues by itself once access is on. You can also skip it: the app still works, and the folders macOS keeps private show as “not scanned”. <a href="full-disk-access.html">More about Full Disk Access</a>.</p>
 
 <h2 id="update">Update to a new version</h2>
 <p>Quit macontrol, download the new zip, unzip it and replace <strong>Macontrol.app</strong> in Applications.</p>
-<p>Each release is signed ad hoc, so macOS treats the new version as a different app and Full Disk Access has to be granted again. If Macontrol is listed and switched on but the app still says Full Disk Access is off, select it in the list, remove it with the minus button, and add it again.</p>
+<p>From 0.2.0 on, every release is signed with the same certificate, so macOS should keep your Full Disk Access grant after an update. This has been checked against the signature macOS stores, not yet through a real update. Updating from 0.1.x, which was signed ad hoc, asks for Full Disk Access one more time.</p>
+<p>If Macontrol is listed and switched on but the app still says Full Disk Access is off, select it in the list, remove it with the minus button, and add it again.</p>
 
 <h2 id="remove">Remove macontrol</h2>
 <p>Quit it and move <strong>Macontrol.app</strong> to the Trash. It keeps its undo journal in <code>~/Library/Application Support/Macontrol</code>, and any settings in <code>~/Library/Preferences/dev.macontrol.Macontrol.plist</code>. You can remove both, and take it out of the Full Disk Access list in System Settings.</p>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin removals: macontrol docs</title>
+<meta name="description" content="Admin removals. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/admin.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/admin.html">
+<meta property="og:title" content="Admin removals: macontrol docs">
+<meta property="og:description" content="Admin removals. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html" aria-current="page">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>Admin removals</h1>
+<p class="lede">Some apps and leftovers belong to the system, so only an administrator can remove them. macontrol does that through a small helper that macOS starts after you enter your password.</p>
+<div class="note warn">
+  <p><strong>Preview.</strong> The helper's checks and both removal modes are tested as a normal user, on temporary folders. Its first real run as root, with an administrator password on a real Mac, is still to come (T-0078 on the <a href="../board/">project board</a>).</p>
+</div>
+
+<h2 id="which">Which items need it</h2>
+<p>Items owned by root, such as:</p>
+<ul>
+  <li>Apple's App Store apps in <code>/Applications</code>: GarageBand, iMovie, Pages, Numbers, Keynote and the like.</li>
+  <li>Leftovers in <code>/Library</code>: Application Support, Caches, Logs, Preferences, LaunchDaemons and LaunchAgents, privileged helper tools.</li>
+  <li>Package receipts in <code>/private/var/db/receipts</code>, and content that Apple's apps install, such as sound libraries and simulator caches.</li>
+  <li>Anything a root process left in your own Library.</li>
+</ul>
+<p>In Clean, Uninstall and Debloat they carry an <strong>Admin</strong> badge and can be ticked like any other item. The Disk Map does not use the helper: root-owned items there stay marked <strong>Needs admin</strong>, with Reveal in Finder.</p>
+
+<h2 id="password">The password prompt</h2>
+<p>The confirmation says it under “Also happens”: “macOS asks for your administrator password for 3 items owned by the system.” When you confirm, macOS shows its own administrator dialog, with macontrol's message in it:</p>
+<ul>
+  <li>“macontrol needs your administrator password to move 3 items owned by the system to the Trash.”</li>
+  <li>“macontrol needs your administrator password to delete 3 items owned by the system permanently.”, in <a href="hardcore.html">hardcore mode</a>.</li>
+</ul>
+<p>Everything that needs root in one removal goes in one request, so one Debloat run of several apps shows one dialog. macOS may ask again for the next removal, even a few minutes later. If you cancel the dialog, none of those items is touched, and the result says so. macontrol never sees or stores your password: the dialog belongs to macOS.</p>
+
+<h2 id="helper">What the helper does</h2>
+<p>The helper, <code>Contents/Helpers/macontrol-priv</code>, lives inside the signed app. It is not installed anywhere, and it exits when the removal is done.</p>
+<ol>
+  <li>macontrol writes the list you confirmed into a request file that only you can read, and hands the helper the file's SHA-256 through the dialog. If the file changes after that, the helper refuses it.</li>
+  <li>As root, the helper checks each item again: that it lies in a place root may act, that it is not protected, that it is still the item the scan saw, and that it is not locked.</li>
+  <li>It moves each item to <strong>your</strong> Trash, or deletes it in hardcore mode, and writes each result to a file only root can write. macontrol shows the results as they come in.</li>
+</ol>
+
+<h2 id="scope">What it can and can't touch</h2>
+<p>The helper may act only on:</p>
+<ul>
+  <li>App bundles in <code>/Applications</code>, or one folder down, never <code>/Applications</code> itself or a folder in it.</li>
+  <li>Items inside <code>/Library</code>'s Application Support, Audio, Caches, Developer, LaunchAgents, LaunchDaemons, Logs, Preferences and PrivilegedHelperTools folders, never those folders themselves.</li>
+  <li>Package receipts in <code>/private/var/db/receipts</code>.</li>
+  <li>Root-owned items in your own Library.</li>
+</ul>
+<p>Everything else is refused, including <code>/System</code>, <code>/private/etc</code>, keychains, extensions, macOS's own settings inside the folders above, other users' folders, locked files, and anything that changed since the scan.</p>
+<p>The helper never changes permissions, ownership or flags to force a removal. A background job in <code>/Library/LaunchDaemons</code> is stopped first only when macOS confirms it was started from that exact file; otherwise its file is still removed, and the result says its background service may keep running until the next restart.</p>
+
+<h2 id="undo">Putting items back</h2>
+<p>Items the helper moved are in your Trash, still owned by the system. History can't put them back itself: drag them back in Finder, which may ask for your password. Finder may also ask for it when you empty the Trash.</p>
+<nav class="pager" aria-label="Pages"><a href="hardcore.html" rel="prev">Previous: Hardcore mode</a><a href="debloat.html" rel="next">Next: Debloat</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

@@ -28,7 +28,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 REPO="Ege-BULUT/macontrol"
-SITE_RELEASE="0.1"
+SITE_RELEASE="0.2"
 BOARD="${BOARD:-$(git rev-parse --path-format=absolute --git-common-dir)/../.board}"
 OUT="$ROOT/dist/site"
 
@@ -96,8 +96,9 @@ crop_box() {
         disk-map-treemap) echo 330 88 1010 1140 ;;
         clean) echo 325 88 1464 1052 ;;
         uninstall) echo 748 82 1036 1144 ;;
-        overview) echo 450 150 1330 720 ;;
-        history) echo 440 150 1330 720 ;;
+        overview) echo 345 105 1430 750 ;;
+        history) echo 345 105 1430 750 ;;
+        debloat) echo 318 80 1482 1060 ;;
     esac
 }
 

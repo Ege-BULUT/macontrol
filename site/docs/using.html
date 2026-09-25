@@ -41,6 +41,10 @@
       <li><a href="install.html">Install</a></li>
       <li><a href="full-disk-access.html">Full Disk Access</a></li>
       <li><a href="using.html" aria-current="page">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
       <li><a href="safety.html">Safety model</a></li>
       <li><a href="faq.html">FAQ</a></li>
       <li><a href="build.html">Build from source</a></li>
@@ -50,11 +54,11 @@
   </nav>
   <main class="doc">
 <h1>Using macontrol</h1>
-<p class="lede">Five sections in the sidebar, each one key away. Nothing moves until you confirm it, and everything that moves can be put back from History.</p>
+<p class="lede">Six sections in the sidebar, each one key away. Nothing moves until you confirm it, and everything that goes to the Trash can be put back from History. The <a href="hardcore.html">Hardcore mode</a> checkbox at the right end of the toolbar is off unless you turn it on.</p>
 <div class="table"><table>
   <thead><tr><th>Keys</th><th>Action</th></tr></thead>
   <tbody>
-    <tr><td><kbd>⌘1</kbd> to <kbd>⌘5</kbd></td><td>Overview, Disk Map, Clean, Uninstall, History</td></tr>
+    <tr><td><kbd>⌘1</kbd> to <kbd>⌘6</kbd></td><td>Overview, Disk Map, Clean, Uninstall, <a href="debloat.html">Debloat</a>, History</td></tr>
     <tr><td><kbd>⌘R</kbd></td><td>Rescan</td></tr>
     <tr><td><kbd>⌘O</kbd></td><td>Scan a folder you choose</td></tr>
   </tbody>
@@ -118,15 +122,15 @@
   <li>Background jobs (launchd) that start a program inside the app.</li>
 </ul>
 <p>Folders that only share the app's name are shown but not selected. Data that another installed app also uses is never selected for you. Documents, Desktop, Downloads, Music, Pictures, Movies and iCloud are never searched.</p>
-<p>When you uninstall, macontrol asks the app to quit (it never forces it) and stops the app's own background jobs. The app goes to the Trash first, and the leftovers you chose follow once it is there. History shows the two batches, each with its own Undo.</p>
-<p>Apps that are part of macOS live on the sealed system volume and say why they cannot be removed. Root-owned apps and leftovers, which usually include Apple's App Store apps such as GarageBand, iMovie and Pages, are marked <strong>Needs admin</strong>, with Reveal in Finder.</p>
+<p>When you uninstall, macontrol asks the app to quit (it never forces it) and stops the app's own background jobs. Then the app and the leftovers you chose go in one batch, and no leftover moves while the app is still in place.</p>
+<p>Root-owned apps and leftovers, which usually include Apple's App Store apps such as GarageBand, iMovie and Pages, carry an <strong>Admin</strong> badge: macOS asks for your administrator password when you confirm. See <a href="admin.html">Admin removals</a>. Apps that are part of macOS live on the sealed system volume and say why they cannot be removed; see <a href="system-apps.html">macOS's own apps</a>.</p>
 <figure class="shot">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/uninstall-dark.webp">
-    <img src="../assets/shots/uninstall-light.webp" width="1800" height="1240" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
+    <img src="../assets/shots/uninstall-light.webp" width="1800" height="1239" loading="lazy" decoding="async" alt="Uninstall: the app list with All, User and System filters, and an app's leftovers grouped by the evidence that ties them to it">
   </picture>
 </figure>
-<h3 id="sort-filter">Sort and filter <span class="tag">0.1.1</span></h3>
+<h3 id="sort-filter">Sort and filter</h3>
 <p>The filter above the app list shows <strong>All</strong>, <strong>User</strong> or <strong>System</strong> apps, with a count for each. System means Apple's apps: those that are part of macOS, Apple's App Store apps, and any other Apple app such as Xcode. User is everything else. The sort menu orders each section by name, date added or size. Apps without a date or a size yet always go last.</p>
 <div class="table"><table>
   <thead><tr><th>Keys</th><th>Action</th></tr></thead>
@@ -139,14 +143,15 @@
 <p>macontrol remembers your choice. Sorting by size measures every app, not only the ones on screen.</p>
 
 <h2 id="history">History and Undo</h2>
-<p>History lists every batch macontrol moved to the Trash and what it frees once you empty the Trash. <strong>Undo</strong> puts a whole batch back where it was, as long as the items are still in the Trash and their original place is free. Anything it could not put back is listed with the reason.</p>
+<p>History lists every batch macontrol removed. For a batch in the Trash it shows what emptying the Trash frees, and <strong>Undo</strong> puts the whole batch back where it was, as long as the items are still in the Trash and their original place is free. Anything it could not put back is listed with the reason.</p>
+<p>Permanent deletions are listed with a red icon and no Undo, with the restore point if one was made. Items the administrator helper moved to the Trash can't be put back from History: drag them back in Finder.</p>
 <figure class="shot">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../assets/shots/history-dark.webp">
-    <img src="../assets/shots/history-light.webp" width="1800" height="1304" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
+    <img src="../assets/shots/history-light.webp" width="1800" height="1239" loading="lazy" decoding="async" alt="History: a batch in the Trash with Undo, a permanent deletion made after a restore point, a batch with items the administrator helper moved, and one already put back">
   </picture>
 </figure>
-<nav class="pager" aria-label="Pages"><a href="full-disk-access.html" rel="prev">Previous: Full Disk Access</a><a href="safety.html" rel="next">Next: Safety model</a></nav>
+<nav class="pager" aria-label="Pages"><a href="full-disk-access.html" rel="prev">Previous: Full Disk Access</a><a href="hardcore.html" rel="next">Next: Hardcore mode</a></nav>
   </main>
 </div>
 <footer>

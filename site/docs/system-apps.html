@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>macOS's own apps: macontrol docs</title>
+<meta name="description" content="macOS's own apps. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<link rel="canonical" href="https://macontrol.vercel.app/docs/system-apps.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="macontrol">
+<meta property="og:url" content="https://macontrol.vercel.app/docs/system-apps.html">
+<meta property="og:title" content="macOS's own apps: macontrol docs">
+<meta property="og:description" content="macOS's own apps. Documentation for macontrol, a native macOS app that maps your disk and cleans it up safely.">
+<meta property="og:image" content="https://macontrol.vercel.app/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="macontrol, with its icon and the line “See where your disk space went, and get it back safely.” beside the Disk Map sunburst and folder list">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon.png" width="28" height="28" alt="">macontrol</a>
+    <nav aria-label="Main">
+      <a class="opt" href="../#features">Features</a>
+      <a class="opt" href="../#safety">Safety</a>
+      <a href="./" aria-current="page">Docs</a>
+      <a class="btn" href="/downloads/latest.zip">Download</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap docs">
+  <nav class="side" aria-label="Docs">
+    <ol>
+      <li><a href="./">Overview</a></li>
+      <li><a href="install.html">Install</a></li>
+      <li><a href="full-disk-access.html">Full Disk Access</a></li>
+      <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html" aria-current="page">macOS's own apps</a></li>
+      <li><a href="safety.html">Safety model</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="build.html">Build from source</a></li>
+      <li><a href="changelog.html">Changelog</a></li>
+    </ol>
+    <div class="dl"><a class="btn" href="/downloads/latest.zip">Download</a></div>
+  </nav>
+  <main class="doc">
+<h1>macOS's own apps</h1>
+<p class="lede">Chess, Stocks, News, Tips and the other apps that come with macOS live on a sealed, read-only system volume. macontrol shows them, locked, and never removes them.</p>
+
+<h2 id="locked">Why they are locked</h2>
+<p>macOS keeps its own apps on a signed system volume that no app can change while System Integrity Protection is on, which it is on almost every Mac. In Uninstall and Debloat they are listed under <strong>Part of macOS</strong> with a lock. Selecting one shows its size and why macOS keeps it. All of macOS's own apps together use about 0.73 GB on macOS 26.6, and macOS updates put them back, so removing them frees almost nothing.</p>
+<p>What you can do instead: remove it from the Dock. Control-click its Dock icon, then Options › Remove from Dock.</p>
+
+<h2 id="guide">The expert guide</h2>
+<p>For people who want to remove them anyway, the locked panel has a button: <strong>Expert: remove system apps yourself…</strong> It opens a guide under a red header, <strong>Strongly not recommended</strong>. macontrol runs none of its commands: you run them yourself in Terminal and in macOS Recovery. Before any step, the guide lists the risks:</p>
+<ul>
+  <li>This lowers your Mac's security. With protection off, iPhone and iPad apps and Apple Pay may stop working (reported by others, unverified).</li>
+  <li>You must turn off FileVault first. Your files are not encrypted until you turn it back on, which takes hours.</li>
+  <li>The apps stay removed only while these protections stay off. Turning them back on brings the apps back.</li>
+  <li>macOS updates bring these apps back, and may then install as a full download.</li>
+  <li>Almost no space comes back: the previous sealed snapshot keeps the files (expected, not yet tested).</li>
+  <li>A mistake can leave your Mac unable to start until you reinstall macOS from Recovery.</li>
+  <li><strong>Make a Time Machine backup first.</strong> Time Machine does not back up the system volume (expected, not yet tested); the way back is the previous sealed snapshot or reinstalling macOS, which keeps your files.</li>
+</ul>
+<p>The steps appear only after you tick <strong>I have a backup and I accept these risks</strong>.</p>
+
+<h2 id="steps">What the steps are</h2>
+<ol>
+  <li>Turn off FileVault, and wait until it has finished.</li>
+  <li>Start up in macOS Recovery and turn off System Integrity Protection and Authenticated Root.</li>
+  <li>Back in macOS, check that both are off, then open the guide again.</li>
+  <li>Mount the system volume, delete the apps you chose from it, and make the changed volume the one that starts up.</li>
+</ol>
+<p>The guide writes every command for your Mac: its system disk and the apps you ticked, as literal paths in single quotes, with no shell variables. The commands that change the system volume appear only once both protections are off, because they name the disk your Mac started up from. The undo steps come with them: go back to the sealed snapshot, turn both protections back on, turn FileVault back on, and if the Mac doesn't start up, reinstall macOS from Recovery, which keeps your files.</p>
+<p>Most of these steps are marked unverified in the guide: they follow Apple's documentation and man pages but have not been run end to end yet. macontrol will not do any of this itself until the steps and their undo have been tested in virtual machines on macOS 14, 15 and 26.</p>
+<nav class="pager" aria-label="Pages"><a href="debloat.html" rel="prev">Previous: Debloat</a><a href="safety.html" rel="next">Next: Safety model</a></nav>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>© 2026 Ege BULUT. Not affiliated with Apple.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="../board/">Project board</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

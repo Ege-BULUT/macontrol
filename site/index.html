@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>macontrol: see where your disk space went</title>
-<meta name="description" content="A native macOS app that maps your disk and cleans it up, with every removal going to the Trash first. Free, macOS 14+, Apple Silicon.">
+<meta name="description" content="A native macOS app that maps your disk, cleans it up and removes the apps you don't want, Apple's included. Everything goes to the Trash first unless you turn on hardcore mode. Free, macOS 14+, Apple Silicon.">
 <link rel="canonical" href="https://macontrol.vercel.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="macontrol">
@@ -42,7 +42,7 @@
     <div>
       <img class="icon" src="assets/icon.png" width="88" height="88" alt="macontrol app icon">
       <h1>See where your disk space went, and get it back safely.</h1>
-      <p class="lede">A native Mac app that maps your disk and cleans it up. Everything it removes goes to the Trash first, so you can put it back until you empty the Trash.</p>
+      <p class="lede">A native Mac app that maps your disk, cleans it up and removes the apps you don't want, Apple's included. Everything goes to the Trash first, so you can put it back, unless you choose hardcore mode.</p>
       <div class="get">
         <a class="btn" href="/downloads/latest.zip">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/></svg>
@@ -55,7 +55,7 @@
     <figure class="shot">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="assets/shots/disk-map-sunburst-dark.webp">
-        <img src="assets/shots/disk-map-sunburst-light.webp" width="1800" height="1240" fetchpriority="high" alt="The Disk Map: a sunburst of a home folder, with the inspector and the folder's contents on the right and two items waiting in the Discard Pile">
+        <img src="assets/shots/disk-map-sunburst-light.webp" width="1800" height="1239" fetchpriority="high" alt="The Disk Map: a sunburst of a home folder, with the inspector and the folder's contents on the right and two items waiting in the Discard Pile">
       </picture>
     </figure>
   </div>
@@ -111,14 +111,50 @@
         <p>Leftovers are matched on evidence: the app's bundle identifier, the containers macOS records as its own, and the background jobs that start it. Each group says why it matched.</p>
         <ul class="facts">
           <li><b>Cautious by default.</b> Folders that only share the app's name are shown but not selected, and neither is data another app also uses.</li>
-          <li><b>In the right order.</b> The app is asked to quit, never forced. It goes to the Trash first, and the leftovers you chose follow once it is there.</li>
-          <li><b>Sort and filter.</b> Sort by name, date added or size, and show all apps, yours or Apple's. New in 0.1.1.</li>
+          <li><b>In the right order.</b> The app is asked to quit, never forced, and no leftover moves while the app is still in place.</li>
+          <li><b>Sort and filter.</b> Sort by name, date added or size, and show all apps, yours or Apple's.</li>
         </ul>
       </div>
       <figure class="shot crop">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="assets/crops/uninstall-dark.webp">
-          <img src="assets/crops/uninstall-light.webp" width="518" height="572" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it, and a Needs admin item with Reveal in Finder">
+          <img src="assets/crops/uninstall-light.webp" width="518" height="572" loading="lazy" decoding="async" alt="Uninstall: an app with its leftovers grouped by the evidence that ties them to it">
+        </picture>
+      </figure>
+    </div>
+
+    <div class="feature flip">
+      <div class="text">
+        <h3>Take Apple's optional apps off your Mac <span class="tag">New in 0.2</span></h3>
+        <p>Debloat lists Xcode, GarageBand, Logic Pro, iMovie, Pages, Numbers, Keynote and Apple's other optional apps with everything they install outside the app: sound libraries, simulator caches, frameworks, receipts.</p>
+        <ul class="facts">
+          <li><b>Nothing starts ticked.</b> Content shared with another app, or not yet checked on a real install, stays unticked, with a note that says why.</li>
+          <li><b>Xcode in the right order.</b> Its simulator runtimes go first, with Xcode's own tool, while it is still there to do it.</li>
+          <li><b>One password.</b> What belongs to the system goes to the administrator helper in one request, checked again as root. <a href="docs/admin.html">How it works</a></li>
+        </ul>
+      </div>
+      <figure class="shot crop">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/crops/debloat-dark.webp">
+          <img src="assets/crops/debloat-light.webp" width="741" height="530" loading="lazy" decoding="async" alt="Debloat: Xcode expanded to its app, simulator caches, build files and developer frameworks, with Admin badges on what belongs to the system">
+        </picture>
+      </figure>
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <h3>Delete permanently, on purpose <span class="tag">New in 0.2</span></h3>
+        <p>Hardcore mode is a checkbox in the toolbar. It is off every time macontrol starts, and turning it on shows what it means first.</p>
+        <ul class="facts">
+          <li><b>Every removal still asks.</b> Permanent confirmations are red, and <kbd>Return</kbd> never confirms one.</li>
+          <li><b>Some things still go to the Trash:</b> iCloud Drive, your notes, contacts, calendars, Safari data and iPhone backups.</li>
+          <li><b>A restore point if you want one.</b> A Time Machine local snapshot before the delete, never automatic. <a href="docs/hardcore.html">More</a></li>
+        </ul>
+      </div>
+      <figure class="shot sheet">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/shots/hardcore-modal-dark.webp">
+          <img src="assets/shots/hardcore-modal-light.webp" width="480" height="345" loading="lazy" decoding="async" alt="The Turn on hardcore mode warning, with Cancel and a red Turn On Hardcore Mode button">
         </picture>
       </figure>
     </div>
@@ -127,7 +163,7 @@
       <figure class="shot crop">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="assets/crops/overview-dark.webp">
-          <img src="assets/crops/overview-light.webp" width="665" height="360" loading="lazy" decoding="async" alt="Overview: disk capacity, the largest folders in the home folder, and how much is safe to clean">
+          <img src="assets/crops/overview-light.webp" width="715" height="375" loading="lazy" decoding="async" alt="Overview: disk capacity, the largest folders in the home folder, and how much is safe to clean">
         </picture>
         <figcaption>
           <h3>Overview</h3>
@@ -137,11 +173,11 @@
       <figure class="shot crop">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="assets/crops/history-dark.webp">
-          <img src="assets/crops/history-light.webp" width="665" height="360" loading="lazy" decoding="async" alt="History: two batches, one in the Trash with an Undo button and one already put back">
+          <img src="assets/crops/history-light.webp" width="715" height="375" loading="lazy" decoding="async" alt="History: a batch in the Trash with Undo, a permanent deletion made after a restore point, and a batch with items the administrator helper moved">
         </picture>
         <figcaption>
           <h3>History</h3>
-          <p>Every batch macontrol moved, what it frees once you empty the Trash, and an Undo button that puts the whole batch back.</p>
+          <p>Every batch macontrol removed. Batches in the Trash say what they free once you empty it and have an Undo button. Permanent deletions and restore points are listed too.</p>
         </figcaption>
       </figure>
     </div>
@@ -183,20 +219,20 @@
   <div class="wrap">
     <div class="sec-head">
       <h2>Built to be <span class="accent">careful</span> with your files.</h2>
-      <p>Nothing is deleted permanently in this version. Here is what happens to every item macontrol removes.</p>
+      <p>Unless you turn on hardcore mode, nothing is deleted permanently. Here is what happens to every item macontrol removes.</p>
     </div>
     <ol class="path">
       <li><b>You choose it</b>In Clean only Safe items start selected. Every removal ends in a confirmation that lists exactly what will move.</li>
       <li><b>It is checked again</b>Right before the move, the item is compared with what the scan saw. A file that was replaced, or swapped for a link, stays put.</li>
       <li><b>Key folders are refused</b>Your home folder and its main folders, Applications, Library and system folders never move.</li>
-      <li><b>It goes to the Trash</b>Through macOS's own Move to Trash. macontrol never empties the Trash: the space comes back when you do.</li>
+      <li><b>It goes to the Trash</b>Through macOS's own Move to Trash, unless hardcore mode is on. macontrol never empties the Trash: the space comes back when you do.</li>
       <li><b>You can undo it</b>Each batch is written to a journal. History puts it back while it is still in the Trash and its old place is free.</li>
     </ol>
     <div class="guards">
       <div><h3>Off limits entirely</h3><p>Keychains, <code>~/.ssh</code>, Mail, Messages, photo libraries, privacy data, cloud sync state and <code>/System</code>, contents included.</p></div>
       <div><h3>Cloud needs consent</h3><p>Items in iCloud Drive or another cloud folder need an extra confirmation, because removing them removes them on every device.</p></div>
-      <div><h3>No admin powers</h3><p>No privileged helper and no password prompt. Root-owned items are marked “Needs admin”, with Reveal in Finder.</p></div>
-      <div><h3>One door</h3><p>Only the Safety module can move files. A test fails if any other code deletes, moves or renames anything.</p></div>
+      <div><h3>Admin powers, fenced in</h3><p>Root-owned items go to a helper only after macOS's password dialog, only in a few places, and only after every check runs again as root.</p></div>
+      <div><h3>One door</h3><p>Only the Safety module can move or delete files. A test fails if any other code deletes, moves or renames anything.</p></div>
     </div>
   </div>
 </section>
@@ -205,13 +241,13 @@
   <div class="wrap">
     <div class="sec-head">
       <h2>Coming next.</h2>
-      <p>Designed and planned, not in the current release. Each ships once it has been tested on real Macs.</p>
+      <p>Planned, not in the current release.</p>
     </div>
     <ul class="next">
-      <li><h3>Hardcore mode <span class="tag">Planned for 0.2</span></h3><p>An opt-in switch for permanent deletion. It is off every time the app starts, and turning it on asks you to confirm the risk first.</p></li>
-      <li><h3>Admin removals <span class="tag">Planned for 0.2</span></h3><p>Root-owned apps and leftovers, removed after you enter your password, with the safety checks run again as root.</p></li>
-      <li><h3>Apple app debloat <span class="tag">Planned for 0.2</span></h3><p>A checklist of Apple's optional apps, such as GarageBand, iMovie and the iWork apps, with the content they install. Nothing starts selected.</p></li>
       <li><h3>Live map <span class="tag">Planned for 0.3</span></h3><p>The Disk Map fills in while the scan runs, instead of appearing when it finishes.</p></li>
+      <li><h3>macOS's own apps <span class="tag">Later</span></h3><p>Removing Chess, Stocks and the other built-in apps from inside macontrol, once the <a href="docs/system-apps.html">expert guide's</a> steps and their undo have been tested on macOS 14, 15 and 26.</p></li>
+      <li><h3>Intel and universal builds <span class="tag">Later</span></h3><p>0.2 runs on Apple Silicon only.</p></li>
+      <li><h3>Notarized builds <span class="tag">Later</span></h3><p>With in-app updates, so the first launch needs no extra step.</p></li>
     </ul>
   </div>
 </section>

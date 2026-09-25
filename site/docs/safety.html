@@ -41,6 +41,10 @@
       <li><a href="install.html">Install</a></li>
       <li><a href="full-disk-access.html">Full Disk Access</a></li>
       <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
       <li><a href="safety.html" aria-current="page">Safety model</a></li>
       <li><a href="faq.html">FAQ</a></li>
       <li><a href="build.html">Build from source</a></li>
@@ -50,17 +54,18 @@
   </nav>
   <main class="doc">
 <h1>Safety model</h1>
-<p class="lede">macontrol is built to be careful with your files. In 0.1, nothing is deleted permanently, and every item passes the same checks before it moves.</p>
+<p class="lede">macontrol is built to be careful with your files. Unless you turn on hardcore mode, nothing is deleted permanently, and every item passes the same checks before it moves or is deleted.</p>
 
 <h2 id="path">What happens to one item</h2>
 <ol>
-  <li><strong>You choose it.</strong> In Clean only Safe items start selected. Every removal ends in a confirmation that lists exactly what will move.</li>
+  <li><strong>You choose it.</strong> In Clean only Safe items start selected, and in Debloat no app does. Every removal ends in a confirmation that lists exactly what will move.</li>
   <li><strong>It is checked again.</strong> Right before the move, the item is compared with what the scan saw. A file that was replaced, or swapped for a link, since the scan stays where it is.</li>
   <li><strong>Protected places are refused.</strong> The path is resolved first, so a different route to the same folder does not slip past.</li>
   <li><strong>It goes to the Trash</strong> through macOS's own Move to Trash, which also records Finder's Put Back. macontrol never empties the Trash: the space comes back when you do.</li>
   <li><strong>It is written to the journal,</strong> so History can put it back.</li>
 </ol>
 <p>If a check fails, that item stays where it is and the result says why.</p>
+<p>In <a href="hardcore.html">hardcore mode</a>, step 4 changes: a file is deleted where it is, and a folder goes to the Trash first and is then erased there, through open folder handles, so a folder swapped for a link halfway through is never followed. The journal records the deletion, with no Undo. Items in iCloud Drive or another cloud folder, and your notes, contacts, calendars, Safari data and iPhone backups, still go to the Trash.</p>
 
 <h2 id="protected">Protected places</h2>
 <p>These are never moved to the Trash, and neither is any folder that contains them: your home folder, Desktop, Documents, Downloads, Pictures, Movies and Music, your Library and its standard folders, <code>/Applications</code>, <code>/Library</code> and system folders. What is inside them can be removed, one item at a time, when you choose it.</p>
@@ -71,7 +76,7 @@
 <p>Items in iCloud Drive or another cloud storage folder need an extra confirmation, because removing them removes them on every device.</p>
 
 <h2 id="journal">The undo journal</h2>
-<p>Every moved item gets a line in <code>~/Library/Application Support/Macontrol/trash-journal.jsonl</code>, readable only by you: its batch, original path, place in the Trash, identity and size. History uses it to put a batch back, as long as the items are still in the Trash and their original place is free. Items keep their names in the Trash, so a crash in the middle of a batch leaves nothing hidden.</p>
+<p>Every removed item gets a line in <code>~/Library/Application Support/Macontrol/trash-journal.jsonl</code>, readable only by you: its batch, original path, place in the Trash, identity and size. History uses it to put a batch back, as long as the items are still in the Trash and their original place is free. Items keep their names in the Trash, so a crash in the middle of a batch leaves nothing hidden.</p>
 
 <h2 id="clean-rules">Clean and Uninstall are cautious</h2>
 <ul>
@@ -81,19 +86,22 @@
   <li>Uninstall asks the app to quit and never forces it.</li>
 </ul>
 
-<h2 id="no-admin">No admin powers, no network</h2>
-<p>0.1 has no privileged helper and never asks for your password. Root-owned items are marked “Needs admin”, with Reveal in Finder. macontrol has no networking code: it does not phone home, check for updates or send what it scans anywhere.</p>
+<h2 id="admin">Admin powers, fenced in</h2>
+<p>Root-owned items are removed only in Clean, Uninstall and Debloat, only after macOS's administrator dialog, and only by the helper inside the app. The helper acts only on app bundles in <code>/Applications</code>, items inside a few <code>/Library</code> folders, package receipts and root-owned items in your own Library, and it runs every check on this page again as root before it acts. The list it works from is bound to the dialog by its SHA-256, so a list changed afterwards is refused. <a href="admin.html">Admin removals</a> has the details. The Disk Map never uses it.</p>
+
+<h2 id="network">No network</h2>
+<p>macontrol has no networking code: it does not phone home, check for updates or send what it scans anywhere.</p>
 
 <h2 id="tests">How this is tested</h2>
 <ul>
-  <li><strong>One door.</strong> Only the Safety module can move files. A test fails if any other source file deletes, moves or renames files, runs a script or launches a process. The one exception is the uninstaller's call to <code>launchctl</code>, which stops an app's own background jobs.</li>
-  <li><strong>Attack suite.</strong> Tests swap folders for links in the middle of a batch, use hostile file names, locked files and paths deeper than <code>PATH_MAX</code>, and compare whole folder trees before, after and after Undo.</li>
+  <li><strong>One door.</strong> Only the Safety module can move or delete files. A test fails if any other source file deletes, moves or renames files, runs a script or launches a process. The exceptions are named in the test: <code>launchctl</code>, which stops an app's own background jobs, Xcode's own <code>simctl</code> for simulator runtimes, <code>tmutil</code> for restore points, and the one call that starts the administrator helper.</li>
+  <li><strong>Attack suite.</strong> Tests swap folders for links in the middle of a batch and of a permanent erase, use hostile file names, locked files and paths deeper than <code>PATH_MAX</code>, rewrite the helper's list after the password, replay old helper results, and compare whole folder trees before, after and after Undo.</li>
   <li><strong>Only in temporary folders.</strong> Tests build their files in temporary folders and never touch real data or the real Trash.</li>
 </ul>
 
-<h2 id="next">What changes later</h2>
-<p>Permanent deletion and admin removals are planned for 0.2, as an opt-in <strong>hardcore mode</strong> that is off every time the app starts and asks you to confirm the risk before it turns on. The design keeps some items going to the Trash even then, such as anything in iCloud Drive. Until that release, everything on this page describes the app you can download.</p>
-<nav class="pager" aria-label="Pages"><a href="using.html" rel="prev">Previous: Using macontrol</a><a href="faq.html" rel="next">Next: FAQ</a></nav>
+<h2 id="not-yet">What is not verified yet</h2>
+<p>The administrator helper has run only as a normal user, in tests. Its first real run as root, with an administrator password on a real Mac, is still to come (T-0078 on the <a href="../board/">project board</a>).</p>
+<nav class="pager" aria-label="Pages"><a href="system-apps.html" rel="prev">Previous: macOS's own apps</a><a href="faq.html" rel="next">Next: FAQ</a></nav>
   </main>
 </div>
 <footer>

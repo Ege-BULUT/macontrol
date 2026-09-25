@@ -41,6 +41,10 @@
       <li><a href="install.html">Install</a></li>
       <li><a href="full-disk-access.html">Full Disk Access</a></li>
       <li><a href="using.html">Using macontrol</a></li>
+      <li><a href="hardcore.html">Hardcore mode</a></li>
+      <li><a href="admin.html">Admin removals</a></li>
+      <li><a href="debloat.html">Debloat</a></li>
+      <li><a href="system-apps.html">macOS's own apps</a></li>
       <li><a href="safety.html">Safety model</a></li>
       <li><a href="faq.html" aria-current="page">FAQ</a></li>
       <li><a href="build.html">Build from source</a></li>
@@ -55,7 +59,7 @@
 <div class="acc" id="permanent">
 <h2>Does macontrol delete anything permanently?</h2>
 <div class="acc-body">
-<p>No. In 0.1 everything goes to the Trash, and macontrol never empties it. History can put a batch back while it is still in the Trash. Permanent deletion is planned for 0.2 as an opt-in hardcore mode.</p>
+<p>Only if you turn on <a href="hardcore.html">hardcore mode</a>. By default everything goes to the Trash, and macontrol never empties it; History can put a batch back while it is still in the Trash. Hardcore mode is off every time macontrol starts, shows a warning before it turns on, and even then iCloud Drive items and your notes, contacts, calendars, Safari data and iPhone backups go to the Trash.</p>
 </div>
 </div>
 <div class="acc" id="space">
@@ -79,7 +83,7 @@
 <div class="acc" id="notarized">
 <h2>Why is it not notarized?</h2>
 <div class="acc-body">
-<p>Notarization needs a paid Apple Developer Program membership, and macontrol does not have one. Releases are signed ad hoc, so macOS asks you to confirm the first launch. The <a href="install.html#first-launch">install guide</a> shows the steps.</p>
+<p>Notarization needs a paid Apple Developer Program membership, and macontrol does not have one. Releases are signed with macontrol's own certificate, which macOS does not know, so it asks you to confirm the first launch. The <a href="install.html#first-launch">install guide</a> shows the steps.</p>
 </div>
 </div>
 <div class="acc" id="damaged">
@@ -93,7 +97,7 @@
 <div class="acc" id="intel">
 <h2>Does it run on Intel Macs?</h2>
 <div class="acc-body">
-<p>Not yet. 0.1 is built for Apple Silicon only. Intel and universal builds are on the roadmap.</p>
+<p>Not yet. macontrol is built for Apple Silicon only. Intel and universal builds are on the roadmap.</p>
 </div>
 </div>
 <div class="acc" id="not-scanned">
@@ -103,15 +107,21 @@
 </div>
 </div>
 <div class="acc" id="fda-again">
-<h2>Why do I have to allow Full Disk Access again after updating?</h2>
+<h2>Do I have to allow Full Disk Access again after updating?</h2>
 <div class="acc-body">
-<p>macOS ties the permission to the app's signature. Ad hoc signatures change with every build, so each new version counts as a new app.</p>
+<p>macOS ties the permission to the app's signature. The 0.1 releases were signed ad hoc, a signature that changes with every build, so each one counted as a new app. From 0.2.0 on, every release is signed with the same certificate, so an update should keep the grant. Updating from 0.1.x asks one more time. That the grant survives has been checked against the signature macOS stores, not yet through a real update.</p>
 </div>
 </div>
 <div class="acc" id="apple-apps">
-<h2>Why can't it remove GarageBand, iMovie or Pages?</h2>
+<h2>Can it remove GarageBand, iMovie or Pages?</h2>
 <div class="acc-body">
-<p>Apple's App Store apps are usually owned by root, so removing them needs an administrator, and 0.1 has no admin powers. It marks them “Needs admin”, with Reveal in Finder. Apps that are part of macOS sit on the sealed system volume and cannot be removed while System Integrity Protection is on. Admin removals and a checklist for Apple's optional apps are planned for 0.2.</p>
+<p>Yes, from 0.2. Apple's App Store apps are usually owned by root, so macOS asks for your administrator password and a helper inside the app removes them; see <a href="admin.html">Admin removals</a>. <a href="debloat.html">Debloat</a> lists them with the content they install. Apps that are part of macOS, such as Chess, sit on the sealed system volume and cannot be removed while System Integrity Protection is on; see <a href="system-apps.html">macOS's own apps</a>.</p>
+</div>
+</div>
+<div class="acc" id="password">
+<h2>Why does it ask for my password?</h2>
+<div class="acc-body">
+<p>Only when a removal includes items owned by the system, marked <strong>Admin</strong>. The dialog is macOS's own, and macontrol never sees your password. It starts a helper inside the app that checks each item again as root and removes only those items. <a href="admin.html">What the helper can and can't touch</a>.</p>
 </div>
 </div>
 <div class="acc" id="skipped">
