@@ -142,13 +142,15 @@ public enum PrivilegedRouting {
     ) -> JournalEntry? {
         let trashedPath: String?
         switch (line.status, line.to, line.partial) {
+        // Partly erased: bytes are gone, so it is a permanent line; `to` is where the rest waits.
+        case ("deleted", _, _), ("failed", _, true?): trashedPath = nil
         case ("trashed", let to?, _), ("failed", let to?, _): trashedPath = to
-        case ("deleted", _, _), ("failed", nil, true?): trashedPath = nil
         default: return nil
         }
         return JournalEntry(
             batch: batch, date: Date(), originalPath: item.path, trashedPath: trashedPath, identity: item.identity,
-            allocated: item.allocated, restored: false, restorePoint: restorePoint, asAdministrator: true
+            allocated: item.allocated, restored: false, restorePoint: restorePoint, asAdministrator: true,
+            leftInTrash: line.partial == true ? line.to : nil
         )
     }
 

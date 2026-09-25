@@ -16,12 +16,15 @@ public struct JournalEntry: Codable, Sendable, Hashable {
     public var restorePoint: String?
     /// Moved by the administrator helper: no in-app Undo (DESIGN-debloat D12). Absent in older lines = false.
     public var asAdministrator: Bool
+    /// A permanent delete that removed only part of it: where the rest waits in the Trash, so History can say
+    /// "partly deleted" instead of "freed" (T-0073 review 1). Nil otherwise, and in older lines.
+    public var leftInTrash: String?
 
     public var isPermanent: Bool { trashedPath == nil }
 
     public init(
         batch: UUID, date: Date, originalPath: String, trashedPath: String?, identity: FileIdentity,
-        allocated: UInt64, restored: Bool, restorePoint: String? = nil, asAdministrator: Bool = false
+        allocated: UInt64, restored: Bool, restorePoint: String? = nil, asAdministrator: Bool = false, leftInTrash: String? = nil
     ) {
         self.batch = batch
         self.date = date
@@ -32,6 +35,7 @@ public struct JournalEntry: Codable, Sendable, Hashable {
         self.restored = restored
         self.restorePoint = restorePoint
         self.asAdministrator = asAdministrator
+        self.leftInTrash = leftInTrash
     }
 
     public init(from decoder: any Decoder) throws {
@@ -45,7 +49,8 @@ public struct JournalEntry: Codable, Sendable, Hashable {
             allocated: try line.decode(UInt64.self, forKey: .allocated),
             restored: try line.decode(Bool.self, forKey: .restored),
             restorePoint: try line.decodeIfPresent(String.self, forKey: .restorePoint),
-            asAdministrator: try line.decodeIfPresent(Bool.self, forKey: .asAdministrator) ?? false
+            asAdministrator: try line.decodeIfPresent(Bool.self, forKey: .asAdministrator) ?? false,
+            leftInTrash: try line.decodeIfPresent(String.self, forKey: .leftInTrash)
         )
     }
 }

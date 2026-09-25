@@ -275,7 +275,7 @@ struct TrashBatch {
         case .partly(let failures):
             // Bytes were removed, so History must show it; a half-deleted folder is not worth an Undo.
             gone[key] = .erased(destination)
-            record(original: path, trashedTo: nil, identity: identity, allocated: allocated)
+            record(original: path, trashedTo: nil, identity: identity, allocated: allocated, leftInTrash: destination)
             return .failed(shown, message: Self.partlyDeleted(failures, trashName: destination.lastPathComponent))
         }
     }
@@ -340,10 +340,12 @@ struct TrashBatch {
         return .failed(shown, message: "It changed as it moved, and what reached the Trash instead could not be put back. Undo it from History.")
     }
 
-    private mutating func record(original path: String, trashedTo destination: URL?, identity: FileIdentity, allocated: UInt64) {
+    private mutating func record(
+        original path: String, trashedTo destination: URL?, identity: FileIdentity, allocated: UInt64, leftInTrash: URL? = nil
+    ) {
         let entry = JournalEntry(
             batch: id, date: Date(), originalPath: path, trashedPath: destination?.path,
-            identity: identity, allocated: allocated, restored: false, restorePoint: restorePoint
+            identity: identity, allocated: allocated, restored: false, restorePoint: restorePoint, leftInTrash: leftInTrash?.path
         )
         do {
             try TrashJournal.append(entry, to: journal)

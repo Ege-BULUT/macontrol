@@ -393,6 +393,27 @@ extension PrivilegedResultLine {
         #expect(entry.asAdministrator && entry.trashedPath == trashed.path)
     }
 
+    /// An erase that removed part of the item: the journal line is permanent (bytes are gone) and says where the rest
+    /// waits in the Trash, so History does not report all of it as freed (T-0073 review 1).
+    @Test func aPartialEraseTellsHistoryWhereTheRestIs() throws {
+        let fx = try RootFixture()
+        try fx.file("root/Library/Caches/Vendor/a/file")
+        try fx.file("root/Library/Caches/Vendor/sub/file")
+        let item = try fx.item("root/Library/Caches/Vendor")
+        let trashed = fx.trash.appendingPathComponent("Vendor")
+        defer { withExtendedLifetime(fx) { _ = chmod(trashed.appendingPathComponent("sub").path, 0o755) } }
+
+        let lines = try fx.execute([item], op: .permanent, beforeRename: { [sub = fx.url("root/Library/Caches/Vendor/sub").path] _ in
+            _ = chmod(sub, 0o555)
+        })
+
+        let line = try #require(lines.first)
+        #expect(line.status == "failed" && line.partial == true && line.to == trashed.path, "\(line)")
+        let entry = try #require(PrivilegedRouting.journalEntry(line, item, batch: UUID(), restorePoint: nil))
+        #expect(entry.isPermanent && entry.leftInTrash == trashed.path)
+        #expect(fx.trashNames == ["Vendor"])
+    }
+
     /// D3: a file is one unlinkat in place, never a Trash move; D4: a personal database goes to the Trash even in
     /// permanent mode, and is not erased there.
     @Test func permanentDeletesAFileInPlaceAndKeepsPersonalDataInTheTrash() throws {

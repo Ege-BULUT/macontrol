@@ -194,7 +194,7 @@ public struct PrivilegedExecutor: Sendable {
             // Nothing was removed: it is whole in the Trash, where History has no Undo for what root moved (D12).
             return .failed(TrashBatch.notDeleted(failures, trashName: (to as NSString).lastPathComponent, asAdministrator: true), to: to)
         case .partly(let failures):
-            return .failed(TrashBatch.partlyDeleted(failures, trashName: (to as NSString).lastPathComponent), partial: true)
+            return .failed(TrashBatch.partlyDeleted(failures, trashName: (to as NSString).lastPathComponent), to: to, partial: true)
         }
     }
 

@@ -67,7 +67,7 @@ struct PrivilegedResultLine: Codable, Hashable {
     var index: Int?
     /// `trashed`, `deleted`, `refused` or `failed`.
     var status: String?
-    /// Where the item is in the Trash: a trashed item, or a failed one that stayed there.
+    /// Where the item is in the Trash: a trashed item, a failed one that stayed there, or the rest of a partial one.
     var to: String?
     var reason: String?
     /// The path a `protectedLocation` or `holdsLocked` reason names.

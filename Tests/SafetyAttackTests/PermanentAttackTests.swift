@@ -419,6 +419,8 @@ import Testing
         #expect(message.hasPrefix("Partly deleted. 500 items inside could not be removed; the rest is in the Trash as \"com.example.big\". Empty the Trash to finish. First: f"), "\(message)")
         #expect(message.hasSuffix(": Permission denied"), "\(message)")
         #expect(await box.service().history().map(\.isPermanent) == [true], "bytes were removed, so History shows it")
+        // ...and where the rest is, so it does not say "freed" for all of it (T-0073 review 1).
+        #expect(await box.service().history().map { $0.leftInTrash.map { ($0 as NSString).lastPathComponent } } == ["com.example.big"])
     }
 
     /// Every entry refuses to go (the folder turns read-only before the first, as App Management would): nothing was
