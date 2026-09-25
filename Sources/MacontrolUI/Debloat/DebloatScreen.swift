@@ -157,7 +157,7 @@ private struct AppBlock: View {
                 } else if let blocker = row.plan?.blocker {
                     Label(blocker, systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if isUnverified {
-                    Text("Its content isn't checked on a real install yet").font(.caption).foregroundStyle(.secondary)
+                    Text("Its content isn't checked on a real install yet, so none of it is ticked for you").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 8)
