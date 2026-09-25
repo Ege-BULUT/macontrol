@@ -13,13 +13,20 @@ public struct TrashItem: Sendable, Hashable {
     /// Remove this item only if nothing exists at this path when its turn comes. An app's leftovers name the
     /// app's bundle here, so no leftover is touched while the app is installed (DESIGN-debloat section 2.1).
     public var requiresGone: URL?
+    /// The app this item belongs to, if any: the administrator helper lets an Apple-named item in /Library go only
+    /// when its name starts with this identifier (T-0075).
+    public var bundleIdentifier: String?
 
-    public init(url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0, requiresGone: URL? = nil) {
+    public init(
+        url: URL, expectedIdentity: FileIdentity?, keep: [URL] = [], allocated: UInt64 = 0, requiresGone: URL? = nil,
+        bundleIdentifier: String? = nil
+    ) {
         self.url = url
         self.expectedIdentity = expectedIdentity
         self.keep = keep
         self.allocated = allocated
         self.requiresGone = requiresGone
+        self.bundleIdentifier = bundleIdentifier
     }
 }
 
@@ -66,10 +73,14 @@ public enum RestoreOutcome: Sendable, Hashable {
 public struct TrashReport: Sendable {
     public var batch: UUID
     public var outcomes: [TrashOutcome]
+    /// What the user should know about an item that went, shown with its outcome: a LaunchDaemon the administrator
+    /// helper removed without stopping, "Its background service may keep running until the next restart."
+    public var notes: [URL: String]
 
-    public init(batch: UUID, outcomes: [TrashOutcome]) {
+    public init(batch: UUID, outcomes: [TrashOutcome], notes: [URL: String] = [:]) {
         self.batch = batch
         self.outcomes = outcomes
+        self.notes = notes
     }
 }
 
@@ -92,64 +103,110 @@ public struct TrashBackend: Sendable {
     }
 }
 
-/// The only code in macontrol that moves user files (enforced by SafetyTests/SinkAuditTests).
-/// Nothing is ever deleted permanently: items go to the Trash, and every move is journaled for Undo.
+/// The only code in macontrol that moves or deletes user files (enforced by SafetyTests/SinkAuditTests).
+/// Items go to the Trash, where every move is journaled for Undo, or, in hardcore mode, are deleted for good
+/// (DESIGN-debloat section 2), journaled for History with no Undo.
 public actor TrashService {
     public let journalURL: URL
-    private let backend: TrashBackend
-    private let home: URL
-    // Trashing blocks on file I/O, so the actor runs on its own queue, not the cooperative pool.
+    let backend: TrashBackend
+    let home: URL
+    let engine: RemovalEngine
+    let route: Route
+    // Removing blocks on file I/O, so the actor runs on its own queue, not the cooperative pool.
     private let queue = DispatchSerialQueue(label: "macontrol.trash")
 
     public nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
+
+    /// Pass 2 of `remove`: `PrivilegedRouting.run`, or a test's stand-in.
+    typealias Route = @Sendable (
+        _ items: [TrashItem], _ mode: DeletionMode, _ launcher: PrivilegedLauncher, _ batch: UUID, _ journalURL: URL,
+        _ home: URL, _ restorePoint: String?
+    ) async -> PrivilegedRouting.Answer
 
     public init(
         journalURL: URL = TrashService.defaultJournalURL,
         backend: TrashBackend = .finder,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) {
+        self.init(journalURL: journalURL, backend: backend, home: home, engine: RemovalEngine()) {
+            await PrivilegedRouting.run($0, mode: $1, launcher: $2, batch: $3, journalURL: $4, home: $5, restorePoint: $6)
+        }
+    }
+
+    /// Tests: a remover with hooks, and a stand-in for the administrator helper.
+    init(journalURL: URL, backend: TrashBackend, home: URL, engine: RemovalEngine, route: @escaping Route) {
         self.journalURL = journalURL
         self.backend = backend
         self.home = home
+        self.engine = engine
+        self.route = route
     }
 
     public static var defaultJournalURL: URL {
         URL.applicationSupportDirectory.appendingPathComponent("Macontrol/trash-journal.jsonl")
     }
 
-    /// Checks and trashes each item on its own, continuing past refusals and failures.
-    /// Outcomes follow the order of `items`; an item pieced out by `keep` reports each piece.
+    /// Checks and trashes each item on its own, continuing past refusals and failures: `remove(items, mode: .trash)`
+    /// with no administrator. Outcomes follow the order of `items`; an item pieced out by `keep` reports each piece.
     public func moveToTrash(_ items: [TrashItem], cloudConfirmed: Bool = false) -> TrashReport {
-        let batch = UUID()
-        let journal: FileHandle
+        var run: TrashBatch
         do {
-            journal = try TrashJournal(url: journalURL).openForAppending()
+            run = try start(.trash, cloudConfirmed: cloudConfirmed, restorePoint: nil)
         } catch {
-            let message = "The undo journal could not be opened: \(error.localizedDescription)"
-            return TrashReport(batch: batch, outcomes: items.map { .failed($0.url, message: message) })
+            return Self.unjournaled(items, error)
         }
-        // Built after the journal's folder exists, so the policy protects it under its real path.
-        let policy = ProtectionPolicy(home: home, journal: journalURL)
-        var run = TrashBatch(id: batch, policy: policy, backend: backend, journal: journal, cloudConfirmed: cloudConfirmed)
-        return TrashReport(batch: batch, outcomes: run.process(items))
+        var passes = run.firstPass(items)
+        run.lastPass(items, &passes)
+        return TrashReport(batch: run.id, outcomes: passes.outcomes.flatMap { $0 })
     }
 
-    /// One batch in either mode, items in array order. `.needsAdministrator` items go to the helper in one request
-    /// when `administrator` is given (DESIGN-debloat section 3.6).
-    /// Stub (T-0072): `.trash` is `moveToTrash`; `.permanent` fails every item. permanent-engine builds the rest.
+    /// One batch in either mode, outcomes in the order of `items` (DESIGN-debloat sections 2.1 and 3.6), in three
+    /// passes: every item in-process, setting aside those refused with `.needsAdministrator` and deferring those whose
+    /// `requiresGone` names a set-aside one (unless their own checks need the administrator too: those are set aside
+    /// after it); then one helper request for the set-aside items when `administrator` is given (without it they stay
+    /// refused, as in v1); then the deferred items. So one call shows at most one dialog.
+    /// `restorePoint` is recorded on every journal line.
     public func remove(
         _ items: [TrashItem], mode: DeletionMode, cloudConfirmed: Bool = false,
         administrator: PrivilegedLauncher? = nil, restorePoint: String? = nil
     ) async -> TrashReport {
-        switch mode {
-        case .trash: moveToTrash(items, cloudConfirmed: cloudConfirmed)
-        case .permanent: TrashReport(batch: UUID(), outcomes: items.map { .failed($0.url, message: "Not built yet") })
+        var run: TrashBatch
+        do {
+            run = try start(mode, cloudConfirmed: cloudConfirmed, restorePoint: restorePoint)
+        } catch {
+            return Self.unjournaled(items, error)
         }
+        var passes = run.firstPass(items)
+        var notes: [URL: String] = [:]
+        if let administrator, !passes.setAside.isEmpty {
+            let routed = await route(passes.setAside.map { items[$0] }, mode, administrator, run.id, journalURL, home, restorePoint)
+            // An item the route did not answer keeps its refusal.
+            for (index, outcome) in zip(passes.setAside, routed.outcomes) { passes.outcomes[index] = [outcome] }
+            notes = routed.notes
+        }
+        run.lastPass(items, &passes)
+        return TrashReport(batch: run.id, outcomes: passes.outcomes.flatMap { $0 }, notes: notes)
+    }
+
+    private func start(_ mode: DeletionMode, cloudConfirmed: Bool, restorePoint: String?) throws -> TrashBatch {
+        let journal = try TrashJournal(url: journalURL).openForAppending()
+        // Built after the journal's folder exists, so the policy protects it under its real path.
+        let policy = ProtectionPolicy(home: home, journal: journalURL)
+        return TrashBatch(
+            id: UUID(), policy: policy, backend: backend, journal: journal, cloudConfirmed: cloudConfirmed,
+            mode: mode, restorePoint: restorePoint, engine: engine
+        )
+    }
+
+    private static func unjournaled(_ items: [TrashItem], _ error: any Error) -> TrashReport {
+        let message = "The undo journal could not be opened: \(error.localizedDescription)"
+        return TrashReport(batch: UUID(), outcomes: items.map { .failed($0.url, message: message) })
     }
 
     /// Journals what an administrator helper finished while the app was gone, once, at launch (section 3.8).
-    /// Stub (T-0072): does nothing. privileged-helper builds it.
-    public func recoverPrivilegedResults() {}
+    public func recoverPrivilegedResults() {
+        PrivilegedRouting.recover(journalURL: journalURL)
+    }
 
     /// Moves a batch back where it came from, newest first. An item is restored only if it is still
     /// in the Trash as the same object and nothing has taken its original path since. Permanent deletions and

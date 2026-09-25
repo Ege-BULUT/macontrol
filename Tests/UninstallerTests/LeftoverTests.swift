@@ -143,7 +143,8 @@ import Uninstaller
             "Application Support/com.example.Demo", "Caches/com.example.Demo", "LaunchAgents/com.vendor.updater.plist",
             "LaunchDaemons/com.example.Demo.helper.plist", "PrivilegedHelperTools/com.example.Demo.helper",
         ])
-        #expect(plan.leftovers.allSatisfy { $0.needsAdministrator && !$0.isPreselected })
+        // Preselection no longer depends on it (T-0075): the helper takes them, and the UI disables them without one.
+        #expect(plan.leftovers.allSatisfy { $0.needsAdministrator })
     }
 
     @Test func launchdJobsAreFoundByProgramLabelAndAssociation() async throws {

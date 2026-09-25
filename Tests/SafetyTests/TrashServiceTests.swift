@@ -206,7 +206,8 @@ import TestSupport
             TrashItem(url: upper, expectedIdentity: nil), TrashItem(url: other, expectedIdentity: nil),
         ])
 
-        let expected = [fixture.trash.path + "/Cache", fixture.trash.path + "/b.bin"]
+        // Each volume has its own Trash: the fixture's is a `Trash` folder on the image.
+        let expected = [volume.path + "/Trash/Cache", volume.path + "/Trash/b.bin"]
         #expect(report.outcomes.map { $0.trashedTo?.path } == expected, "\(report.outcomes)")
         #expect(!FileManager.default.fileExists(atPath: other.path))
     }

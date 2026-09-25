@@ -162,4 +162,40 @@ import TestSupport
         let absent = fixture.tmp.url.appendingPathComponent("absent/file.txt")
         #expect(ProtectedPaths.refusal(for: absent, home: fixture.home) == .missing)
     }
+    /// The live macOS configuration folders: root-owned and mostly not `restricted`, so before r2 a root caller passed
+    /// the policy there (r2: sec 3b). Checked on the folders and on a file inside; the policy only reads.
+    @Test(arguments: [
+        "/Library/Preferences/SystemConfiguration", "/Library/Preferences/OpenDirectory", "/Library/Application Support/Apple",
+        "/Library/Apple", "/Library/Developer/CommandLineTools",
+    ])
+    func macOSConfigurationFoldersAreNeverTouched(folder: String) {
+        for path in [folder, folder + "/preferences.plist"] {
+            #expect(ProtectedPaths.refusal(for: URL(fileURLWithPath: path)) == .protectedLocation(folder), "\(path)")
+        }
+    }
+
+    /// D4: which items a permanent delete sends to the Trash, and the reason the sheet shows.
+    @Test func trashOnlyItemsAndTheirReasons() throws {
+        let fixture = try TrashFixture()
+        let home = fixture.home
+        let cases: [(String, String?)] = [
+            ("Library/Group Containers/group.com.apple.notes", "holds your notes"),
+            ("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite", "holds your notes"),
+            ("Library/Containers/com.apple.Notes", "holds your notes"),
+            ("Library/Application Support/AddressBook/Sources", "holds your contacts"),
+            ("Library/Calendars/Calendar Cache", "holds your calendars"),
+            ("Library/Safari/History.db", "holds your Safari data"),
+            ("Library/Application Support/MobileSync", "holds iPhone and iPad backups"),
+            ("Library/Mobile Documents/com~apple~CloudDocs/a.txt", "stored in iCloud"),
+            ("Library/CloudStorage/Dropbox/a.txt", "stored in a cloud folder"),
+            ("Library/Group Containers/group.com.apple.notesX", nil),
+            ("Library/Caches/com.apple.Safari", nil),
+            ("Library/Application Support/AddressBookX", nil),
+        ]
+        for (relative, reason) in cases {
+            try fixture.tmp.file("home/" + relative + "/x")
+            #expect(ProtectedPaths.trashOnlyReason(for: home.appendingPathComponent(relative), home: home) == reason, "\(relative)")
+        }
+    }
 }
+

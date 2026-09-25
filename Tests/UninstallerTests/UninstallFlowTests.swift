@@ -20,42 +20,61 @@ import Testing
         return fx
     }
 
+    /// What a v1 user (no administrator helper) can choose: the preselected items that need no administrator.
+    private func userChosen(_ plan: UninstallPlan) -> [Leftover] {
+        plan.leftovers.filter { $0.isPreselected && !$0.needsAdministrator }
+    }
+
+    /// The one batch: the bundle, then each leftover with the bundle as `requiresGone` (DESIGN-debloat section 3.6),
+    /// every item naming the app it belongs to.
+    private func batch(_ plan: UninstallPlan, _ leftovers: [TrashItem]) -> Recorder.Event {
+        // Sent only for an app Apple's signature vouched for (the first-component rule).
+        let id = plan.app.kind == .appleAppStore ? plan.app.bundleIdentifier : nil
+        return .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity, bundleIdentifier: id)] + leftovers.map { item in
+            var item = item
+            item.requiresGone = plan.app.url
+            item.bundleIdentifier = id
+            return item
+        })
+    }
+
     /// F-0023: jobs are stopped by exact label before anything is trashed, and the app is checked again after the
     /// last bootout, because a KeepAlive job can relaunch it between the first quit and its own bootout.
     @Test func stopsJobsByExactLabelAfterQuittingAndBeforeTrashing() async throws {
         let fx = try demo()
         let plan = try await fx.plan("Demo")
-        let chosen = plan.leftovers.filter(\.isPreselected)
+        let chosen = userChosen(plan)
 
         _ = try await fx.uninstaller().uninstall(plan, leftovers: Set(chosen.map(\.url)))
 
-        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
         let leftovers = chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }
         #expect(fx.recorder.events == [
             .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"),
-            .trash([bundle]), .trash(leftovers),
+            batch(plan, leftovers),
         ])
     }
 
-    /// F-0030: Safety carries on past a refused item, so the bundle goes alone and first, and its path must be empty
-    /// after. When the app stays (Sparkle swapped in a new copy while it quit, App Management said no, or an updater
-    /// finished after the Trash step), its data stays too.
+    /// F-0030: Safety carries on past a refused item, so every leftover names its bundle as `requiresGone`. When the
+    /// app stays (Sparkle swapped in a new copy while it quit, App Management said no, or an updater put it back right
+    /// after the bundle's turn), its data stays too.
     @Test(arguments: [false, true]) func appThatStaysInstalledKeepsItsData(reinstalledAfterTrash: Bool) async throws {
         let fx = try demo()
         let plan = try await fx.plan("Demo")
-        let chosen = plan.leftovers.filter(\.isPreselected)
+        let chosen = userChosen(plan)
         if reinstalledAfterTrash {
-            let contents = plan.app.url.appendingPathComponent("Contents")
-            fx.recorder.afterTrashing = { try? FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true) }
+            let bundle = plan.app.url
+            fx.recorder.afterEachItem = { item in
+                if item.url == bundle { try? FileManager.default.createDirectory(at: bundle.appendingPathComponent("Contents"), withIntermediateDirectories: true) }
+            }
         } else {
             fx.recorder.refusedPath = plan.app.url.path
         }
 
         let report = try await fx.uninstaller().uninstall(plan, leftovers: Set(chosen.map(\.url)))
 
-        #expect(fx.recorder.events.last == .trash([TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)]))
+        #expect(fx.recorder.events.last == batch(plan, chosen.map { TrashItem(url: $0.url, expectedIdentity: $0.identity) }))
         #expect(chosen.allSatisfy { FileManager.default.fileExists(atPath: $0.url.path) })
-        let kept = report.outcomes.dropFirst().compactMap { if case .failed(let url, _) = $0 { url } else { nil } }
+        let kept = report.outcomes.dropFirst().compactMap { if case .failed(let url, let message) = $0, message == "Not removed, because Demo.app is still there." { url } else { nil } }
         #expect(kept == chosen.map(\.url), "\(report.outcomes)")
     }
 
@@ -74,8 +93,8 @@ import Testing
         // A rename keeps the inode, so the Trash copy shows the identity the plist had when it was trashed.
         guard case .trashed(_, let trashedPrefs)? = report.outcomes.last else { Issue.record("\(report.outcomes)"); return }
         let saved = try #require(FileIdentity(url: trashedPrefs))
-        #expect(fx.recorder.events.last == .trash([TrashItem(url: cache.url, expectedIdentity: cache.identity),
-                                                   TrashItem(url: prefs, expectedIdentity: saved)]))
+        #expect(fx.recorder.events.last == batch(plan, [TrashItem(url: cache.url, expectedIdentity: cache.identity),
+                                                        TrashItem(url: prefs, expectedIdentity: saved)]))
         #expect(saved != plan.leftover("Preferences/com.example.Demo.plist", in: fx.home.appendingPathComponent("Library"))?.identity)
     }
 
@@ -138,7 +157,7 @@ import Testing
         let plan = try await fx.plan("Demo")
 
         await #expect(throws: UninstallError.stillRunning("Demo")) {
-            try await fx.uninstaller().uninstall(plan, leftovers: Set(plan.leftovers.filter(\.isPreselected).map(\.url)))
+            try await fx.uninstaller().uninstall(plan, leftovers: Set(userChosen(plan).map(\.url)))
         }
         #expect(fx.recorder.events == [
             .quit("Demo"), .bootout("com.example.Demo.login"), .bootout("com.example.Demo.agent"), .quit("Demo"),
@@ -154,14 +173,13 @@ import Testing
 
         _ = try await fx.uninstaller().uninstall(plan, leftovers: [exactName.url, stranger])
 
-        let bundle = TrashItem(url: plan.app.url, expectedIdentity: plan.app.identity)
         let leftover = TrashItem(url: exactName.url, expectedIdentity: exactName.identity)
-        #expect(fx.recorder.events.suffix(2) == [.trash([bundle]), .trash([leftover])])
-        #expect(bundle.expectedIdentity != nil && leftover.expectedIdentity != nil)
+        #expect(fx.recorder.events.last == batch(plan, [leftover]))
+        #expect(plan.app.identity != nil && leftover.expectedIdentity != nil)
     }
 
-    /// T-0072: the mode reaches both batches, and the leftovers follow a bundle that came back `.deleted`.
-    @Test func permanentModeReachesBothBatchesAndLeftoversFollowADeletedBundle() async throws {
+    /// T-0072: the mode reaches the batch, and the leftovers follow a bundle that came back `.deleted`.
+    @Test func permanentModeReachesTheBatchAndLeftoversFollowADeletedBundle() async throws {
         let fx = try demo()
         let plan = try await fx.plan("Demo")
         let exactName = try #require(plan.leftovers.first { $0.evidence == .exactName })
@@ -169,7 +187,7 @@ import Testing
         let report = try await fx.uninstaller().uninstall(plan, leftovers: [exactName.url], mode: .permanent)
 
         #expect(report.outcomes == [.deleted(original: plan.app.url), .deleted(original: exactName.url)])
-        #expect(fx.recorder.modes == [.permanent, .permanent])
+        #expect(fx.recorder.modes == [.permanent])
         #expect(!FileManager.default.fileExists(atPath: exactName.url.path))
     }
 
@@ -180,7 +198,7 @@ import Testing
         let plan = try await fx.plan("Demo")
 
         await #expect(throws: UninstallError.stillRunning("Demo")) {
-            try await fx.uninstaller().uninstall(plan, leftovers: Set(plan.leftovers.filter(\.isPreselected).map(\.url)))
+            try await fx.uninstaller().uninstall(plan, leftovers: Set(userChosen(plan).map(\.url)))
         }
         #expect(fx.recorder.events == [.quit("Demo")])
     }
@@ -191,7 +209,7 @@ import Testing
         let plan = try await fx.plan("Demo")
 
         await #expect(throws: UninstallError.bootoutFailed(label: "com.example.Demo.login", status: 5)) {
-            try await fx.uninstaller().uninstall(plan, leftovers: Set(plan.leftovers.filter(\.isPreselected).map(\.url)))
+            try await fx.uninstaller().uninstall(plan, leftovers: Set(userChosen(plan).map(\.url)))
         }
         #expect(fx.recorder.events == [.quit("Demo"), .bootout("com.example.Demo.login")])
     }
@@ -254,7 +272,7 @@ import Testing
     @Test func itemWithoutARecordedIdentityCountsAsChanged() async throws {
         let fx = try demo()
         var plan = try await fx.plan("Demo")
-        let index = try #require(plan.leftovers.firstIndex { $0.isPreselected })
+        let index = try #require(plan.leftovers.firstIndex { $0.isPreselected && !$0.needsAdministrator })
         plan.leftovers[index].identity = nil
         let url = plan.leftovers[index].url
 

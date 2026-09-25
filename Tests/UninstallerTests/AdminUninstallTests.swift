@@ -1,0 +1,263 @@
+import Darwin
+import Foundation
+import MacontrolCore
+@testable import Safety
+import Testing
+@testable import Uninstaller
+
+/// DESIGN-debloat section 3.6 with the administrator helper: several apps in one Safety batch, root-owned bundles and
+/// leftovers, receipts, and LaunchDaemons left to the helper. The launcher is never started here (the actions are
+/// injected); what matters is what the Uninstaller sends.
+@Suite struct AdminUninstallTests {
+    /// Recorded if anything ever starts it: the Uninstaller only hands it to Safety through the live actions.
+    static let launcher = PrivilegedLauncher(helperURL: URL(fileURLWithPath: "/nonexistent/macontrol-priv")) { _, _, _, _ in
+        Issue.record("the launcher was started")
+    }
+
+    static func uninstaller(_ fx: Fixture, administrator: PrivilegedLauncher? = launcher) -> Uninstaller {
+        Uninstaller(
+            home: fx.home, systemRoot: fx.root,
+            trash: TrashService(journalURL: fx.tmp.url.appendingPathComponent("journal.jsonl")),
+            actions: fx.recorder.actions, administrator: administrator
+        )
+    }
+
+    static func plan(_ fx: Fixture, _ name: String, administrator: PrivilegedLauncher? = launcher) async throws -> UninstallPlan {
+        let uninstaller = uninstaller(fx, administrator: administrator)
+        let app = try #require(try await uninstaller.installedApps().first { $0.name == name })
+        return try await uninstaller.plan(for: app)
+    }
+
+    /// Three apps, each with a user leftover and one in /Library.
+    static func threeApps() throws -> Fixture {
+        let fx = try Fixture()
+        for name in ["Alpha", "Beta", "Gamma"] {
+            try fx.app(name, id: "com.example.\(name)")
+            try fx.file("home/Library/Caches/com.example.\(name)/cache.db")
+            try fx.file("root/Library/Application Support/com.example.\(name)/state")
+        }
+        return fx
+    }
+
+    static func items(_ event: Recorder.Event?) -> [TrashItem] {
+        if case .trash(let items)? = event { items } else { [] }
+    }
+
+    /// One user action, one `remove` call, so at most one administrator dialog: each bundle, then its leftovers,
+    /// every leftover with its own bundle as `requiresGone`.
+    @Test func severalAppsGoInOneRemoveCall() async throws {
+        let fx = try Self.threeApps()
+        var jobs: [UninstallJob] = []
+        for name in ["Alpha", "Beta", "Gamma"] {
+            let plan = try await Self.plan(fx, name)
+            jobs.append(UninstallJob(plan: plan, leftovers: Set(plan.leftovers.map(\.url))))
+        }
+
+        let result = await Self.uninstaller(fx).uninstall(jobs, mode: .trash)
+
+        #expect(result.skipped.isEmpty)
+        let batches = fx.recorder.events.filter { if case .trash = $0 { true } else { false } }
+        #expect(batches.count == 1)
+        let sent = Self.items(batches.first)
+        let expected = jobs.flatMap { job in
+            [job.plan.app.url] + job.plan.leftovers.filter { job.leftovers.contains($0.url) }.map(\.url)
+        }
+        #expect(sent.map(\.url) == expected)
+        for job in jobs {
+            let leftovers = sent.filter { job.leftovers.contains($0.url) }
+            #expect(leftovers.count == 2 && leftovers.allSatisfy { $0.requiresGone == job.plan.app.url })
+            #expect(sent.first { $0.url == job.plan.app.url }?.requiresGone == nil)
+        }
+        #expect(result.report.outcomes.count == expected.count)
+    }
+
+    /// An app that does not quit, or whose job cannot be stopped, is skipped with its reason; the others still go.
+    @Test func anAppThatFailsIsSkippedAndTheOthersGoOn() async throws {
+        let fx = try Self.threeApps()
+        try fx.launchdJob("home/Library/LaunchAgents/com.example.Gamma.agent.plist", label: "com.example.Gamma.agent",
+                          program: fx.root.appendingPathComponent("Applications/Gamma.app/Contents/MacOS/agent").path)
+        let plans = [try await Self.plan(fx, "Alpha"), try await Self.plan(fx, "Beta"), try await Self.plan(fx, "Gamma")]
+        fx.recorder.quitResults = [true, false]
+        fx.recorder.failingLabel = "com.example.Gamma.agent"
+        let jobs = plans.map { UninstallJob(plan: $0, leftovers: Set($0.leftovers.filter(\.isPreselected).map(\.url))) }
+
+        let result = await Self.uninstaller(fx).uninstall(jobs)
+
+        #expect(result.skipped == [
+            plans[1].app.url: .stillRunning("Beta"),
+            plans[2].app.url: .bootoutFailed(label: "com.example.Gamma.agent", status: 5),
+        ])
+        let sent = Self.items(fx.recorder.events.last)
+        #expect(sent.map(\.url) == [plans[0].app.url] + plans[0].leftovers.filter(\.isPreselected).map(\.url))
+        #expect(FileManager.default.fileExists(atPath: plans[1].app.url.path) && FileManager.default.fileExists(atPath: plans[2].app.url.path))
+    }
+
+    /// A bundle this user cannot move (root-owned, like Apple's App Store apps; a 0555 bundle stands in) is a blocker
+    /// without the helper and goes to Safety with it, together with its /Library leftovers.
+    @Test func aRootOwnedBundleGoesThroughTheHelper() async throws {
+        let fx = try Fixture()
+        let bundle = try fx.app("Suite", id: "com.example.Suite")
+        let leftover = try fx.file("root/Library/Application Support/com.example.Suite/content")
+        #expect(chmod(bundle.path, 0o555) == 0)
+
+        let v1 = try await Self.plan(fx, "Suite", administrator: nil)
+        #expect(v1.blocker == "Owned by the system, so removing it needs an administrator. Reveal it in Finder and drag it to the Trash.")
+        await #expect(throws: UninstallError.blocked(try #require(v1.blocker))) {
+            try await Self.uninstaller(fx, administrator: nil).uninstall(v1, leftovers: [])
+        }
+
+        let plan = try await Self.plan(fx, "Suite")
+        #expect(plan.blocker == nil)
+        let chosen = try #require(plan.leftovers.first { $0.url == leftover.deletingLastPathComponent() })
+        // A third-party app: the user ticks its admin leftovers (T-0075 review 2).
+        #expect(chosen.needsAdministrator && !chosen.isPreselected && chosen.note == Uninstaller.unvouchedNote("Suite"))
+        _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: [chosen.url])
+
+        let sent = Self.items(fx.recorder.events.last)
+        #expect(sent.map(\.url) == [plan.app.url, chosen.url])
+        #expect(sent.last?.requiresGone == plan.app.url)
+        // A third-party app's identifier comes from its own Info.plist, so it is never sent.
+        #expect(sent.allSatisfy { $0.bundleIdentifier == nil })
+    }
+
+    /// Package receipts (`pkgutil --forget`'s two files) are a removable area with the helper; anything deeper is not.
+    @Test func receiptsAreAcceptedAndNothingDeeper() async throws {
+        let fx = try Fixture()
+        try fx.app("Tool", id: "com.example.Tool")
+        let receipt = try fx.file("root/private/var/db/receipts/com.example.Tool.plist")
+        let deeper = try fx.file("root/private/var/db/receipts/sub/com.example.Tool.plist")
+        var plan = try await Self.plan(fx, "Tool")
+        plan.leftovers = [receipt, deeper].map {
+            Leftover(url: $0, identity: FileIdentity(url: $0), evidence: .appleProfile, measurement: plan.appMeasurement,
+                     needsAdministrator: true, note: nil)
+        }
+
+        await #expect(throws: UninstallError.refused(deeper, .protectedLocation("Outside the Library folders"))) {
+            try await Self.uninstaller(fx).uninstall(plan, leftovers: [receipt, deeper])
+        }
+        _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: [receipt])
+        #expect(Self.items(fx.recorder.events.last).map(\.url) == [plan.app.url, receipt])
+    }
+
+    /// A LaunchDaemon runs in the system domain: the helper boots it out after launchd confirms the plist, so the
+    /// Uninstaller never runs `bootout gui/<uid>/<label>` for it. A /Library/LaunchAgents job is still booted out as
+    /// the user first (v1), then its root-owned file goes to the helper.
+    @Test func launchDaemonsAreLeftToTheHelper() async throws {
+        let fx = try Fixture()
+        let app = try fx.app("Demo", id: "com.example.Demo")
+        try fx.launchdJob("root/Library/LaunchDaemons/com.example.Demo.helper.plist", label: "com.example.Demo.helper",
+                          program: app.appendingPathComponent("Contents/MacOS/helper").path)
+        try fx.launchdJob("root/Library/LaunchAgents/com.example.Demo.agent.plist", label: "com.example.Demo.agent",
+                          program: app.appendingPathComponent("Contents/MacOS/agent").path)
+        let plan = try await Self.plan(fx, "Demo")
+        #expect(plan.leftovers.count == 2)
+
+        _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: Set(plan.leftovers.map(\.url)))
+
+        #expect(fx.recorder.events.dropLast() == [.quit("Demo"), .bootout("com.example.Demo.agent"), .quit("Demo")])
+        #expect(Self.items(fx.recorder.events.last).map(\.url) == [plan.app.url] + plan.leftovers.map(\.url))
+    }
+
+    /// The restore point made before the uninstall reaches the one Safety batch, for its journal lines (section 2.6).
+    @Test func theRestorePointReachesTheBatch() async throws {
+        let fx = try Fixture()
+        try fx.app("Demo", id: "com.example.Demo")
+        let plan = try await Self.plan(fx, "Demo")
+        let points = Points()
+        let actions = UninstallActions(quit: { _ in true }, bootout: { _ in }, remove: { items, _, point in
+            points.append(point)
+            return TrashReport(batch: UUID(), outcomes: items.map { .refused($0.url, .notImplemented) })
+        })
+        let uninstaller = Uninstaller(home: fx.home, systemRoot: fx.root, trash: TrashService(journalURL: fx.tmp.url.appendingPathComponent("j.jsonl")),
+                                      actions: actions, administrator: Self.launcher)
+
+        _ = try await uninstaller.uninstall(plan, leftovers: [], mode: .permanent, restorePoint: "com.apple.TimeMachine.2026-09-24-101500.local")
+        _ = await uninstaller.uninstall([UninstallJob(plan: plan, leftovers: [])])
+
+        #expect(points.all == ["com.apple.TimeMachine.2026-09-24-101500.local", nil])
+    }
+
+    /// sec 3c (T-0075 review 1): the first-component rule opens only for an identifier Apple's signature vouched for.
+    /// A bundle that merely claims `com.apple.loginwindow` in its Info.plist gets macOS's own preferences as admin
+    /// leftovers (not preselected, review 2), and if the user ticks them they go without the identifier, so the root
+    /// allowlist refuses them before any dialog. The same plan as an Apple App Store app sends it.
+    @Test(arguments: [
+        ("com.apple.loginwindow", ["com.apple.loginwindow.plist"]),
+        ("com.apple.networkextension", ["com.apple.networkextension.control.plist", "com.apple.networkextension.necp.plist"]),
+    ])
+    func aClaimedAppleIdentifierIsNotSent(id: String, files: [String]) async throws {
+        for kind in [AppKind.thirdParty, .appleAppStore] {
+            let fx = try Fixture()
+            try fx.app("Junk", id: id)
+            for name in files { try fx.file("root/Library/Preferences/\(name)") }
+            let targets = files.map { fx.root.appendingPathComponent("Library/Preferences/\($0)") }
+            var plan = try await Self.plan(fx, "Junk")
+            #expect(plan.app.kind == .thirdParty)
+            #expect(targets.allSatisfy { target in plan.leftovers.contains { $0.url == target && !$0.isPreselected && $0.needsAdministrator } })
+            plan.app.kind = kind
+
+            _ = try await Self.uninstaller(fx).uninstall(plan, leftovers: Set(targets))
+
+            let sent = Self.items(fx.recorder.events.last)
+            #expect(sent.map(\.url) == [plan.app.url] + targets)
+            let expected = kind == .appleAppStore ? id : nil
+            #expect(sent.allSatisfy { $0.bundleIdentifier == expected }, "\(kind)")
+            // The root allowlist, on the canonical spelling (the recorder has moved the files by now).
+            let root = try ProtectedPaths.canonicalPath(of: fx.root)
+            let home = try ProtectedPaths.canonicalPath(of: fx.home)
+            for (item, name) in zip(sent.dropFirst(), files) {
+                let refusal = PrivilegedScope.refusal(
+                    canonical: root + "/Library/Preferences/" + name, home: home, bundleIdentifier: item.bundleIdentifier, systemRoot: root
+                )
+                #expect((refusal == nil) == (kind == .appleAppStore), "\(kind) \(name)")
+            }
+        }
+    }
+
+    /// Review 2 item 2 (Risk 8): a third-party Info.plist that claims `org.cups.printers` gets macOS's printer list as an
+    /// admin leftover. It is not preselected, with a note, because nothing vouches for the claim; only an app Apple's
+    /// signature vouched for keeps it ticked. Ticked anyway, the root allowlist refuses it, identifier or not.
+    @Test func aClaimedSystemNameIsNeitherPreselectedNorAllowed() async throws {
+        let fx = try Fixture()
+        try fx.app("Printers", id: "org.cups.printers")
+        let printers = try fx.file("root/Library/Preferences/org.cups.printers.plist")
+        let uninstaller = Self.uninstaller(fx)
+        var app = try #require(try await uninstaller.installedApps().first { $0.name == "Printers" })
+        #expect(app.kind == .thirdParty)
+
+        let plan = try await uninstaller.plan(for: app)
+        let listed = try #require(plan.leftovers.first { $0.url == printers })
+        #expect(listed.evidence == .bundleIdentifier && listed.needsAdministrator)
+        #expect(!listed.isPreselected && listed.note == Uninstaller.unvouchedNote("Printers"))
+        app.kind = .appleAppStore
+        #expect(try await uninstaller.plan(for: app).leftovers.first { $0.url == printers }?.isPreselected == true)
+
+        let root = try ProtectedPaths.canonicalPath(of: fx.root)
+        let home = try ProtectedPaths.canonicalPath(of: fx.home)
+        for id in [nil, "org.cups.printers"] {
+            let refusal = PrivilegedScope.refusal(canonical: root + "/Library/Preferences/org.cups.printers.plist", home: home, bundleIdentifier: id, systemRoot: root)
+            #expect(refusal != nil, "\(id ?? "-")")
+        }
+    }
+
+    /// Without the helper, v1 unchanged: a chosen admin leftover stops everything before any step.
+    @Test func withoutTheHelperAdminLeftoversStillStop() async throws {
+        let fx = try Fixture()
+        try fx.app("Demo", id: "com.example.Demo")
+        let state = try fx.file("root/Library/Application Support/com.example.Demo/state").deletingLastPathComponent()
+        let plan = try await Self.plan(fx, "Demo", administrator: nil)
+
+        await #expect(throws: UninstallError.needsAdministrator(state)) {
+            try await Self.uninstaller(fx, administrator: nil).uninstall(plan, leftovers: [state])
+        }
+        #expect(fx.recorder.events.isEmpty)
+        #expect(!Self.uninstaller(fx, administrator: nil).canUseAdministrator && Self.uninstaller(fx).canUseAdministrator)
+    }
+}
+
+private final class Points: @unchecked Sendable {
+    private let lock = NSLock()
+    private var points: [String?] = []
+    var all: [String?] { lock.withLock { points } }
+    func append(_ point: String?) { lock.withLock { points.append(point) } }
+}

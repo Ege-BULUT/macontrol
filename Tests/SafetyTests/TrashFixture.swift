@@ -1,5 +1,6 @@
+import Darwin
 import Foundation
-import Safety
+@testable import Safety
 import TestSupport
 
 /// A home, a Trash and a journal inside one temporary folder. The service's backend refuses to
@@ -47,11 +48,32 @@ final class TrashFixture: @unchecked Sendable {
         TrashService(journalURL: journal, backend: backend, home: home ?? self.home)
     }
 
-    /// Like Finder's Trash: the item keeps its name, with a suffix only when the name is taken.
+    /// A service whose remover calls `hook` before each item and entry, and stops the test process before it could
+    /// touch anything outside this fixture. `route` stands in for the administrator helper.
+    func guardedService(
+        hook: (@Sendable (_ item: String, _ relative: String) -> Void)? = nil,
+        route: TrashService.Route? = nil
+    ) -> TrashService {
+        let root = tmp.url.path + "/"
+        let engine = RemovalEngine { item, relative in
+            precondition(item.hasPrefix(root), "a permanent delete outside the fixture: \(item)")
+            hook?(item, relative)
+        }
+        let unrouted: TrashService.Route = { items, _, _, _, _, _, _ in (items.map { .refused($0.url, .needsAdministrator) }, [:]) }
+        return TrashService(journalURL: journal, backend: backend, home: home, engine: engine, route: route ?? unrouted)
+    }
+
+    /// Like Finder's Trash: the item keeps its name, with a suffix only when the name is taken, and an item on a disk
+    /// image mounted in the fixture goes to a `Trash` folder on that image, as each volume has its own Trash.
     private var backend: TrashBackend {
         TrashBackend { [self] url in
             lock.withLock { moved.append(url) }
             guard url.path.hasPrefix(tmp.url.path + "/") else { throw CocoaError(.fileWriteNoPermission) }
+            var trash = trash
+            if let volume = Self.mountPoint(of: url.deletingLastPathComponent()), volume.hasPrefix(tmp.url.path + "/") {
+                trash = URL(fileURLWithPath: volume).appendingPathComponent("Trash")
+                try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
+            }
             var destination = trash.appendingPathComponent(url.lastPathComponent)
             var copy = 2
             while FileManager.default.fileExists(atPath: destination.path) {
@@ -61,6 +83,12 @@ final class TrashFixture: @unchecked Sendable {
             try FileManager.default.moveItem(at: url, to: destination)
             return destination
         }
+    }
+
+    private static func mountPoint(of folder: URL) -> String? {
+        var volume = statfs()
+        guard statfs(folder.path, &volume) == 0 else { return nil }
+        return withUnsafeBytes(of: volume.f_mntonname) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
     }
 }
 

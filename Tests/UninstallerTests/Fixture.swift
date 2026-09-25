@@ -107,6 +107,8 @@ final class Recorder: @unchecked Sendable {
     var refusedPath: String?
     /// Runs after each Trash batch, as an updater that finishes late would.
     var afterTrashing: (@Sendable () -> Void)?
+    /// Runs after each item of a batch is handled, as an updater that puts the app back mid-batch would.
+    var afterEachItem: (@Sendable (TrashItem) -> Void)?
 
     init(fixture: URL, trash: URL) {
         self.fixture = fixture
@@ -139,7 +141,11 @@ final class Recorder: @unchecked Sendable {
                 self.record(.trash(items))
                 self.lock.withLock { self.recordedModes.append(mode) }
                 let refused = self.lock.withLock { self.refusedPath }
-                let outcomes = items.map { $0.url.path == refused ? .refused($0.url, .identityChanged) : self.moveIntoTrash($0.url, mode) }
+                let outcomes = items.map { item in
+                    let outcome = item.url.path == refused ? .refused(item.url, .identityChanged) : self.moveIntoTrash(item, mode)
+                    self.lock.withLock { self.afterEachItem }?(item)
+                    return outcome
+                }
                 self.lock.withLock { self.afterTrashing }?()
                 return TrashReport(batch: UUID(), outcomes: outcomes)
             }
@@ -147,7 +153,12 @@ final class Recorder: @unchecked Sendable {
     }
 
     /// Permanent mode moves too, as the real engine's first step does (DESIGN-debloat D3), and reports `.deleted`.
-    private func moveIntoTrash(_ url: URL, _ mode: DeletionMode) -> TrashOutcome {
+    /// An item whose `requiresGone` path still exists stays, as Safety's check leaves it (section 2.1).
+    private func moveIntoTrash(_ item: TrashItem, _ mode: DeletionMode) -> TrashOutcome {
+        let url = item.url
+        if let gone = item.requiresGone, (try? FileManager.default.attributesOfItem(atPath: gone.path)) != nil {
+            return .failed(url, message: "Not removed, because \(gone.lastPathComponent) is still there.")
+        }
         guard url.path.hasPrefix(fixture.path + "/"), !url.path.split(separator: "/").contains("..") else {
             return .refused(url, .protectedLocation("Outside the fixture"))
         }

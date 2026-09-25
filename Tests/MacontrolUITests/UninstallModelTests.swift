@@ -26,7 +26,8 @@ import Uninstaller
     @Test func onlyPreselectedLeftoversStartChosen() throws {
         let model = UninstallModel.demo()
         let leftovers = try #require(model.plan?.leftovers)
-        #expect(model.leftoverSelection == Set(leftovers.filter(\.isPreselected).map(\.url)))
+        // Admin items are preselected in the plan (T-0075); without a launcher the model never chooses them.
+        #expect(model.leftoverSelection == Set(leftovers.filter { $0.isPreselected && !$0.needsAdministrator }.map(\.url)))
         let held = leftovers.filter { $0.evidence == .exactName || $0.note != nil || $0.needsAdministrator }
         #expect(held.count == 3)
         #expect(held.allSatisfy { !model.isChosen($0) })
@@ -142,7 +143,9 @@ import Uninstaller
 
         let report = try #require(model.confirmation?.report)
         #expect(report.outcomes.map(\.url) == rows.map(\.url))
-        #expect(recorder.batches.withLock { $0 }.map { $0.map(\.url) } == [[plan.app.url]])
+        // One batch (T-0075): the bundle, then the leftovers, each removable only once the bundle is gone.
+        #expect(recorder.batches.withLock { $0 }.map { $0.map(\.url) } == [rows.map(\.url)])
+        #expect(recorder.batches.withLock { $0 }.first?.dropFirst().allSatisfy { $0.requiresGone == plan.app.url } == true)
         #expect(model.apps.map(\.url) == [plan.app.url])
     }
 
@@ -169,7 +172,7 @@ import Uninstaller
         model.confirmation = nil
         model.beginUninstall()
         await model.confirmUninstall()
-        #expect(recorder.batches.withLock { $0 }.first?.map(\.expectedIdentity) == [fresh.app.identity])
+        #expect(recorder.batches.withLock { $0 }.first?.first?.expectedIdentity == fresh.app.identity)
     }
 
     /// Scan Again, and every new selection, reads the app's leftovers from disk instead of reusing a plan.
@@ -213,7 +216,7 @@ import Uninstaller
         await model.loadPlan()
         #expect(model.plan?.app.id == editor.app.id)
         #expect(!model.isChosen(kept))
-        #expect(model.leftoverSelection == Set(editor.leftovers.filter(\.isPreselected).map(\.url)).subtracting([kept.url]))
+        #expect(model.leftoverSelection == Set(editor.leftovers.filter { $0.isPreselected && !$0.needsAdministrator }.map(\.url)).subtracting([kept.url]))
     }
 
     /// The running warning is read when the sheet opens. Finder stands in for an app opened after it was selected;

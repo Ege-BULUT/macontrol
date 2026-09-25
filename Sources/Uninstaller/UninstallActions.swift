@@ -9,17 +9,27 @@ public struct UninstallActions: Sendable {
     public var quit: @Sendable (InstalledApp) async -> Bool
     /// Stops one user launchd job by its exact label; throws when it may still be running.
     public var bootout: @Sendable (_ label: String) async throws -> Void
-    /// One Safety batch in the given mode (`TrashService.remove`).
-    public var remove: @Sendable ([TrashItem], DeletionMode) async -> TrashReport
+    /// One Safety batch in the given mode (`TrashService.remove`), with the restore point made before it, if any: its
+    /// name goes on every journal line of the batch (DESIGN-debloat section 2.6).
+    public var remove: @Sendable (_ items: [TrashItem], _ mode: DeletionMode, _ restorePoint: String?) async -> TrashReport
 
+    public init(
+        quit: @escaping @Sendable (InstalledApp) async -> Bool,
+        bootout: @escaping @Sendable (_ label: String) async throws -> Void,
+        remove: @escaping @Sendable (_ items: [TrashItem], _ mode: DeletionMode, _ restorePoint: String?) async -> TrashReport
+    ) {
+        self.quit = quit
+        self.bootout = bootout
+        self.remove = remove
+    }
+
+    /// For stand-ins that do not record the restore point.
     public init(
         quit: @escaping @Sendable (InstalledApp) async -> Bool,
         bootout: @escaping @Sendable (_ label: String) async throws -> Void,
         remove: @escaping @Sendable ([TrashItem], DeletionMode) async -> TrashReport
     ) {
-        self.quit = quit
-        self.bootout = bootout
-        self.remove = remove
+        self.init(quit: quit, bootout: bootout, remove: { items, mode, _ in await remove(items, mode) })
     }
 
     public static func live(
@@ -28,7 +38,7 @@ public struct UninstallActions: Sendable {
         UninstallActions(
             quit: { await RunningApps.quit($0) },
             bootout: { try await Launchd.bootout(label: $0, runner: launchctl) },
-            remove: { await trash.remove($0, mode: $1, administrator: administrator) }
+            remove: { await trash.remove($0, mode: $1, administrator: administrator, restorePoint: $2) }
         )
     }
 }
