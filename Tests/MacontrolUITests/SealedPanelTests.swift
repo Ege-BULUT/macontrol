@@ -143,8 +143,8 @@ import Uninstaller
         try Self.write(SealedGuideSheet(apps: [Self.chess], integrity: Self.sipOn, home: Self.home, acknowledged: true), "sealed-guide-steps-all", size: CGSize(width: 640, height: 2000))
     }
 
-    /// Like `Snapshot.write`, but in a borderless window: AppKit moves a titled window from -20000 back onto the
-    /// screen when it is ordered in, a borderless one stays off screen. Keeps the PNGs when MACONTROL_SNAPSHOT_DIR is set.
+    /// Like `Snapshot.write`, but in a borderless window, so a sheet has no title bar over its header. Keeps the PNGs
+    /// when MACONTROL_SNAPSHOT_DIR is set.
     static func write(_ view: some View, _ name: String, size: CGSize) throws {
         let folder = ProcessInfo.processInfo.environment["MACONTROL_SNAPSHOT_DIR"].map(URL.init(fileURLWithPath:))
         for dark in [false, true] {
@@ -160,23 +160,15 @@ import Uninstaller
     }
 }
 
-/// AppKit moves a titled window that is ordered in off screen back onto the screen; this one stays where it is put.
-private final class OffscreenWindow: NSWindow {
-    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
-}
-
 /// A view in an off-screen window, read and driven through its accessibility tree.
 @MainActor
 private final class Host {
     let window: NSWindow
 
     init(_ view: some View, size: CGSize) {
-        SnapshotRenderer.runHeadless()
         Self.accessibilityClient(true)
-        window = OffscreenWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        window = SnapshotRenderer.offscreenWindow(size: size)
         window.contentView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         #expect(window.frame.minX < -10_000, "the test window is on the screen")
         Self.settle()
     }
