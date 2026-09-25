@@ -1,6 +1,7 @@
 #!/bin/bash
-# Checks scripts/make-signing-cert.sh and the release workflow's signature check. Opens no dialog
-# and never touches a real keychain: `security` and `codesign` are fakes on PATH, in a scratch HOME.
+# Checks scripts/make-signing-cert.sh, signing-identity.sh and the release workflow (certificate pin,
+# zip, release notes). Opens no dialog and never touches a real keychain: `security` and `codesign`
+# are fakes on PATH, in a scratch HOME.
 #
 #   scripts/test-signing.sh
 set -euo pipefail
@@ -83,6 +84,15 @@ REQ="$(sed -n "s/^ *RELEASE_REQUIREMENT: '\(.*\)'$/\1/p" "$YML")"
 [ -n "$REQ" ] || fail "no RELEASE_REQUIREMENT in $YML"
 grep -qF -- '--test-requirement="=$RELEASE_REQUIREMENT"' "$YML" || fail "$YML does not check RELEASE_REQUIREMENT"
 verify() { /usr/bin/codesign --verify --strict --test-requirement="=$1" "$2" 2>/dev/null; }
+
+# Release notes: the workflow's awk must cut the newest CHANGELOG.md section ("## 0.1.1, <date>, preview").
+NOTES_AWK="$(sed -n "s/^ *awk -v v=\"\$VERSION\" '\(.*\)' \\\\$/\1/p" "$YML")"
+[ -n "$NOTES_AWK" ] || fail "no release-notes awk in $YML"
+V="$(sed -n 's/^## \([^,]*\),.*/\1/p' CHANGELOG.md | head -1)"
+awk -v v="$V" "$NOTES_AWK" CHANGELOG.md > "$T/notes.md"
+[ -s "$T/notes.md" ] || fail "release notes for $V are empty"
+grep -q '^## ' "$T/notes.md" && fail "release notes for $V run into the next section"
+grep -q '^### ' "$T/notes.md" || fail "release notes for $V have no ### heading"
 
 cp /usr/bin/true "$T/adhoc"
 /usr/bin/codesign --force -i dev.macontrol.Macontrol --sign - "$T/adhoc" 2>/dev/null
