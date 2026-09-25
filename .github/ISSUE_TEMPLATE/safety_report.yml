@@ -61,6 +61,8 @@ body:
     attributes:
       label: What happened
       description: Was it preselected (Safe) or did you select it? Why should it have been left alone?
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
