@@ -211,14 +211,11 @@ import Testing
 
     /// Hosts `view` like the real window: toolbar bridged into an NSToolbar, off screen, never activated.
     static func window(_ view: some View, size: CGSize, dark: Bool = false) -> NSWindow {
-        SnapshotRenderer.runHeadless()
         let hosting = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
         hosting.sceneBridgingOptions = [.toolbars, .title]
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        let window = SnapshotRenderer.offscreenWindow(size: size, styleMask: [.titled, .fullSizeContentView])
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = hosting
-        window.setFrameOrigin(CGPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         return window
     }
