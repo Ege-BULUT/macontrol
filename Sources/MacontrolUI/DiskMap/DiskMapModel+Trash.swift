@@ -136,7 +136,8 @@ extension DiskMapModel {
                 }
                 pile.remove(item.node)
                 outcomes.append(ReviewOutcome(name: item.name, path: original.path, bytes: item.bytes, status: .inTrash))
-            case .deleted(let original), .failed(let original, _) where outcome.isLeftInTrash:
+            case .deleted(let original),
+                 .failed(let original, _) where outcome.isLeftInTrash:
                 // Gone for good, or stopped with the item in the Trash: off the map like a trashed item. Only an item
                 // whole in the Trash is "In Trash"; a partly deleted one's bytes would overstate it.
                 guard let item = stagedItem(at: original) else { continue }
