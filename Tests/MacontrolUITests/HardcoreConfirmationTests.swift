@@ -175,6 +175,36 @@ import Uninstaller
 
     // MARK: Criterion 4: Return never confirms, Esc cancels, in every sheet and both modes
 
+    /// Esc closes a SwiftUI sheet even while Cancel is disabled (P5), and a confirm at work would lose its result. As a
+    /// real sheet on RootView: SwiftUI's `SheetPresentationWindow` handles Esc in `cancelOperation` only while its
+    /// `handleEscapeKey` is set, which `.interactiveDismissDisabled` clears. The working state is read from that flag,
+    /// not pressed: an Esc nothing takes beeps. Once done, a real `cancelOperation` closes it.
+    @Test(arguments: [SidebarItem.clean, .uninstall])
+    func escCannotCloseAWorkingSheet(screen: SidebarItem) throws {
+        SnapshotRenderer.runHeadless()
+        let model = AppModel.demo(selection: screen)
+        if screen == .clean { model.clean.beginReview() } else { model.uninstall.beginUninstall() }
+        func setWorking(_ working: Bool) {
+            if screen == .clean { model.clean.review?.isWorking = working } else { model.uninstall.confirmation?.isWorking = working }
+        }
+        var isOpen: Bool { screen == .clean ? model.clean.review != nil : model.uninstall.confirmation != nil }
+        setWorking(true)
+        let window = HardcoreModeTests.window(RootView(model: model), size: RootView.minimumSize)
+        defer { window.orderOut(nil) }
+        let sheet = try #require(window.attachedSheet)
+        let flag = try #require(class_getInstanceVariable(type(of: sheet), "handleEscapeKey"), "SwiftUI renamed its Esc flag")
+        func handlesEscape() -> Bool { (Unmanaged.passUnretained(sheet).toOpaque() + ivar_getOffset(flag)).load(as: Bool.self) }
+        #expect(!handlesEscape(), "Esc would close the \(screen) sheet while it works")
+
+        setWorking(false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(handlesEscape())
+        sheet.cancelOperation(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(!isOpen && window.attachedSheet == nil, "Esc did not close the finished \(screen) sheet")
+    }
+
+
     @Test(arguments: modes)
     func returnInTheCleanSheetRemovesNothing(mode: DeletionMode) async throws {
         let fixture = try RemovalFixture()
